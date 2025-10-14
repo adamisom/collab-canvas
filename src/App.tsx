@@ -7,7 +7,7 @@ import Header from './components/layout/Header'
 import Canvas from './components/canvas/Canvas'
 
 const CanvasContent: React.FC = () => {
-  const { rectangles, loading, error, createRectangle } = useCanvas()
+  const { rectangles, selectedRectangleId, loading, error, createRectangle } = useCanvas()
 
   const handleTestCreate = async () => {
     const rect = await createRectangle(100, 100)
@@ -33,6 +33,9 @@ const CanvasContent: React.FC = () => {
           <div className="status-item">
             <strong>Rectangles:</strong> {rectangles.length}
           </div>
+          <div className="status-item">
+            <strong>Selected:</strong> {selectedRectangleId ? 'Yes' : 'None'}
+          </div>
           {error && (
             <div className="status-item error">
               <strong>Error:</strong> {error}
@@ -45,13 +48,24 @@ const CanvasContent: React.FC = () => {
             </button>
           </div>
           
+          <div className="canvas-instructions">
+            <h4>🖱️ How to Use:</h4>
+            <ul>
+              <li>Click empty space to create rectangle</li>
+              <li>Click rectangle to select it</li>
+              <li>Drag selected rectangle to move it</li>
+              <li>See real-time updates from other users</li>
+            </ul>
+          </div>
+          
           <div className="feature-list">
             <div className="feature-item">✅ Anonymous authentication</div>
             <div className="feature-item">✅ Canvas service layer</div>
             <div className="feature-item">✅ Real-time Firebase sync</div>
             <div className="feature-item">✅ Pan & zoom canvas</div>
-            <div className="feature-item">🔄 Rectangle shapes (Next PR)</div>
-            <div className="feature-item">🔄 Multi-user cursors (PR #5)</div>
+            <div className="feature-item">✅ Multi-user cursors</div>
+            <div className="feature-item">✅ Rectangle creation & sync</div>
+            <div className="feature-item">🔄 Rectangle selection & movement (Next PR)</div>
           </div>
         </div>
       </div>

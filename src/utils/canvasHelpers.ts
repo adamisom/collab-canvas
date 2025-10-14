@@ -1,8 +1,8 @@
 import { CANVAS_BOUNDS, DEFAULT_RECT } from './constants'
 
-// Generate unique IDs for rectangles
+// Generate unique IDs for rectangles (Firebase push generates these automatically)
 export const generateRectangleId = (): string => {
-  return `rect_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  return `rect_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
 }
 
 // Validate rectangle bounds

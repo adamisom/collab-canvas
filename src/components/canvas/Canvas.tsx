@@ -4,6 +4,8 @@ import { useCanvas } from '../../contexts/CanvasContext'
 import { useCursors } from '../../hooks/useCursors'
 import { VIEWPORT_WIDTH, VIEWPORT_HEIGHT } from '../../utils/constants'
 import Cursor from './Cursor'
+import Rectangle from './Rectangle'
+import type { Rectangle as RectangleType } from '../../services/canvasService'
 import './Canvas.css'
 
 interface CanvasProps {
@@ -23,7 +25,7 @@ const Canvas: React.FC<CanvasProps> = ({
   const [isDragging, setIsDragging] = useState(false)
   
   // Get canvas context
-  const { rectangles } = useCanvas()
+  const { rectangles, selectedRectangleId, createRectangle, updateRectangle, selectRectangle } = useCanvas()
   
   // Get cursors context
   const { cursors, updateCursor, error: cursorsError } = useCursors()
@@ -83,14 +85,50 @@ const Canvas: React.FC<CanvasProps> = ({
     setStagePosition({ x: e.target.x(), y: e.target.y() })
   }, [])
 
-  // Handle stage click (for future rectangle creation)
-  const handleStageClick = useCallback((e: any) => {
+  // Handle stage click (for rectangle creation and deselection)
+  const handleStageClick = useCallback(async (e: any) => {
     // Only handle clicks on the stage background (not on shapes)
     if (e.target === e.target.getStage()) {
-      console.log('Clicked on canvas background at:', e.evt.layerX, e.evt.layerY)
-      // Future: This is where we'll add rectangle creation in PR #6
+      // Deselect any selected rectangle
+      selectRectangle(null)
+      
+      // Create new rectangle at click position
+      const stage = e.target.getStage()
+      const pointer = stage.getPointerPosition()
+      
+      if (pointer) {
+        // Convert screen coordinates to canvas coordinates
+        const canvasX = (pointer.x - stagePosition.x) / stageScale
+        const canvasY = (pointer.y - stagePosition.y) / stageScale
+        
+        console.log('Creating rectangle at:', canvasX, canvasY)
+        const newRectangle = await createRectangle(canvasX, canvasY)
+        
+        if (newRectangle) {
+          console.log('Rectangle created:', newRectangle)
+        }
+      }
     }
-  }, [])
+  }, [createRectangle, selectRectangle, stagePosition, stageScale])
+
+  // Handle rectangle click (selection)
+  const handleRectangleClick = useCallback((rectangle: RectangleType) => {
+    selectRectangle(rectangle.id)
+  }, [selectRectangle])
+
+  // Handle rectangle drag start
+  const handleRectangleDragStart = useCallback((rectangle: RectangleType) => {
+    selectRectangle(rectangle.id)
+  }, [selectRectangle])
+
+  // Handle rectangle drag end (update position)
+  const handleRectangleDragEnd = useCallback(async (rectangle: RectangleType, newX: number, newY: number) => {
+    try {
+      await updateRectangle(rectangle.id, { x: newX, y: newY })
+    } catch (error) {
+      console.error('Error updating rectangle position:', error)
+    }
+  }, [updateRectangle])
 
   // Keyboard controls for canvas navigation
   useEffect(() => {
@@ -171,8 +209,17 @@ const Canvas: React.FC<CanvasProps> = ({
           className={isDragging ? 'dragging' : ''}
         >
           <Layer>
-            {/* Grid background for visual reference */}
-            {/* We'll add rectangles here in PR #6 */}
+            {/* Render rectangles */}
+            {rectangles.map((rectangle) => (
+              <Rectangle
+                key={rectangle.id}
+                rectangle={rectangle}
+                isSelected={rectangle.id === selectedRectangleId}
+                onClick={handleRectangleClick}
+                onDragStart={handleRectangleDragStart}
+                onDragEnd={handleRectangleDragEnd}
+              />
+            ))}
             
             {/* Render other users' cursors */}
             {Object.values(cursors).map((cursor) => (

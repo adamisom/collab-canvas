@@ -122,6 +122,29 @@
   margin: 0;
 }
 
+.canvas-instructions {
+  margin: 20px 0;
+}
+
+.canvas-instructions h4 {
+  color: #2d3748;
+  font-size: 14px;
+  margin: 0 0 12px 0;
+}
+
+.canvas-instructions ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.canvas-instructions li {
+  color: #4a5568;
+  font-size: 12px;
+  padding: 4px 0;
+  margin: 0;
+}
+
 .status-item {
   font-size: 14px;
   color: #4a5568;
