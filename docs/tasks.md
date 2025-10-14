@@ -15,52 +15,52 @@ collabcanvas/
 ├── .firebaserc
 │
 ├── src/
-│   ├── main.jsx
-│   ├── App.jsx
+│   ├── main.tsx
+│   ├── App.tsx
 │   ├── App.css
 │   │
 │   ├── config/
-│   │   └── firebase.js
+│   │   └── firebase.ts
 │   │
 │   ├── services/
-│   │   ├── firebaseService.js
-│   │   ├── canvasService.js
-│   │   └── cursorService.js
+│   │   ├── firebaseService.ts
+│   │   ├── canvasService.ts
+│   │   └── cursorService.ts
 │   │
 │   ├── contexts/
-│   │   ├── AuthContext.jsx
-│   │   └── CanvasContext.jsx
+│   │   ├── AuthContext.tsx
+│   │   └── CanvasContext.tsx
 │   │
 │   ├── hooks/
-│   │   ├── useCanvas.js
-│   │   └── useCursors.js
+│   │   ├── useCanvas.ts
+│   │   └── useCursors.ts
 │   │
 │   ├── components/
 │   │   ├── auth/
-│   │   │   ├── LoginForm.jsx
+│   │   │   ├── LoginForm.tsx
 │   │   │   └── LoginForm.css
 │   │   │
 │   │   ├── canvas/
-│   │   │   ├── Canvas.jsx
+│   │   │   ├── Canvas.tsx
 │   │   │   ├── Canvas.css
-│   │   │   ├── Rectangle.jsx
-│   │   │   └── Cursor.jsx
+│   │   │   ├── Rectangle.tsx
+│   │   │   └── Cursor.tsx
 │   │   │
 │   │   └── layout/
-│   │       ├── Header.jsx
+│   │       ├── Header.tsx
 │   │       └── Header.css
 │   │
 │   └── utils/
-│       ├── canvasHelpers.js
-│       └── constants.js
+│       ├── canvasHelpers.ts
+│       └── constants.ts
 │
 ├── tests/
-│   ├── setup.js
+│   ├── setup.ts
 │   ├── services/
-│   │   ├── canvasService.test.js
-│   │   └── cursorService.test.js
+│   │   ├── canvasService.test.ts
+│   │   └── cursorService.test.ts
 │   └── utils/
-│       └── canvasHelpers.test.js
+│       └── canvasHelpers.test.ts
 │
 └── public/
     └── (static assets if needed)
@@ -268,48 +268,49 @@ Run through this before calling MVP complete:
 **Goal:** Initialize React + Vite project with Firebase configuration
 
 **Tasks:**
-- [ ] Create new Vite + React project
-  - Creates: `package.json`, `vite.config.js`, `index.html`
-- [ ] Install dependencies (react, react-dom, vite, firebase, react-konva, konva)
+- [ ] Remove existing files and start fresh with TypeScript setup
+  - Removes: Existing src files, configs that conflict
+- [ ] Create new Vite + React + TypeScript project structure
+  - Creates: `package.json`, `vite.config.ts`, `index.html`
+- [ ] Install dependencies (react, react-dom, vite, firebase, react-konva, konva, typescript)
   - Edits: `package.json`
-- [ ] Install testing dependencies (vitest, @testing-library/react, @testing-library/jest-dom)
+- [ ] Install testing dependencies (vitest, @testing-library/react, @testing-library/jest-dom, @types/*)
   - Edits: `package.json`
-- [ ] Configure Vitest for testing
-  - Creates: `vitest.config.js`
-  - Creates: `tests/setup.js`
-- [ ] Create Firebase project in Firebase Console
-  - Manual step in Firebase Console
+- [ ] Configure Vitest for testing within existing vite.config.ts
+  - Edits: `vite.config.ts`
+  - Creates: `tests/setup.ts`
+- [ ] Create Firebase project in Firebase Console (manual step for you)
+  - Manual step: Create project, enable Realtime Database, enable Anonymous Auth
 - [ ] Set up Firebase configuration and initialization
-  - Creates: `src/config/firebase.js`
+  - Creates: `src/config/firebase.ts`
   - Creates: `.env.example`
   - Creates: `.env.local` (local only, not committed)
   - Edits: `.gitignore`
 - [ ] Create Firebase service layer with RTDB and Auth exports
-  - Creates: `src/services/firebaseService.js`
-- [ ] Configure Firebase Realtime Database rules (allow read/write for authenticated users)
-  - Manual step in Firebase Console
-- [ ] Set up basic app structure
-  - Creates: `src/App.jsx`, `src/App.css`, `src/main.jsx`
-  - Creates: `src/utils/constants.js`
+  - Creates: `src/services/firebaseService.ts`
+- [ ] Configure Firebase Realtime Database rules (manual step for you)
+  - Manual step: Set rules to allow read/write for authenticated users
+- [ ] Set up basic app structure with TypeScript
+  - Creates: `src/App.tsx`, `src/App.css`, `src/main.tsx`
+  - Creates: `src/utils/constants.ts`
 - [ ] Create README with setup instructions
   - Creates: `README.md`
 - [ ] Test Firebase connection and RTDB export
-  - Edits: `src/App.jsx` (temporary test code)
+  - Edits: `src/App.tsx` (temporary test code)
 
 **Files Created:**
 - `package.json`
-- `vite.config.js`
-- `vitest.config.js`
-- `tests/setup.js`
+- `vite.config.ts`
+- `tests/setup.ts`
 - `index.html`
 - `.gitignore`
 - `.env.example`
-- `src/main.jsx`
-- `src/App.jsx`
+- `src/main.tsx`
+- `src/App.tsx`
 - `src/App.css`
-- `src/config/firebase.js`
-- `src/services/firebaseService.js`
-- `src/utils/constants.js`
+- `src/config/firebase.ts`
+- `src/services/firebaseService.ts`
+- `src/utils/constants.ts`
 - `README.md`
 
 **Files Edited:**
@@ -329,33 +330,33 @@ Run through this before calling MVP complete:
 
 **Tasks:**
 - [ ] Create AuthContext for managing user state
-  - Creates: `src/contexts/AuthContext.jsx`
+  - Creates: `src/contexts/AuthContext.tsx`
 - [ ] Create login form component
-  - Creates: `src/components/auth/LoginForm.jsx`
+  - Creates: `src/components/auth/LoginForm.tsx`
   - Creates: `src/components/auth/LoginForm.css`
 - [ ] Implement anonymous sign-in with Firebase Auth
-  - Edits: `src/contexts/AuthContext.jsx`
+  - Edits: `src/contexts/AuthContext.tsx`
 - [ ] Store username in Firebase Realtime Database under users node
-  - Edits: `src/contexts/AuthContext.jsx`
+  - Edits: `src/contexts/AuthContext.tsx`
 - [ ] Handle session persistence (user stays logged in on refresh)
-  - Edits: `src/contexts/AuthContext.jsx`
+  - Edits: `src/contexts/AuthContext.tsx`
 - [ ] Add authentication wrapper to App
-  - Edits: `src/App.jsx`
+  - Edits: `src/App.tsx`
 - [ ] Create simple header showing logged-in username
-  - Creates: `src/components/layout/Header.jsx`
+  - Creates: `src/components/layout/Header.tsx`
   - Creates: `src/components/layout/Header.css`
 - [ ] Test login flow with multiple browser windows
 
 **Files Created:**
-- `src/contexts/AuthContext.jsx`
-- `src/components/auth/LoginForm.jsx`
+- `src/contexts/AuthContext.tsx`
+- `src/components/auth/LoginForm.tsx`
 - `src/components/auth/LoginForm.css`
-- `src/components/layout/Header.jsx`
+- `src/components/layout/Header.tsx`
 - `src/components/layout/Header.css`
 
 **Files Edited:**
-- `src/App.jsx`
-- `src/main.jsx`
+- `src/App.tsx`
+- `src/main.tsx`
 
 **Success Criteria:**
 - ✅ User can enter username and log in
@@ -371,39 +372,39 @@ Run through this before calling MVP complete:
 
 **Tasks:**
 - [ ] Create Canvas service for Firebase operations
-  - Creates: `src/services/canvasService.js`
+  - Creates: `src/services/canvasService.ts`
 - [ ] Write unit tests for canvasService
-  - Creates: `tests/services/canvasService.test.js`
+  - Creates: `tests/services/canvasService.test.ts`
   - Tests: Rectangle ID generation, data structure format, CRUD operations
 - [ ] Create CanvasContext for managing canvas state
-  - Creates: `src/contexts/CanvasContext.jsx`
+  - Creates: `src/contexts/CanvasContext.tsx`
 - [ ] Implement canvas state initialization
-  - Edits: `src/contexts/CanvasContext.jsx`
+  - Edits: `src/contexts/CanvasContext.tsx`
 - [ ] Create helper utilities for canvas operations
-  - Creates: `src/utils/canvasHelpers.js`
+  - Creates: `src/utils/canvasHelpers.ts`
 - [ ] Write unit tests for canvasHelpers
-  - Creates: `tests/utils/canvasHelpers.test.js`
+  - Creates: `tests/utils/canvasHelpers.test.ts`
   - Tests: Coordinate calculations, ID generation, bounds checking
 - [ ] Add useCanvas hook for components to access canvas context
-  - Creates: `src/hooks/useCanvas.js`
+  - Creates: `src/hooks/useCanvas.ts`
 - [ ] Set up canvas dimensions and constants
-  - Edits: `src/utils/constants.js`
+  - Edits: `src/utils/constants.ts`
 - [ ] Wrap App with CanvasContext provider
-  - Edits: `src/App.jsx`
+  - Edits: `src/App.tsx`
 - [ ] Run tests to verify service layer
   - Run: `npm test`
 
 **Files Created:**
-- `src/services/canvasService.js`
-- `tests/services/canvasService.test.js`
-- `src/contexts/CanvasContext.jsx`
-- `src/hooks/useCanvas.js`
-- `src/utils/canvasHelpers.js`
-- `tests/utils/canvasHelpers.test.js`
+- `src/services/canvasService.ts`
+- `tests/services/canvasService.test.ts`
+- `src/contexts/CanvasContext.tsx`
+- `src/hooks/useCanvas.ts`
+- `src/utils/canvasHelpers.ts`
+- `tests/utils/canvasHelpers.test.ts`
 
 **Files Edited:**
-- `src/App.jsx`
-- `src/utils/constants.js`
+- `src/App.tsx`
+- `src/utils/constants.ts`
 
 **Success Criteria:**
 - ✅ All unit tests pass (`npm test`)
@@ -427,24 +428,24 @@ Run through this before calling MVP complete:
 - [ ] Install and configure react-konva (if not already added)
   - Edits: `package.json`
 - [ ] Create Canvas component with Stage and Layer
-  - Creates: `src/components/canvas/Canvas.jsx`
+  - Creates: `src/components/canvas/Canvas.tsx`
   - Creates: `src/components/canvas/Canvas.css`
 - [ ] Implement pan functionality (click and drag background)
-  - Edits: `src/components/canvas/Canvas.jsx`
+  - Edits: `src/components/canvas/Canvas.tsx`
 - [ ] Implement zoom functionality (mouse wheel)
-  - Edits: `src/components/canvas/Canvas.jsx`
+  - Edits: `src/components/canvas/Canvas.tsx`
 - [ ] Connect Canvas component to CanvasContext
-  - Edits: `src/components/canvas/Canvas.jsx`
+  - Edits: `src/components/canvas/Canvas.tsx`
 - [ ] Integrate Canvas component into App
-  - Edits: `src/App.jsx`
+  - Edits: `src/App.tsx`
 - [ ] Test pan and zoom in browser
 
 **Files Created:**
-- `src/components/canvas/Canvas.jsx`
+- `src/components/canvas/Canvas.tsx`
 - `src/components/canvas/Canvas.css`
 
 **Files Edited:**
-- `src/App.jsx`
+- `src/App.tsx`
 - `package.json` (if dependencies added)
 
 **Success Criteria:**
@@ -465,39 +466,39 @@ Run through this before calling MVP complete:
 
 **Tasks:**
 - [ ] Create Cursor service for Firebase operations
-  - Creates: `src/services/cursorService.js`
+  - Creates: `src/services/cursorService.ts`
 - [ ] Write unit tests for cursorService
-  - Creates: `tests/services/cursorService.test.js`
+  - Creates: `tests/services/cursorService.test.ts`
   - Tests: Cursor data format, throttling logic, cleanup on disconnect
 - [ ] Create Cursor component for rendering other users' cursors
-  - Creates: `src/components/canvas/Cursor.jsx`
+  - Creates: `src/components/canvas/Cursor.tsx`
 - [ ] Create useCursors hook for managing cursor data
-  - Creates: `src/hooks/useCursors.js`
+  - Creates: `src/hooks/useCursors.ts`
 - [ ] Implement cursor position broadcasting to Firebase
-  - Edits: `src/services/cursorService.js`
+  - Edits: `src/services/cursorService.ts`
 - [ ] Set up Firebase listener for cursor positions
-  - Edits: `src/hooks/useCursors.js`
+  - Edits: `src/hooks/useCursors.ts`
 - [ ] Broadcast current user's cursor position on mouse move
-  - Edits: `src/components/canvas/Canvas.jsx`
+  - Edits: `src/components/canvas/Canvas.tsx`
 - [ ] Render other users' cursors with usernames
-  - Edits: `src/components/canvas/Canvas.jsx`
+  - Edits: `src/components/canvas/Canvas.tsx`
 - [ ] Handle cursor cleanup on user disconnect
-  - Edits: `src/services/cursorService.js`
-- [ ] Throttle cursor position updates for performance
-  - Edits: `src/hooks/useCursors.js` or `src/utils/canvasHelpers.js`
+  - Edits: `src/services/cursorService.ts`
+- [ ] Throttle cursor position updates for performance (16ms)
+  - Edits: `src/hooks/useCursors.ts` or `src/utils/canvasHelpers.ts`
 - [ ] Run tests to verify cursor service
   - Run: `npm test`
 - [ ] Test with 2+ browser windows (manual integration test)
 
 **Files Created:**
-- `src/services/cursorService.js`
-- `tests/services/cursorService.test.js`
-- `src/components/canvas/Cursor.jsx`
-- `src/hooks/useCursors.js`
+- `src/services/cursorService.ts`
+- `tests/services/cursorService.test.ts`
+- `src/components/canvas/Cursor.tsx`
+- `src/hooks/useCursors.ts`
 
 **Files Edited:**
-- `src/components/canvas/Canvas.jsx`
-- `src/utils/canvasHelpers.js` (if adding throttle utility)
+- `src/components/canvas/Canvas.tsx`
+- `src/utils/canvasHelpers.ts` (if adding throttle utility)
 
 **Success Criteria:**
 - ✅ All unit tests pass (`npm test`)
@@ -522,37 +523,37 @@ Run through this before calling MVP complete:
 
 **Tasks:**
 - [ ] Create Rectangle component
-  - Creates: `src/components/canvas/Rectangle.jsx`
+  - Creates: `src/components/canvas/Rectangle.tsx`
 - [ ] Implement click-to-create rectangle functionality in Canvas
-  - Edits: `src/components/canvas/Canvas.jsx`
+  - Edits: `src/components/canvas/Canvas.tsx`
 - [ ] Add rectangle creation methods to canvasService
-  - Edits: `src/services/canvasService.js`
+  - Edits: `src/services/canvasService.ts`
 - [ ] Update unit tests for new canvasService methods
-  - Edits: `tests/services/canvasService.test.js`
+  - Edits: `tests/services/canvasService.test.ts`
   - Tests: createRectangle(), rectangle validation
 - [ ] Add rectangle state management to CanvasContext
-  - Edits: `src/contexts/CanvasContext.jsx`
+  - Edits: `src/contexts/CanvasContext.tsx`
 - [ ] Generate unique IDs for rectangles
-  - Edits: `src/utils/canvasHelpers.js`
+  - Edits: `src/utils/canvasHelpers.ts`
 - [ ] Store rectangles in Firebase Realtime Database
-  - Edits: `src/services/canvasService.js`
+  - Edits: `src/services/canvasService.ts`
 - [ ] Listen for rectangle changes from other users
-  - Edits: `src/contexts/CanvasContext.jsx`
+  - Edits: `src/contexts/CanvasContext.tsx`
 - [ ] Render all rectangles on canvas
-  - Edits: `src/components/canvas/Canvas.jsx`
+  - Edits: `src/components/canvas/Canvas.tsx`
 - [ ] Run tests to verify rectangle creation logic
   - Run: `npm test`
 - [ ] Test rectangle creation across multiple users (manual integration test)
 
 **Files Created:**
-- `src/components/canvas/Rectangle.jsx`
+- `src/components/canvas/Rectangle.tsx`
 
 **Files Edited:**
-- `src/components/canvas/Canvas.jsx`
-- `src/services/canvasService.js`
-- `tests/services/canvasService.test.js`
-- `src/contexts/CanvasContext.jsx`
-- `src/utils/canvasHelpers.js`
+- `src/components/canvas/Canvas.tsx`
+- `src/services/canvasService.ts`
+- `tests/services/canvasService.test.ts`
+- `src/contexts/CanvasContext.tsx`
+- `src/utils/canvasHelpers.ts`
 
 **Success Criteria:**
 - ✅ All unit tests pass (`npm test`)
@@ -577,24 +578,24 @@ Run through this before calling MVP complete:
 
 **Tasks:**
 - [ ] Implement rectangle selection (click to select)
-  - Edits: `src/components/canvas/Canvas.jsx`
-  - Edits: `src/components/canvas/Rectangle.jsx`
+  - Edits: `src/components/canvas/Canvas.tsx`
+  - Edits: `src/components/canvas/Rectangle.tsx`
 - [ ] Add selection state to CanvasContext
-  - Edits: `src/contexts/CanvasContext.jsx`
-- [ ] Add visual indicator for selected rectangle
-  - Edits: `src/components/canvas/Rectangle.jsx`
+  - Edits: `src/contexts/CanvasContext.tsx`
+- [ ] Add visual indicator for selected rectangle (shows to other users)
+  - Edits: `src/components/canvas/Rectangle.tsx`
 - [ ] Implement drag functionality for rectangles
-  - Edits: `src/components/canvas/Rectangle.jsx`
+  - Edits: `src/components/canvas/Rectangle.tsx`
 - [ ] Add rectangle update methods to canvasService
-  - Edits: `src/services/canvasService.js`
+  - Edits: `src/services/canvasService.ts`
 - [ ] Update unit tests for rectangle update methods
-  - Edits: `tests/services/canvasService.test.js`
+  - Edits: `tests/services/canvasService.test.ts`
   - Tests: updateRectangle(), position validation
-- [ ] Sync rectangle position changes to Firebase
-  - Edits: `src/contexts/CanvasContext.jsx`
-  - Edits: `src/components/canvas/Rectangle.jsx`
+- [ ] Sync rectangle position changes to Firebase (optimistic updates)
+  - Edits: `src/contexts/CanvasContext.tsx`
+  - Edits: `src/components/canvas/Rectangle.tsx`
 - [ ] Handle deselection (click on empty canvas)
-  - Edits: `src/components/canvas/Canvas.jsx`
+  - Edits: `src/components/canvas/Canvas.tsx`
 - [ ] Run tests to verify update logic
   - Run: `npm test`
 - [ ] Test movement across multiple users (manual integration test)
@@ -603,11 +604,11 @@ Run through this before calling MVP complete:
 - None
 
 **Files Edited:**
-- `src/components/canvas/Canvas.jsx`
-- `src/components/canvas/Rectangle.jsx`
-- `src/contexts/CanvasContext.jsx`
-- `src/services/canvasService.js`
-- `tests/services/canvasService.test.js`
+- `src/components/canvas/Canvas.tsx`
+- `src/components/canvas/Rectangle.tsx`
+- `src/contexts/CanvasContext.tsx`
+- `src/services/canvasService.ts`
+- `tests/services/canvasService.test.ts`
 
 **Success Criteria:**
 - ✅ All unit tests pass (`npm test`)
@@ -635,16 +636,16 @@ Run through this before calling MVP complete:
 - [ ] Verify rectangles persist in Firebase after all users leave
   - Test in Firebase Console
 - [ ] Implement canvas state loading on user join
-  - Edits: `src/contexts/CanvasContext.jsx`
-  - Edits: `src/services/canvasService.js`
+  - Edits: `src/contexts/CanvasContext.tsx`
+  - Edits: `src/services/canvasService.ts`
 - [ ] Test page refresh - ensure rectangles and state remain
   - Manual integration test
 - [ ] Handle edge cases (rapid creation, concurrent edits)
-  - Edits: `src/services/canvasService.js`
-  - Edits: `src/contexts/CanvasContext.jsx`
+  - Edits: `src/services/canvasService.ts`
+  - Edits: `src/contexts/CanvasContext.tsx`
 - [ ] Add error handling for Firebase operations
-  - Edits: `src/services/canvasService.js`
-  - Edits: `src/services/cursorService.js`
+  - Edits: `src/services/canvasService.ts`
+  - Edits: `src/services/cursorService.ts`
 - [ ] Test with 3-5 concurrent users
   - Manual integration test
 - [ ] Verify last-write-wins conflict resolution
@@ -663,9 +664,9 @@ Run through this before calling MVP complete:
 - None
 
 **Files Edited:**
-- `src/contexts/CanvasContext.jsx`
-- `src/services/canvasService.js`
-- `src/services/cursorService.js`
+- `src/contexts/CanvasContext.tsx`
+- `src/services/canvasService.ts`
+- `src/services/cursorService.ts`
 - Any files with debug code
 
 **Success Criteria:**
@@ -738,43 +739,43 @@ Run through this before calling MVP complete:
 - `src/App.css` - Global styles
 
 ### Firebase
-- `src/config/firebase.js` - Firebase initialization
-- `src/services/firebaseService.js` - RTDB and Auth exports
-- `src/services/canvasService.js` - Canvas Firebase operations
-- `src/services/cursorService.js` - Cursor Firebase operations
+- `src/config/firebase.ts` - Firebase initialization
+- `src/services/firebaseService.ts` - RTDB and Auth exports
+- `src/services/canvasService.ts` - Canvas Firebase operations
+- `src/services/cursorService.ts` - Cursor Firebase operations
 
 ### Authentication
-- `src/contexts/AuthContext.jsx` - Auth state management
-- `src/components/auth/LoginForm.jsx` - Login UI
+- `src/contexts/AuthContext.tsx` - Auth state management
+- `src/components/auth/LoginForm.tsx` - Login UI
 - `src/components/auth/LoginForm.css` - Login styles
 
 ### Canvas State Management
-- `src/contexts/CanvasContext.jsx` - Canvas state management
+- `src/contexts/CanvasContext.tsx` - Canvas state management
 
 ### Canvas Components
-- `src/components/canvas/Canvas.jsx` - Main canvas container
+- `src/components/canvas/Canvas.tsx` - Main canvas container
 - `src/components/canvas/Canvas.css` - Canvas styles
-- `src/components/canvas/Rectangle.jsx` - Rectangle shape
-- `src/components/canvas/Cursor.jsx` - Multiplayer cursor
+- `src/components/canvas/Rectangle.tsx` - Rectangle shape
+- `src/components/canvas/Cursor.tsx` - Multiplayer cursor
 
 ### Hooks (Custom React Hooks)
-- `src/hooks/useCanvas.js` - Access canvas context
-- `src/hooks/useCursors.js` - Cursor syncing
+- `src/hooks/useCanvas.ts` - Access canvas context
+- `src/hooks/useCursors.ts` - Cursor syncing
 
 ### Utilities
-- `src/utils/canvasHelpers.js` - Canvas helper functions
-- `src/utils/constants.js` - App constants
+- `src/utils/canvasHelpers.ts` - Canvas helper functions
+- `src/utils/constants.ts` - App constants
 
 ### Layout
-- `src/components/layout/Header.jsx` - App header
+- `src/components/layout/Header.tsx` - App header
 - `src/components/layout/Header.css` - Header styles
 
 ### Tests
-- `vitest.config.js` - Test configuration
-- `tests/setup.js` - Test environment setup
-- `tests/services/canvasService.test.js` - Canvas service unit tests
-- `tests/services/cursorService.test.js` - Cursor service unit tests
-- `tests/utils/canvasHelpers.test.js` - Canvas helpers unit tests
+- `vite.config.ts` - Includes test configuration
+- `tests/setup.ts` - Test environment setup
+- `tests/services/canvasService.test.ts` - Canvas service unit tests
+- `tests/services/cursorService.test.ts` - Cursor service unit tests
+- `tests/utils/canvasHelpers.test.ts` - Canvas helpers unit tests
 
 ---
 
