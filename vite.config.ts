@@ -6,6 +6,9 @@ import react from '@vitejs/plugin-react'
 export default mergeConfig(
   defineConfig({
     plugins: [react()],
+    optimizeDeps: {
+      include: ['react', 'react-dom', 'react-konva', 'konva']
+    },
   }),
   defineTestConfig({
     test: {
