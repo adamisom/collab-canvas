@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { CanvasProvider, useCanvas } from './contexts/CanvasContext'
 import LoginForm from './components/auth/LoginForm'
 import Header from './components/layout/Header'
+import Canvas from './components/canvas/Canvas'
 
 const CanvasContent: React.FC = () => {
   const { rectangles, loading, error, createRectangle } = useCanvas()
@@ -13,47 +14,50 @@ const CanvasContent: React.FC = () => {
     console.log('Created rectangle:', rect)
   }
 
+  if (loading) {
+    return (
+      <main className="app-main">
+        <div className="canvas-loading">
+          <div className="loading-spinner"></div>
+          <p>Loading canvas...</p>
+        </div>
+      </main>
+    )
+  }
+
   return (
-    <main className="app-main">
-      <div className="canvas-placeholder">
-        <h2>🎨 Canvas Data Layer Ready!</h2>
-        <p>Canvas context and service layer are working!</p>
-        
+    <main className="app-main canvas-main">
+      <div className="canvas-sidebar">
         <div className="canvas-status">
+          <h3>🎨 Canvas Workspace</h3>
           <div className="status-item">
             <strong>Rectangles:</strong> {rectangles.length}
-          </div>
-          <div className="status-item">
-            <strong>Loading:</strong> {loading ? 'Yes' : 'No'}
           </div>
           {error && (
             <div className="status-item error">
               <strong>Error:</strong> {error}
             </div>
           )}
-        </div>
-
-        <div className="test-controls">
-          <button onClick={handleTestCreate} className="test-button">
-            Create Test Rectangle
-          </button>
-        </div>
-        
-        <div className="feature-list">
-          <div className="feature-item">✅ Anonymous authentication</div>
-          <div className="feature-item">✅ Canvas service layer</div>
-          <div className="feature-item">✅ Rectangle data management</div>
-          <div className="feature-item">✅ Real-time Firebase sync</div>
-          <div className="feature-item">✅ Unit tests passing</div>
-          <div className="feature-item">🔄 Visual canvas (Next PR)</div>
-        </div>
-
-        {rectangles.length > 0 && (
-          <div className="rectangles-list">
-            <h4>Rectangle Data:</h4>
-            <pre>{JSON.stringify(rectangles, null, 2)}</pre>
+          
+          <div className="test-controls">
+            <button onClick={handleTestCreate} className="test-button">
+              Create Test Rectangle
+            </button>
           </div>
-        )}
+          
+          <div className="feature-list">
+            <div className="feature-item">✅ Anonymous authentication</div>
+            <div className="feature-item">✅ Canvas service layer</div>
+            <div className="feature-item">✅ Real-time Firebase sync</div>
+            <div className="feature-item">✅ Pan & zoom canvas</div>
+            <div className="feature-item">🔄 Rectangle shapes (Next PR)</div>
+            <div className="feature-item">🔄 Multi-user cursors (PR #5)</div>
+          </div>
+        </div>
+      </div>
+      
+      <div className="canvas-area">
+        <Canvas />
       </div>
     </main>
   )
