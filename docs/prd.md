@@ -36,7 +36,7 @@ Build a real-time collaborative canvas application (Figma-like) where multiple u
 - Username displayed with cursor
 
 **Implementation Notes:**
-- No password management needed
+- Use Firebase Anonymous Authentication with display name
 - Users enter username and start collaborating immediately
 - Session persists across page refreshes
 
@@ -47,6 +47,7 @@ Build a real-time collaborative canvas application (Figma-like) where multiple u
 - Smooth zoom (mouse wheel or pinch gesture)
 
 **Implementation Notes:**
+- Use basic rendering with Konva.js (no viewport culling needed for MVP)
 - Canvas rendering performance should be reasonable
 - Focus on functionality over perfect optimization
 
@@ -56,6 +57,8 @@ Build a real-time collaborative canvas application (Figma-like) where multiple u
 - Click/drag to create new rectangles
 - Click to select a rectangle
 - Drag to move selected rectangles
+- Show selection state (visual indicator)
+- No constraints on rectangle size (any size within canvas bounds)
 
 **Out of Scope:**
 - Multiple shape types (circles, text)
@@ -67,12 +70,14 @@ Build a real-time collaborative canvas application (Figma-like) where multiple u
 - Multiplayer cursors showing position and username
 - Object creation syncs to all users <100ms
 - Object movement syncs to all users <100ms
-- Cursor position syncs <50ms
+- Cursor position syncs <50ms (throttled to every 16ms)
+- Selection state syncs to show visual indicators to other users
 
 **Critical Requirements:**
 - Changes from one user appear immediately for others
 - No race conditions or lost updates
 - Handle simultaneous edits gracefully
+- Optimistic UI updates on frontend with last-write-wins on backend
 
 ### 5. Presence Awareness
 **Must Have:**
@@ -98,6 +103,7 @@ Build a real-time collaborative canvas application (Figma-like) where multiple u
 - Publicly accessible URL
 - Supports 5+ concurrent users
 - Works across different browsers/devices
+- No monitoring or logging setup needed for MVP
 
 ---
 
