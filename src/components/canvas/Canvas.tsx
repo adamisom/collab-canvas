@@ -1,7 +1,9 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react'
 import { Stage, Layer } from 'react-konva'
 import { useCanvas } from '../../contexts/CanvasContext'
+import { useCursors } from '../../hooks/useCursors'
 import { VIEWPORT_WIDTH, VIEWPORT_HEIGHT } from '../../utils/constants'
+import Cursor from './Cursor'
 import './Canvas.css'
 
 interface CanvasProps {
@@ -20,8 +22,27 @@ const Canvas: React.FC<CanvasProps> = ({
   const [stagePosition, setStagePosition] = useState({ x: 0, y: 0 })
   const [isDragging, setIsDragging] = useState(false)
   
-  // Get canvas context (we're not using rectangles yet, but connecting for future)
+  // Get canvas context
   const { rectangles } = useCanvas()
+  
+  // Get cursors context
+  const { cursors, updateCursor, error: cursorsError } = useCursors()
+
+  // Handle mouse move for cursor broadcasting
+  const handleMouseMove = useCallback((e: any) => {
+    if (isDragging) return // Don't broadcast while panning
+
+    const stage = e.target.getStage()
+    const pointer = stage.getPointerPosition()
+    
+    if (pointer) {
+      // Convert screen coordinates to canvas coordinates
+      const canvasX = (pointer.x - stagePosition.x) / stageScale
+      const canvasY = (pointer.y - stagePosition.y) / stageScale
+      
+      updateCursor(canvasX, canvasY)
+    }
+  }, [updateCursor, stagePosition, stageScale, isDragging])
 
   // Handle wheel zoom
   const handleWheel = useCallback((e: any) => {
@@ -117,13 +138,19 @@ const Canvas: React.FC<CanvasProps> = ({
           <span>Zoom: {Math.round(stageScale * 100)}%</span>
           <span>Position: ({Math.round(stagePosition.x)}, {Math.round(stagePosition.y)})</span>
           <span>Rectangles: {rectangles.length}</span>
+          <span>Cursors: {Object.keys(cursors).length}</span>
         </div>
         <div className="canvas-controls">
           <span>🖱️ Click+Drag to pan</span>
           <span>🔍 Scroll to zoom</span>
           <span>⌨️ Arrow keys to navigate</span>
-          <span>0️⃣ Press '0' to reset</span>
+          <span>👥 Real-time cursors</span>
         </div>
+        {cursorsError && (
+          <div className="cursor-error">
+            <span>⚠️ Cursor sync: {cursorsError}</span>
+          </div>
+        )}
       </div>
       
       <div className="canvas-wrapper">
@@ -140,17 +167,21 @@ const Canvas: React.FC<CanvasProps> = ({
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
           onClick={handleStageClick}
+          onMouseMove={handleMouseMove}
           className={isDragging ? 'dragging' : ''}
         >
           <Layer>
             {/* Grid background for visual reference */}
             {/* We'll add rectangles here in PR #6 */}
             
-            {/* Canvas bounds indicator */}
-            <React.Fragment>
-              {/* This will show the canvas boundaries */}
-              {/* For now, we'll add a simple border rect to show canvas limits */}
-            </React.Fragment>
+            {/* Render other users' cursors */}
+            {Object.values(cursors).map((cursor) => (
+              <Cursor
+                key={cursor.userId}
+                cursor={cursor}
+                isOwnCursor={false}
+              />
+            ))}
           </Layer>
         </Stage>
       </div>

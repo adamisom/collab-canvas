@@ -18,8 +18,13 @@ vi.mock('../../src/services/firebaseService', () => ({
 describe('CanvasService', () => {
   let canvasService: CanvasService
   
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks()
+    
+    // Reset dbPush to default value
+    const { dbPush } = await import('../../src/services/firebaseService')
+    vi.mocked(dbPush).mockReturnValue({ key: 'test-rectangle-id' } as any)
+    
     canvasService = new CanvasService()
   })
 
@@ -53,7 +58,9 @@ describe('CanvasService', () => {
 
     it('should throw error if rectangle ID generation fails', async () => {
       const { dbPush } = await import('../../src/services/firebaseService')
-      vi.mocked(dbPush).mockReturnValue({ key: null } as any)
+      
+      // Mock dbPush to return null key for this specific test
+      vi.mocked(dbPush).mockReturnValueOnce({ key: null } as any)
 
       const rectangleInput: RectangleInput = {
         x: 100,
@@ -182,6 +189,7 @@ describe('CanvasService', () => {
           val: () => mockData
         }
         callback(mockSnapshot as any)
+        return vi.fn() // Return unsubscribe function
       })
 
       canvasService.onRectanglesChange(mockCallback)
@@ -199,6 +207,7 @@ describe('CanvasService', () => {
           exists: () => false
         }
         callback(mockSnapshot as any)
+        return vi.fn() // Return unsubscribe function
       })
 
       canvasService.onRectanglesChange(mockCallback)

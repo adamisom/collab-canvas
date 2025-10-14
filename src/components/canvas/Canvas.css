@@ -35,6 +35,12 @@
   color: #718096;
 }
 
+.cursor-error {
+  margin-top: 8px;
+  font-size: 11px;
+  color: #e53e3e;
+}
+
 .canvas-wrapper {
   flex: 1;
   background: #ffffff;
