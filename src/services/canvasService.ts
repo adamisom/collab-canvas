@@ -67,6 +67,15 @@ export class CanvasService {
   async updateRectangle(rectangleId: string, updates: Partial<Omit<Rectangle, 'id' | 'createdBy' | 'createdAt'>>): Promise<void> {
     try {
       const rectangleRef = dbRef(firebaseDatabase, `${DB_PATHS.RECTANGLES}/${rectangleId}`)
+      
+      // Check if rectangle still exists before updating (handles race conditions)
+      const snapshot = await dbGet(rectangleRef)
+      if (!snapshot.exists()) {
+        // Rectangle was deleted by another user - silently ignore the update
+        console.log(`Rectangle ${rectangleId} no longer exists, skipping update`)
+        return
+      }
+      
       const updateData = {
         ...updates,
         updatedAt: Date.now()
@@ -75,6 +84,54 @@ export class CanvasService {
       await dbUpdate(rectangleRef, updateData)
     } catch (error) {
       console.error('Error updating rectangle:', error)
+      throw error
+    }
+  }
+
+  // Resize an existing rectangle with validation
+  async resizeRectangle(
+    rectangleId: string, 
+    newWidth: number, 
+    newHeight: number, 
+    newX?: number, 
+    newY?: number
+  ): Promise<void> {
+    try {
+      // Import constants inside the method to avoid circular dependencies
+      const { RECTANGLE_CONSTRAINTS, CANVAS_BOUNDS } = await import('../utils/constants')
+      
+      const rectangleRef = dbRef(firebaseDatabase, `${DB_PATHS.RECTANGLES}/${rectangleId}`)
+      
+      // Check if rectangle still exists before resizing (handles race conditions)
+      const snapshot = await dbGet(rectangleRef)
+      if (!snapshot.exists()) {
+        // Rectangle was deleted by another user - silently ignore the resize
+        console.log(`Rectangle ${rectangleId} no longer exists, skipping resize`)
+        return
+      }
+      
+      // Validate dimensions
+      const validatedWidth = Math.max(RECTANGLE_CONSTRAINTS.MIN_WIDTH, Math.min(newWidth, RECTANGLE_CONSTRAINTS.MAX_WIDTH))
+      const validatedHeight = Math.max(RECTANGLE_CONSTRAINTS.MIN_HEIGHT, Math.min(newHeight, RECTANGLE_CONSTRAINTS.MAX_HEIGHT))
+      
+      // Prepare update data
+      const updateData: Partial<Rectangle> = {
+        width: validatedWidth,
+        height: validatedHeight,
+        updatedAt: Date.now()
+      }
+      
+      // Include position updates if provided
+      if (newX !== undefined) {
+        updateData.x = Math.max(CANVAS_BOUNDS.MIN_X, Math.min(newX, CANVAS_BOUNDS.MAX_X - validatedWidth))
+      }
+      if (newY !== undefined) {
+        updateData.y = Math.max(CANVAS_BOUNDS.MIN_Y, Math.min(newY, CANVAS_BOUNDS.MAX_Y - validatedHeight))
+      }
+      
+      await dbUpdate(rectangleRef, updateData)
+    } catch (error) {
+      console.error('Error resizing rectangle:', error)
       throw error
     }
   }

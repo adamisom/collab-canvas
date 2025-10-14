@@ -1,4 +1,4 @@
-import { CANVAS_BOUNDS, DEFAULT_RECT } from './constants'
+import { CANVAS_BOUNDS, DEFAULT_RECT, RECTANGLE_CONSTRAINTS, RESIZE_DIRECTIONS } from './constants'
 
 // Generate unique IDs for rectangles (Firebase push generates these automatically)
 export const generateRectangleId = (): string => {
@@ -26,6 +26,97 @@ export const constrainToCanvas = (x: number, y: number, width: number, height: n
     width,
     height
   }
+}
+
+// Validate and constrain rectangle dimensions
+export const validateAndConstrainDimensions = (width: number, height: number) => {
+  return {
+    width: Math.max(RECTANGLE_CONSTRAINTS.MIN_WIDTH, Math.min(width, RECTANGLE_CONSTRAINTS.MAX_WIDTH)),
+    height: Math.max(RECTANGLE_CONSTRAINTS.MIN_HEIGHT, Math.min(height, RECTANGLE_CONSTRAINTS.MAX_HEIGHT))
+  }
+}
+
+// Calculate resize handle positions for a rectangle
+export const calculateResizeHandlePositions = (x: number, y: number, width: number, height: number) => {
+  return {
+    [RESIZE_DIRECTIONS.TOP_LEFT]: { x, y },
+    [RESIZE_DIRECTIONS.TOP_CENTER]: { x: x + width / 2, y },
+    [RESIZE_DIRECTIONS.TOP_RIGHT]: { x: x + width, y },
+    [RESIZE_DIRECTIONS.MIDDLE_LEFT]: { x, y: y + height / 2 },
+    [RESIZE_DIRECTIONS.MIDDLE_RIGHT]: { x: x + width, y: y + height / 2 },
+    [RESIZE_DIRECTIONS.BOTTOM_LEFT]: { x, y: y + height },
+    [RESIZE_DIRECTIONS.BOTTOM_CENTER]: { x: x + width / 2, y: y + height },
+    [RESIZE_DIRECTIONS.BOTTOM_RIGHT]: { x: x + width, y: y + height }
+  }
+}
+
+// Calculate new rectangle dimensions based on resize direction and delta
+export const calculateResizeUpdate = (
+  direction: string,
+  currentX: number,
+  currentY: number,
+  currentWidth: number,
+  currentHeight: number,
+  deltaX: number,
+  deltaY: number
+) => {
+  let newX = currentX
+  let newY = currentY
+  let newWidth = currentWidth
+  let newHeight = currentHeight
+
+  switch (direction) {
+    case RESIZE_DIRECTIONS.TOP_LEFT:
+      newX = currentX + deltaX
+      newY = currentY + deltaY
+      newWidth = currentWidth - deltaX
+      newHeight = currentHeight - deltaY
+      break
+    case RESIZE_DIRECTIONS.TOP_CENTER:
+      newY = currentY + deltaY
+      newHeight = currentHeight - deltaY
+      break
+    case RESIZE_DIRECTIONS.TOP_RIGHT:
+      newY = currentY + deltaY
+      newWidth = currentWidth + deltaX
+      newHeight = currentHeight - deltaY
+      break
+    case RESIZE_DIRECTIONS.MIDDLE_LEFT:
+      newX = currentX + deltaX
+      newWidth = currentWidth - deltaX
+      break
+    case RESIZE_DIRECTIONS.MIDDLE_RIGHT:
+      newWidth = currentWidth + deltaX
+      break
+    case RESIZE_DIRECTIONS.BOTTOM_LEFT:
+      newX = currentX + deltaX
+      newWidth = currentWidth - deltaX
+      newHeight = currentHeight + deltaY
+      break
+    case RESIZE_DIRECTIONS.BOTTOM_CENTER:
+      newHeight = currentHeight + deltaY
+      break
+    case RESIZE_DIRECTIONS.BOTTOM_RIGHT:
+      newWidth = currentWidth + deltaX
+      newHeight = currentHeight + deltaY
+      break
+  }
+
+  // Validate and constrain dimensions
+  const constrainedDimensions = validateAndConstrainDimensions(newWidth, newHeight)
+  
+  // Adjust position if dimensions were constrained (for left/top handles)
+  if (direction.includes('l')) { // left handles
+    newX = currentX + currentWidth - constrainedDimensions.width
+  }
+  if (direction.includes('t')) { // top handles
+    newY = currentY + currentHeight - constrainedDimensions.height
+  }
+
+  // Ensure rectangle stays within canvas bounds
+  const constrainedBounds = constrainToCanvas(newX, newY, constrainedDimensions.width, constrainedDimensions.height)
+
+  return constrainedBounds
 }
 
 // Calculate distance between two points

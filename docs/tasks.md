@@ -568,67 +568,80 @@ Run through this before calling MVP complete:
 
 ---
 
-### PR #7: Rectangle Resizing & Movement Polish
+### PR #7: Rectangle Resizing & Movement Polish ✅ COMPLETED
 **Branch:** `feature/rectangle-resizing`  
 **Goal:** Add rectangle resizing functionality and polish existing movement behavior
 
 **Tasks:**
-- [ ] Fix canvas repositioning during rectangle drag
+- [x] Fix canvas repositioning during rectangle drag
   - Issue: Canvas pans when dragging rectangles, should only move the rectangle
   - Edits: `src/components/canvas/Rectangle.tsx`
   - Edits: `src/components/canvas/Canvas.tsx`
   - Fix: Prevent drag events from bubbling to stage, stop canvas pan during rectangle drag
-- [ ] Create ResizeHandle component for rectangle corners/edges
+- [x] Create ResizeHandle component for rectangle corners/edges
   - Creates: `src/components/canvas/ResizeHandle.tsx`
   - Add resize handles at corners and edges of selected rectangles
   - Handle visual styling (small squares/circles at resize points)
-- [ ] Implement resize functionality in Rectangle component
+- [x] Implement resize functionality in Rectangle component
   - Edits: `src/components/canvas/Rectangle.tsx`
   - Add resize handles to selected rectangles (8 handles: 4 corners + 4 edges)
   - Implement onResize callback for handle dragging
   - Maintain minimum size constraints (e.g., 20x20px minimum)
   - Add resize cursor styling (nw-resize, ne-resize, etc.)
-- [ ] Add rectangle resize methods to canvasService
+- [x] Add rectangle resize methods to canvasService
   - Edits: `src/services/canvasService.ts`
   - Create resizeRectangle() method
   - Add validation for minimum/maximum dimensions
-- [ ] Update unit tests for rectangle resize methods
+- [x] Update unit tests for rectangle resize methods
   - Edits: `tests/services/canvasService.test.ts`
   - Tests: resizeRectangle(), dimension validation, minimum size enforcement
-- [ ] Add resize state management to CanvasContext
+- [x] Add resize state management to CanvasContext
   - Edits: `src/contexts/CanvasContext.tsx`
   - Add resizeRectangle method to context
   - Handle optimistic resize updates
-- [ ] Implement real-time resize synchronization
+- [x] Implement real-time resize synchronization
   - Edits: `src/contexts/CanvasContext.tsx`
   - Sync resize changes to Firebase instantly
   - Show resize operations to other users in real-time
-- [ ] Add resize visual feedback
+- [x] Add resize visual feedback
   - Edits: `src/components/canvas/Rectangle.tsx`
   - Show resize handles only on selected rectangles
   - Add hover states for resize handles
   - Show resize preview during drag operation
-- [ ] Handle resize constraints and bounds checking
+- [x] Handle resize constraints and bounds checking
   - Edits: `src/utils/canvasHelpers.ts`
   - Add utility functions for resize bounds validation
   - Prevent resizing beyond canvas boundaries
   - Maintain minimum rectangle dimensions
-- [ ] Add keyboard shortcuts for resizing
+- [x] Add keyboard shortcuts for resizing
   - Edits: `src/components/canvas/Canvas.tsx`
   - Shift+Arrow keys: Resize selected rectangle in 10px increments
   - Ctrl+Shift+Arrow keys: Fine resize in 1px increments
-- [ ] Polish drag behavior and event handling
+- [x] Polish drag behavior and event handling
   - Edits: `src/components/canvas/Rectangle.tsx`
   - Ensure smooth dragging without canvas interference
   - Add proper event stopPropagation for all rectangle interactions
   - Improve drag performance and responsiveness
-- [ ] Update constants for resize handles and dimensions
+- [x] Update constants for resize handles and dimensions
   - Edits: `src/utils/constants.ts`
   - Add RESIZE_HANDLE_SIZE, MIN_RECTANGLE_SIZE, MAX_RECTANGLE_SIZE
   - Define resize handle colors and styling constants
-- [ ] Run tests to verify resize logic
+- [x] **BONUS: Rectangle Deletion Functionality**
+  - Add Delete/Backspace key support for selected rectangles
+  - Prevent deletion during active drag/resize operations
+  - Optimistic deletion with real-time sync
+  - No confirmation dialog for smooth UX
+- [x] **BONUS: Race Condition Protection**
+  - Make updateRectangle() and resizeRectangle() resilient to deleted rectangles
+  - Silent failure when rectangle no longer exists (handles multi-user conflicts)
+  - Prevents errors when users interact with same rectangle simultaneously
+- [x] **BONUS: Enhanced Canvas Stability**
+  - Fix canvas repositioning during resize operations (not just drag)
+  - Aggressive event prevention with stopImmediatePropagation
+  - Complete isolation between rectangle and canvas interactions
+- [x] Run tests to verify resize logic
   - Run: `npm test`
-- [ ] Test resizing across multiple users (manual integration test)
+- [x] Test resizing across multiple users (manual integration test)
   - Manual test: Multiple users resizing different rectangles simultaneously
   - Manual test: Resize operations sync in real-time
   - Manual test: Resize constraints work properly
@@ -648,17 +661,28 @@ Run through this before calling MVP complete:
 **Success Criteria:**
 - ✅ All unit tests pass (`npm test`)
 - ✅ Canvas no longer pans when dragging rectangles (manual test)
+- ✅ Canvas no longer pans when resizing rectangles (manual test)
 - ✅ Can resize selected rectangle using corner/edge handles (manual test)
 - ✅ Resize handles appear only on selected rectangles (manual test)
+- ✅ Resize handles disappear during drag operations (manual test)
 - ✅ Resize operations respect minimum size constraints (manual test)
 - ✅ Resize changes sync to all users in <100ms (manual test)
 - ✅ Keyboard shortcuts work for resizing (Shift+Arrow keys)
+- ✅ Delete/Backspace keys delete selected rectangles (manual test)
+- ✅ Deletion prevented during active drag/resize operations (manual test)
+- ✅ Race conditions handled gracefully - no errors on deleted rectangles (manual test)
 - ✅ Multiple users can resize different rectangles simultaneously (manual test)
 - ✅ Rectangle drag behavior is smooth and responsive (manual test)
 
 **Test Coverage:**
-- Unit tests: Rectangle resize, dimension validation, bounds checking
-- Manual integration test: Multi-user resize sync, drag behavior improvements
+- Unit tests: Rectangle resize, dimension validation, bounds checking, race condition handling
+- Manual integration test: Multi-user resize sync, drag behavior improvements, deletion functionality
+
+**BONUS FEATURES ACHIEVED:**
+- 🗑️ **Rectangle Deletion**: Delete/Backspace key support with optimistic updates
+- 🛡️ **Race Condition Protection**: Resilient to multi-user conflicts and deleted rectangles  
+- 🎯 **Enhanced Stability**: Complete canvas isolation during all rectangle operations
+- 📱 **Professional UX**: Handles disappear during drag, proper cursors, smooth interactions
 
 ---
 

@@ -12,6 +12,7 @@ interface CanvasContextType {
   // Rectangle operations
   createRectangle: (x: number, y: number) => Promise<Rectangle | null>
   updateRectangle: (rectangleId: string, updates: Partial<Omit<Rectangle, 'id' | 'createdBy' | 'createdAt'>>) => Promise<void>
+  resizeRectangle: (rectangleId: string, newWidth: number, newHeight: number, newX?: number, newY?: number) => Promise<void>
   deleteRectangle: (rectangleId: string) => Promise<void>
   
   // Selection operations
@@ -114,6 +115,22 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     }
   }, [])
 
+  // Resize an existing rectangle
+  const resizeRectangle = useCallback(async (
+    rectangleId: string, 
+    newWidth: number, 
+    newHeight: number, 
+    newX?: number, 
+    newY?: number
+  ): Promise<void> => {
+    try {
+      await canvasService.resizeRectangle(rectangleId, newWidth, newHeight, newX, newY)
+    } catch (error) {
+      console.error('Error resizing rectangle:', error)
+      setError('Failed to resize rectangle')
+    }
+  }, [])
+
   // Delete a rectangle
   const deleteRectangle = useCallback(async (rectangleId: string): Promise<void> => {
     try {
@@ -162,6 +179,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     error,
     createRectangle,
     updateRectangle,
+    resizeRectangle,
     deleteRectangle,
     selectRectangle,
     clearError,

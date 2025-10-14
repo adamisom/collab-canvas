@@ -31,6 +31,36 @@ export const SELECTION_COLORS = {
   STROKE_WIDTH: 3
 } as const
 
+// Resize handle properties
+export const RESIZE_HANDLE = {
+  SIZE: 8,
+  FILL: '#ffffff',
+  STROKE: '#ef4444',
+  STROKE_WIDTH: 2,
+  HOVER_FILL: '#ef4444',
+  HOVER_STROKE: '#dc2626'
+} as const
+
+// Rectangle size constraints
+export const RECTANGLE_CONSTRAINTS = {
+  MIN_WIDTH: 20,
+  MIN_HEIGHT: 20,
+  MAX_WIDTH: CANVAS_WIDTH,
+  MAX_HEIGHT: CANVAS_HEIGHT
+} as const
+
+// Resize directions
+export const RESIZE_DIRECTIONS = {
+  TOP_LEFT: 'tl',
+  TOP_CENTER: 'tc', 
+  TOP_RIGHT: 'tr',
+  MIDDLE_LEFT: 'ml',
+  MIDDLE_RIGHT: 'mr',
+  BOTTOM_LEFT: 'bl',
+  BOTTOM_CENTER: 'bc',
+  BOTTOM_RIGHT: 'br'
+} as const
+
 // Canvas bounds
 export const CANVAS_BOUNDS = {
   MIN_X: 0,

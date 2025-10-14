@@ -76,7 +76,13 @@ describe('CanvasService', () => {
 
   describe('updateRectangle', () => {
     it('should update rectangle with new data and timestamp', async () => {
-      const { dbUpdate } = await import('../../src/services/firebaseService')
+      const { dbUpdate, dbGet } = await import('../../src/services/firebaseService')
+      
+      // Mock dbGet to return existing rectangle
+      vi.mocked(dbGet).mockResolvedValue({
+        exists: () => true,
+        val: () => ({ id: 'test-id', x: 100, y: 100 })
+      } as any)
 
       const updates = {
         x: 200,
@@ -87,10 +93,152 @@ describe('CanvasService', () => {
 
       await canvasService.updateRectangle('test-id', updates)
 
+      expect(dbGet).toHaveBeenCalled()
       expect(dbUpdate).toHaveBeenCalledWith(
         expect.anything(),
         expect.objectContaining({
           ...updates,
+          updatedAt: expect.any(Number)
+        })
+      )
+    })
+
+    it('should handle race condition when rectangle no longer exists', async () => {
+      const { dbUpdate, dbGet } = await import('../../src/services/firebaseService')
+      
+      // Mock dbGet to return non-existing rectangle
+      vi.mocked(dbGet).mockResolvedValue({
+        exists: () => false
+      } as any)
+
+      const updates = {
+        x: 200,
+        y: 250,
+        width: 300,
+        height: 150
+      }
+
+      // Should not throw an error - should silently ignore
+      await expect(canvasService.updateRectangle('test-id', updates)).resolves.toBeUndefined()
+
+      expect(dbGet).toHaveBeenCalled()
+      expect(dbUpdate).not.toHaveBeenCalled() // Should not update if rectangle doesn't exist
+    })
+  })
+
+  describe('resizeRectangle', () => {
+    it('should resize rectangle with dimension validation', async () => {
+      const { dbUpdate, dbGet } = await import('../../src/services/firebaseService')
+      
+      // Mock dbGet to return existing rectangle
+      vi.mocked(dbGet).mockResolvedValue({
+        exists: () => true,
+        val: () => ({ id: 'test-id', x: 100, y: 100 })
+      } as any)
+
+      await canvasService.resizeRectangle('test-id', 200, 150)
+
+      expect(dbGet).toHaveBeenCalled()
+      expect(dbUpdate).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          width: 200,
+          height: 150,
+          updatedAt: expect.any(Number)
+        })
+      )
+    })
+
+    it('should resize rectangle with position updates', async () => {
+      const { dbUpdate, dbGet } = await import('../../src/services/firebaseService')
+      
+      // Mock dbGet to return existing rectangle
+      vi.mocked(dbGet).mockResolvedValue({
+        exists: () => true,
+        val: () => ({ id: 'test-id', x: 100, y: 100 })
+      } as any)
+
+      await canvasService.resizeRectangle('test-id', 200, 150, 100, 50)
+
+      expect(dbGet).toHaveBeenCalled()
+      expect(dbUpdate).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          width: 200,
+          height: 150,
+          x: 100,
+          y: 50,
+          updatedAt: expect.any(Number)
+        })
+      )
+    })
+
+    it('should enforce minimum dimensions', async () => {
+      const { dbUpdate, dbGet } = await import('../../src/services/firebaseService')
+      
+      // Mock dbGet to return existing rectangle
+      vi.mocked(dbGet).mockResolvedValue({
+        exists: () => true,
+        val: () => ({ id: 'test-id', x: 100, y: 100 })
+      } as any)
+
+      // Try to resize smaller than minimum (20x20)
+      await canvasService.resizeRectangle('test-id', 10, 5)
+
+      expect(dbGet).toHaveBeenCalled()
+      expect(dbUpdate).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          width: 20, // Should be constrained to minimum
+          height: 20, // Should be constrained to minimum
+          updatedAt: expect.any(Number)
+        })
+      )
+    })
+
+    it('should enforce maximum dimensions', async () => {
+      const { dbUpdate, dbGet } = await import('../../src/services/firebaseService')
+      
+      // Mock dbGet to return existing rectangle
+      vi.mocked(dbGet).mockResolvedValue({
+        exists: () => true,
+        val: () => ({ id: 'test-id', x: 100, y: 100 })
+      } as any)
+
+      // Try to resize larger than canvas
+      await canvasService.resizeRectangle('test-id', 5000, 4000)
+
+      expect(dbGet).toHaveBeenCalled()
+      expect(dbUpdate).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          width: 3000, // Should be constrained to canvas width
+          height: 3000, // Should be constrained to canvas height
+          updatedAt: expect.any(Number)
+        })
+      )
+    })
+
+    it('should constrain position to canvas bounds', async () => {
+      const { dbUpdate, dbGet } = await import('../../src/services/firebaseService')
+      
+      // Mock dbGet to return existing rectangle
+      vi.mocked(dbGet).mockResolvedValue({
+        exists: () => true,
+        val: () => ({ id: 'test-id', x: 100, y: 100 })
+      } as any)
+
+      // Try to position outside canvas
+      await canvasService.resizeRectangle('test-id', 100, 100, -50, -50)
+
+      expect(dbGet).toHaveBeenCalled()
+      expect(dbUpdate).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          width: 100,
+          height: 100,
+          x: 0, // Should be constrained to canvas minimum
+          y: 0, // Should be constrained to canvas minimum
           updatedAt: expect.any(Number)
         })
       )
