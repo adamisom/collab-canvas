@@ -112,16 +112,85 @@ src/
 
 ## Deployment
 
-Will be deployed to Firebase Hosting. Instructions coming in a later phase.
+### Production URL
+🚀 **Live App:** `https://collab-canvas.web.app` *(will be available after deployment)*
+
+### Deploy to Firebase Hosting
+
+**Prerequisites:**
+- Firebase CLI installed: `npm install -g firebase-tools`
+- Firebase project created and configured (see setup above)
+
+**Deployment Steps:**
+
+1. **Login to Firebase:**
+   ```bash
+   firebase login
+   ```
+
+2. **Initialize Firebase Hosting (if not done):**
+   ```bash
+   firebase init hosting
+   # Select existing project
+   # Public directory: dist
+   # Single-page app: Yes
+   # Overwrite index.html: No
+   ```
+
+3. **Build and Deploy:**
+   ```bash
+   # Build production version
+   npm run build
+   
+   # Deploy to Firebase Hosting
+   firebase deploy --only hosting
+   ```
+
+4. **Update Firebase Database Rules for Production:**
+   
+   Go to Firebase Console > Realtime Database > Rules and update:
+   ```json
+   {
+     "rules": {
+       "rectangles": {
+         ".read": "auth != null",
+         ".write": "auth != null"
+       },
+       "cursors": {
+         ".read": "auth != null", 
+         ".write": "auth != null"
+       },
+       "users": {
+         ".read": "auth != null",
+         ".write": "auth != null"  
+       }
+     }
+   }
+   ```
+
+5. **Test Production Deployment:**
+   - Open the deployed URL
+   - Test with multiple browser tabs/devices
+   - Verify real-time collaboration works
+   - Check browser console for errors
+
+**Deployment Configuration Files:**
+- `firebase.json` - Firebase hosting configuration
+- `.firebaserc` - Firebase project configuration  
+- Both files are already configured and ready for deployment
 
 ## MVP Features
 
 - ✅ Anonymous authentication with usernames
-- ✅ Real-time cursor sharing
+- ✅ Real-time cursor sharing with user names
 - ✅ Rectangle creation and movement
-- ✅ Canvas pan and zoom
-- ✅ State persistence
-- ✅ Multi-user collaboration
+- ✅ Rectangle resizing with 8-point handles
+- ✅ Rectangle deletion (Delete/Backspace keys)
+- ✅ Canvas pan and zoom (trackpad/mouse wheel)
+- ✅ State persistence across page refreshes
+- ✅ Multi-user real-time collaboration
+- ✅ Race condition protection for concurrent edits
+- ✅ Professional UX with smooth interactions
 
 ## Contributing
 
