@@ -50,6 +50,9 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
   // Use ref to access current selectedRectangleId in Firebase callback
   const selectedRectangleIdRef = useRef<string | null>(null)
   
+  // Use ref to track previous user ID for cleanup
+  const prevUserIdRef = useRef<string | null>(null)
+  
   // Keep ref in sync with state
   useEffect(() => {
     selectedRectangleIdRef.current = selectedRectangleId
@@ -84,6 +87,17 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
 
     return () => {
       unsubscribe()
+    }
+  }, [user])
+
+  // Clean up user selections when user signs out
+  useEffect(() => {
+    if (user) {
+      prevUserIdRef.current = user.uid
+    } else if (prevUserIdRef.current) {
+      // User signed out, clean up their selections
+      canvasService.clearUserSelections(prevUserIdRef.current)
+      prevUserIdRef.current = null
     }
   }, [user])
 

@@ -572,4 +572,105 @@ describe('CanvasService', () => {
       expect(result.selectedByUsername).toBeUndefined()
     })
   })
+
+  describe('clearUserSelections', () => {
+    it('should clear all selections by a specific user', async () => {
+      const { dbGet, dbUpdate } = await import('../../src/services/firebaseService')
+      const userId = 'user123'
+      const mockRectangles = {
+        'rect1': {
+          id: 'rect1',
+          selectedBy: userId,
+          selectedByUsername: 'Alice',
+          x: 100,
+          y: 100,
+          width: 50,
+          height: 50
+        },
+        'rect2': {
+          id: 'rect2',
+          selectedBy: 'otherUser',
+          selectedByUsername: 'Bob',
+          x: 200,
+          y: 200,
+          width: 50,
+          height: 50
+        },
+        'rect3': {
+          id: 'rect3',
+          selectedBy: userId,
+          selectedByUsername: 'Alice',
+          x: 300,
+          y: 300,
+          width: 50,
+          height: 50
+        }
+      }
+
+      vi.mocked(dbGet).mockResolvedValueOnce({
+        exists: () => true,
+        val: () => mockRectangles
+      } as any)
+
+      await canvasService.clearUserSelections(userId)
+
+      expect(dbUpdate).toHaveBeenCalledWith(
+        expect.any(Object),
+        {
+          'rect1/selectedBy': null,
+          'rect1/selectedByUsername': null,
+          'rect1/updatedAt': expect.any(Number),
+          'rect3/selectedBy': null,
+          'rect3/selectedByUsername': null,
+          'rect3/updatedAt': expect.any(Number)
+        }
+      )
+    })
+
+    it('should handle case when no rectangles exist', async () => {
+      const { dbGet, dbUpdate } = await import('../../src/services/firebaseService')
+
+      vi.mocked(dbGet).mockResolvedValueOnce({
+        exists: () => false,
+        val: () => null
+      } as any)
+
+      await canvasService.clearUserSelections('user123')
+
+      expect(dbUpdate).not.toHaveBeenCalled()
+    })
+
+    it('should handle case when user has no selections', async () => {
+      const { dbGet, dbUpdate } = await import('../../src/services/firebaseService')
+      const mockRectangles = {
+        'rect1': {
+          id: 'rect1',
+          selectedBy: 'otherUser',
+          selectedByUsername: 'Bob',
+          x: 100,
+          y: 100,
+          width: 50,
+          height: 50
+        }
+      }
+
+      vi.mocked(dbGet).mockResolvedValueOnce({
+        exists: () => true,
+        val: () => mockRectangles
+      } as any)
+
+      await canvasService.clearUserSelections('user123')
+
+      expect(dbUpdate).not.toHaveBeenCalled()
+    })
+
+    it('should not throw error on database failure', async () => {
+      const { dbGet } = await import('../../src/services/firebaseService')
+      
+      vi.mocked(dbGet).mockRejectedValueOnce(new Error('Database error'))
+
+      // Should not throw
+      await expect(canvasService.clearUserSelections('user123')).resolves.toBeUndefined()
+    })
+  })
 })

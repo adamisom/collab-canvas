@@ -262,6 +262,39 @@ export class CanvasService {
       throw error
     }
   }
+
+  // Clear all selections by a specific user (for cleanup when user signs out)
+  async clearUserSelections(userId: string): Promise<void> {
+    try {
+      const rectanglesRef = dbRef(firebaseDatabase, DB_PATHS.RECTANGLES)
+      const snapshot = await dbGet(rectanglesRef)
+      
+      if (!snapshot.exists()) {
+        return // No rectangles exist
+      }
+      
+      const rectangles = snapshot.val() as Record<string, Rectangle>
+      const updates: Record<string, any> = {}
+      
+      // Find all rectangles selected by this user and prepare batch update
+      Object.entries(rectangles).forEach(([rectangleId, rectangle]) => {
+        if (rectangle.selectedBy === userId) {
+          updates[`${rectangleId}/selectedBy`] = null
+          updates[`${rectangleId}/selectedByUsername`] = null
+          updates[`${rectangleId}/updatedAt`] = Date.now()
+        }
+      })
+      
+      // Perform batch update if there are any selections to clear
+      if (Object.keys(updates).length > 0) {
+        await dbUpdate(rectanglesRef, updates)
+        console.log(`Cleared ${Object.keys(updates).length / 3} rectangle selections for user ${userId}`)
+      }
+    } catch (error) {
+      console.error('Error clearing user selections:', error)
+      // Don't throw error - this is cleanup, shouldn't block sign out
+    }
+  }
 }
 
 // Export singleton instance
