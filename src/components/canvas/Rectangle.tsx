@@ -30,6 +30,9 @@ const RectangleComponent: React.FC<RectangleProps> = ({
   const [isResizing, setIsResizing] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   
+  // Store the rectangle state at the start of resize to avoid stale prop issues
+  const [resizeStartRect, setResizeStartRect] = useState<typeof rectangle | null>(null)
+  
   const { user } = useAuth()
   
   // Check if rectangle is selected by another user
@@ -82,20 +85,23 @@ const RectangleComponent: React.FC<RectangleProps> = ({
   // Handle resize operations
   const handleResizeStart = (_direction: string) => {
     setIsResizing(true)
+    // Capture the rectangle state at the start of resize
+    setResizeStartRect({ ...rectangle })
     if (onResizeStart) {
       onResizeStart()
     }
   }
 
   const handleResizeMove = (direction: string, deltaX: number, deltaY: number) => {
-    if (!onResize || !isResizing) return
+    if (!onResize || !isResizing || !resizeStartRect) return
 
+    // Use the captured rectangle state from resize start, not current props
     const resizeUpdate = calculateResizeUpdate(
       direction,
-      rectangle.x,
-      rectangle.y,
-      rectangle.width,
-      rectangle.height,
+      resizeStartRect.x,
+      resizeStartRect.y,
+      resizeStartRect.width,
+      resizeStartRect.height,
       deltaX,
       deltaY
     )
@@ -106,6 +112,8 @@ const RectangleComponent: React.FC<RectangleProps> = ({
 
   const handleResizeEnd = (_direction: string) => {
     setIsResizing(false)
+    // Clear the captured resize start state
+    setResizeStartRect(null)
     if (onResizeEnd) {
       onResizeEnd()
     }

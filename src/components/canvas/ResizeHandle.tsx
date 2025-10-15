@@ -21,7 +21,7 @@ const ResizeHandle: React.FC<ResizeHandleProps> = ({
 }) => {
   const [isHover, setIsHover] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
+  const [initialDragStart, setInitialDragStart] = useState({ x: 0, y: 0 })
 
   const getCursor = (direction: string) => {
     switch (direction) {
@@ -69,7 +69,8 @@ const ResizeHandle: React.FC<ResizeHandleProps> = ({
     
     setIsDragging(true)
     const pos = e.target.getStage().getPointerPosition()
-    setDragStart({ x: pos.x, y: pos.y })
+    // Store the initial drag position
+    setInitialDragStart({ x: pos.x, y: pos.y })
     
     if (onDragStart) {
       onDragStart(direction)
@@ -86,14 +87,13 @@ const ResizeHandle: React.FC<ResizeHandleProps> = ({
     e.evt?.stopImmediatePropagation?.()
     
     const pos = e.target.getStage().getPointerPosition()
-    const deltaX = pos.x - dragStart.x
-    const deltaY = pos.y - dragStart.y
+    // Calculate delta from the INITIAL drag start position, not the previous position
+    const deltaX = pos.x - initialDragStart.x
+    const deltaY = pos.y - initialDragStart.y
     
     if (onDragMove) {
       onDragMove(direction, deltaX, deltaY)
     }
-    
-    setDragStart({ x: pos.x, y: pos.y })
   }
 
   const handleDragEnd = (e: any) => {
