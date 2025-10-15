@@ -62,7 +62,7 @@ const Canvas: React.FC<CanvasProps> = ({
       y: (pointer.y - stage.y()) / oldScale,
     }
     
-    let newScale = e.evt.deltaY > 0 ? oldScale * scaleBy : oldScale / scaleBy
+    let newScale = e.evt.deltaY > 0 ? oldScale / scaleBy : oldScale * scaleBy
     
     // Constrain zoom levels
     newScale = Math.max(0.1, Math.min(newScale, 5))
