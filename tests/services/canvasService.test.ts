@@ -50,6 +50,7 @@ describe('CanvasService', () => {
         y: 150,
         width: 200,
         height: 100,
+        color: '#3b82f6', // Default blue color
         createdBy: 'user123',
         createdAt: expect.any(Number),
         updatedAt: expect.any(Number)
@@ -361,6 +362,214 @@ describe('CanvasService', () => {
       canvasService.onRectanglesChange(mockCallback)
 
       expect(mockCallback).toHaveBeenCalledWith([])
+    })
+  })
+
+  describe('Exclusive Selection Logic', () => {
+    beforeEach(async () => {
+      const { dbGet } = await import('../../src/services/firebaseService')
+      // Mock rectangle exists by default
+      vi.mocked(dbGet).mockResolvedValue({
+        exists: () => true,
+        val: () => ({
+          id: 'test-rectangle-id',
+          x: 100,
+          y: 150,
+          width: 200,
+          height: 100,
+          color: '#3b82f6',
+          createdBy: 'user123',
+          createdAt: Date.now(),
+          updatedAt: Date.now()
+        })
+      } as any)
+    })
+
+    describe('selectRectangle', () => {
+      it('should successfully select an unselected rectangle', async () => {
+        const { dbUpdate } = await import('../../src/services/firebaseService')
+        
+        const result = await canvasService.selectRectangle('test-rectangle-id', 'user456', 'TestUser')
+        
+        expect(result).toBe(true)
+        expect(dbUpdate).toHaveBeenCalledWith(
+          expect.anything(),
+          expect.objectContaining({
+            selectedBy: 'user456',
+            selectedByUsername: 'TestUser',
+            updatedAt: expect.any(Number)
+          })
+        )
+      })
+
+      it('should allow same user to select already selected rectangle', async () => {
+        const { dbGet, dbUpdate } = await import('../../src/services/firebaseService')
+        
+        // Mock rectangle already selected by same user
+        vi.mocked(dbGet).mockResolvedValueOnce({
+          exists: () => true,
+          val: () => ({
+            id: 'test-rectangle-id',
+            selectedBy: 'user456',
+            selectedByUsername: 'TestUser'
+          })
+        } as any)
+        
+        const result = await canvasService.selectRectangle('test-rectangle-id', 'user456', 'TestUser')
+        
+        expect(result).toBe(true)
+        expect(dbUpdate).toHaveBeenCalled()
+      })
+
+      it('should reject selection if rectangle is selected by another user', async () => {
+        const { dbGet, dbUpdate } = await import('../../src/services/firebaseService')
+        
+        // Mock rectangle selected by different user
+        vi.mocked(dbGet).mockResolvedValueOnce({
+          exists: () => true,
+          val: () => ({
+            id: 'test-rectangle-id',
+            selectedBy: 'other-user',
+            selectedByUsername: 'OtherUser'
+          })
+        } as any)
+        
+        const result = await canvasService.selectRectangle('test-rectangle-id', 'user456', 'TestUser')
+        
+        expect(result).toBe(false)
+        expect(dbUpdate).not.toHaveBeenCalled()
+      })
+
+      it('should return false if rectangle does not exist', async () => {
+        const { dbGet, dbUpdate } = await import('../../src/services/firebaseService')
+        
+        vi.mocked(dbGet).mockResolvedValueOnce({
+          exists: () => false
+        } as any)
+        
+        const result = await canvasService.selectRectangle('nonexistent-id', 'user456', 'TestUser')
+        
+        expect(result).toBe(false)
+        expect(dbUpdate).not.toHaveBeenCalled()
+      })
+    })
+
+    describe('deselectRectangle', () => {
+      it('should successfully deselect rectangle selected by same user', async () => {
+        const { dbGet, dbUpdate } = await import('../../src/services/firebaseService')
+        
+        // Mock rectangle selected by same user
+        vi.mocked(dbGet).mockResolvedValueOnce({
+          exists: () => true,
+          val: () => ({
+            id: 'test-rectangle-id',
+            selectedBy: 'user456',
+            selectedByUsername: 'TestUser'
+          })
+        } as any)
+        
+        await canvasService.deselectRectangle('test-rectangle-id', 'user456')
+        
+        expect(dbUpdate).toHaveBeenCalledWith(
+          expect.anything(),
+          expect.objectContaining({
+            selectedBy: null,
+            selectedByUsername: null,
+            updatedAt: expect.any(Number)
+          })
+        )
+      })
+
+      it('should not deselect rectangle selected by different user', async () => {
+        const { dbGet, dbUpdate } = await import('../../src/services/firebaseService')
+        
+        // Mock rectangle selected by different user
+        vi.mocked(dbGet).mockResolvedValueOnce({
+          exists: () => true,
+          val: () => ({
+            id: 'test-rectangle-id',
+            selectedBy: 'other-user',
+            selectedByUsername: 'OtherUser'
+          })
+        } as any)
+        
+        await canvasService.deselectRectangle('test-rectangle-id', 'user456')
+        
+        expect(dbUpdate).not.toHaveBeenCalled()
+      })
+
+      it('should handle nonexistent rectangle gracefully', async () => {
+        const { dbGet, dbUpdate } = await import('../../src/services/firebaseService')
+        
+        vi.mocked(dbGet).mockResolvedValueOnce({
+          exists: () => false
+        } as any)
+        
+        await expect(canvasService.deselectRectangle('nonexistent-id', 'user456')).resolves.not.toThrow()
+        expect(dbUpdate).not.toHaveBeenCalled()
+      })
+    })
+  })
+
+  describe('Rectangle Color Properties', () => {
+    it('should create rectangle with default blue color when no color provided', async () => {
+      const { dbSet } = await import('../../src/services/firebaseService')
+      
+      const rectangleInput: RectangleInput = {
+        x: 100,
+        y: 150,
+        width: 200,
+        height: 100,
+        createdBy: 'user123'
+      }
+
+      const result = await canvasService.createRectangle(rectangleInput)
+
+      expect(result.color).toBe('#3b82f6') // RECTANGLE_COLORS.BLUE
+      expect(dbSet).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          color: '#3b82f6'
+        })
+      )
+    })
+
+    it('should create rectangle with specified color', async () => {
+      const { dbSet } = await import('../../src/services/firebaseService')
+      
+      const rectangleInput: RectangleInput = {
+        x: 100,
+        y: 150,
+        width: 200,
+        height: 100,
+        color: '#ef4444', // Red
+        createdBy: 'user123'
+      }
+
+      const result = await canvasService.createRectangle(rectangleInput)
+
+      expect(result.color).toBe('#ef4444')
+      expect(dbSet).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          color: '#ef4444'
+        })
+      )
+    })
+
+    it('should create rectangle with no initial selection', async () => {
+      const rectangleInput: RectangleInput = {
+        x: 100,
+        y: 150,
+        width: 200,
+        height: 100,
+        createdBy: 'user123'
+      }
+
+      const result = await canvasService.createRectangle(rectangleInput)
+
+      expect(result.selectedBy).toBeUndefined()
+      expect(result.selectedByUsername).toBeUndefined()
     })
   })
 })
