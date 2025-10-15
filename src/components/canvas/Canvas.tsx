@@ -20,8 +20,6 @@ const Canvas: React.FC<CanvasProps> = ({
   const stageRef = useRef<any>(null)
   
   // Canvas viewport state
-  const [stageScale, setStageScale] = useState(1)
-  const [stagePosition, setStagePosition] = useState({ x: 0, y: 0 })
   const [isDragging, setIsDragging] = useState(false)
   const [isRectangleDragging, setIsRectangleDragging] = useState(false)
   const [isRectangleResizing, setIsRectangleResizing] = useState(false)
@@ -32,6 +30,22 @@ const Canvas: React.FC<CanvasProps> = ({
   // Get cursors context
   const { cursors, updateCursor, error: cursorsError } = useCursors()
 
+
+  // Get current stage position and scale (with safer fallbacks)
+  const getCurrentStagePosition = useCallback(() => {
+    // Don't return (0,0) fallback - return null to indicate unavailable
+    if (!stageRef.current) return null
+    return {
+      x: stageRef.current.x(),
+      y: stageRef.current.y()
+    }
+  }, [])
+
+  const getCurrentStageScale = useCallback(() => {
+    if (!stageRef.current) return null
+    return stageRef.current.scaleX()
+  }, [])
+
   // Handle mouse move for cursor broadcasting
   const handleMouseMove = useCallback((e: any) => {
     if (isDragging || isRectangleDragging || isRectangleResizing) return // Don't broadcast while panning, dragging, or resizing
@@ -41,21 +55,30 @@ const Canvas: React.FC<CanvasProps> = ({
     
     if (pointer) {
       // Convert screen coordinates to canvas coordinates
-      const canvasX = (pointer.x - stagePosition.x) / stageScale
-      const canvasY = (pointer.y - stagePosition.y) / stageScale
+      const stagePos = getCurrentStagePosition()
+      const currentScale = getCurrentStageScale()
       
-      updateCursor(canvasX, canvasY)
+      if (stagePos && currentScale) {
+        const canvasX = (pointer.x - stagePos.x) / currentScale
+        const canvasY = (pointer.y - stagePos.y) / currentScale
+        
+        updateCursor(canvasX, canvasY)
+      }
     }
-  }, [updateCursor, stagePosition, stageScale, isDragging, isRectangleDragging, isRectangleResizing])
+  }, [updateCursor, getCurrentStagePosition, getCurrentStageScale, isDragging, isRectangleDragging, isRectangleResizing])
 
   // Handle wheel zoom
   const handleWheel = useCallback((e: any) => {
     e.evt.preventDefault()
     
+    if (!stageRef.current) return
+    
     const scaleBy = 1.05
-    const stage = e.target.getStage()
+    const stage = stageRef.current
     const oldScale = stage.scaleX()
     const pointer = stage.getPointerPosition()
+    
+    if (!pointer) return
     
     const mousePointTo = {
       x: (pointer.x - stage.x()) / oldScale,
@@ -72,8 +95,11 @@ const Canvas: React.FC<CanvasProps> = ({
       y: pointer.y - mousePointTo.y * newScale,
     }
     
-    setStageScale(newScale)
-    setStagePosition(newPos)
+    // Update both scale and position directly via ref
+    stage.scaleX(newScale)
+    stage.scaleY(newScale)
+    stage.x(newPos.x)
+    stage.y(newPos.y)
   }, [])
 
   // Handle drag start
@@ -88,13 +114,10 @@ const Canvas: React.FC<CanvasProps> = ({
   }, [isRectangleDragging, isRectangleResizing])
 
   // Handle drag end  
-  const handleDragEnd = useCallback((e: any) => {
-    // Only update stage position if this was actually a stage drag
-    if (!isRectangleDragging && !isRectangleResizing && isDragging) {
-      setIsDragging(false)
-      setStagePosition({ x: e.target.x(), y: e.target.y() })
-    }
-  }, [isRectangleDragging, isRectangleResizing, isDragging])
+  const handleDragEnd = useCallback((_e: any) => {
+    // Reset dragging state
+    setIsDragging(false)
+  }, [])
 
   // Handle stage click (for rectangle creation and deselection)
   const handleStageClick = useCallback(async (e: any) => {
@@ -109,18 +132,23 @@ const Canvas: React.FC<CanvasProps> = ({
       
       if (pointer) {
         // Convert screen coordinates to canvas coordinates
-        const canvasX = (pointer.x - stagePosition.x) / stageScale
-        const canvasY = (pointer.y - stagePosition.y) / stageScale
+        const stagePos = getCurrentStagePosition()
+        const currentScale = getCurrentStageScale()
         
-        console.log('Creating rectangle at:', canvasX, canvasY)
-        const newRectangle = await createRectangle(canvasX, canvasY)
-        
-        if (newRectangle) {
-          console.log('Rectangle created:', newRectangle)
+        if (stagePos && currentScale) {
+          const canvasX = (pointer.x - stagePos.x) / currentScale
+          const canvasY = (pointer.y - stagePos.y) / currentScale
+          
+          console.log('Creating rectangle at:', canvasX, canvasY)
+          const newRectangle = await createRectangle(canvasX, canvasY)
+          
+          if (newRectangle) {
+            console.log('Rectangle created:', newRectangle)
+          }
         }
       }
     }
-  }, [createRectangle, selectRectangle, stagePosition, stageScale])
+  }, [createRectangle, selectRectangle, getCurrentStagePosition, getCurrentStageScale])
 
   // Handle rectangle click (selection)
   const handleRectangleClick = useCallback((rectangle: RectangleType) => {
@@ -185,7 +213,6 @@ const Canvas: React.FC<CanvasProps> = ({
       
       // Canvas navigation
       const moveAmount = 50
-      let newPosition = { ...stagePosition }
       
       // Check if we're resizing a selected rectangle
       if (selectedRectangleId && (e.shiftKey || e.ctrlKey)) {
@@ -220,43 +247,57 @@ const Canvas: React.FC<CanvasProps> = ({
       }
       
       // Canvas navigation (when not resizing)
-      switch (e.key) {
-        case 'ArrowUp':
-          newPosition.y += moveAmount
-          break
-        case 'ArrowDown':
-          newPosition.y -= moveAmount
-          break
-        case 'ArrowLeft':
-          newPosition.x += moveAmount
-          break
-        case 'ArrowRight':
-          newPosition.x -= moveAmount
-          break
-        case '0':
-          // Reset zoom and position
-          setStageScale(1)
-          setStagePosition({ x: 0, y: 0 })
-          return
-        default:
-          return
+      if (stageRef.current) {
+        const currentPos = getCurrentStagePosition()
+        let newPosition = { ...currentPos }
+        
+        switch (e.key) {
+          case 'ArrowUp':
+            newPosition.y += moveAmount
+            break
+          case 'ArrowDown':
+            newPosition.y -= moveAmount
+            break
+          case 'ArrowLeft':
+            newPosition.x += moveAmount
+            break
+          case 'ArrowRight':
+            newPosition.x -= moveAmount
+            break
+          case '0':
+            // Reset zoom and position
+            stageRef.current.scaleX(1)
+            stageRef.current.scaleY(1)
+            stageRef.current.x(0)
+            stageRef.current.y(0)
+            return
+          default:
+            return
+        }
+        
+        stageRef.current.x(newPosition.x)
+        stageRef.current.y(newPosition.y)
       }
-      
-      setStagePosition(newPosition)
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [stagePosition, selectedRectangleId, rectangles, handleRectangleResize, deleteRectangle, isRectangleDragging, isRectangleResizing])
+  }, [selectedRectangleId, rectangles, handleRectangleResize, deleteRectangle, isRectangleDragging, isRectangleResizing])
 
   return (
     <div className="canvas-container">
       <div className="canvas-info">
         <div className="canvas-stats">
-          <span>Zoom: {Math.round(stageScale * 100)}%</span>
-          <span>Position: ({Math.round(stagePosition.x)}, {Math.round(stagePosition.y)})</span>
+          <span>Zoom: {(() => {
+            const scale = getCurrentStageScale()
+            return scale ? Math.round(scale * 100) : 100
+          })()}%</span>
+          <span>Position: ({(() => {
+            const pos = getCurrentStagePosition()
+            return pos ? `${Math.round(pos.x)}, ${Math.round(pos.y)}` : '0, 0'
+          })()})</span>
           <span>Rectangles: {rectangles.length}</span>
           <span>Cursors: {Object.keys(cursors).length}</span>
         </div>
@@ -280,10 +321,6 @@ const Canvas: React.FC<CanvasProps> = ({
           ref={stageRef}
           width={width}
           height={height}
-          scaleX={stageScale}
-          scaleY={stageScale}
-          x={stagePosition.x}
-          y={stagePosition.y}
           draggable={!isRectangleDragging && !isRectangleResizing}
           onWheel={handleWheel}
           onDragStart={handleDragStart}

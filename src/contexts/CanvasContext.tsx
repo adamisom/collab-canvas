@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react'
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react'
 import { canvasService } from '../services/canvasService'
 import type { Rectangle, RectangleInput } from '../services/canvasService'
 import { useAuth } from './AuthContext'
@@ -43,6 +43,14 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   
+  // Use ref to access current selectedRectangleId in Firebase callback
+  const selectedRectangleIdRef = useRef<string | null>(null)
+  
+  // Keep ref in sync with state
+  useEffect(() => {
+    selectedRectangleIdRef.current = selectedRectangleId
+  }, [selectedRectangleId])
+  
   const { user } = useAuth()
 
   // Initialize canvas state and set up real-time listeners
@@ -63,7 +71,9 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       setLoading(false)
       
       // Clear selection if selected rectangle no longer exists
-      if (selectedRectangleId && !newRectangles.find(r => r.id === selectedRectangleId)) {
+      // Use ref to get current selectedRectangleId without causing re-subscription
+      const currentSelectedId = selectedRectangleIdRef.current
+      if (currentSelectedId && !newRectangles.find(r => r.id === currentSelectedId)) {
         setSelectedRectangleId(null)
       }
     })
@@ -71,7 +81,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     return () => {
       unsubscribe()
     }
-  }, [user, selectedRectangleId])
+  }, [user])
 
   // Create a new rectangle
   const createRectangle = useCallback(async (x: number, y: number): Promise<Rectangle | null> => {
