@@ -184,16 +184,32 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     }
 
     if (rectangleId) {
-      // Try to select the new rectangle
-      const success = await canvasService.selectRectangle(rectangleId, user.uid, username)
+      // Admin override: user "adam" can always select rectangles (for cleanup)
+      const isAdmin = username.toLowerCase() === 'adam'
       
-      if (success) {
-        setSelectedRectangleId(rectangleId)
-      } else {
-        // Rectangle is already selected by another user
+      if (isAdmin) {
+        // Force selection for admin user, clear any existing selection first
         const rectangle = rectangles.find(r => r.id === rectangleId)
-        if (rectangle && rectangle.selectedByUsername) {
-          setToastMessage(`Rectangle selected by ${rectangle.selectedByUsername}`)
+        if (rectangle && rectangle.selectedBy && rectangle.selectedBy !== user.uid) {
+          // Clear the existing selection first
+          await canvasService.deselectRectangle(rectangleId, rectangle.selectedBy)
+        }
+        // Force select the rectangle
+        await canvasService.selectRectangle(rectangleId, user.uid, username)
+        setSelectedRectangleId(rectangleId)
+        console.log(`Admin override: Force selected rectangle ${rectangleId}`)
+      } else {
+        // Normal exclusive selection logic
+        const success = await canvasService.selectRectangle(rectangleId, user.uid, username)
+        
+        if (success) {
+          setSelectedRectangleId(rectangleId)
+        } else {
+          // Rectangle is already selected by another user
+          const rectangle = rectangles.find(r => r.id === rectangleId)
+          if (rectangle && rectangle.selectedByUsername) {
+            setToastMessage(`Rectangle selected by ${rectangle.selectedByUsername}`)
+          }
         }
       }
     } else {
