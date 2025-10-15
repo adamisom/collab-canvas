@@ -163,10 +163,16 @@ const Canvas: React.FC<CanvasProps> = ({
     }
   }, [createRectangle, selectRectangle, getCurrentStagePosition, getCurrentStageScale])
 
-  // Handle rectangle click (selection)
+  // Handle rectangle click (selection/deselection)
   const handleRectangleClick = useCallback(async (rectangle: RectangleType) => {
-    await selectRectangle(rectangle.id)
-  }, [selectRectangle])
+    // If the rectangle is already selected, deselect it
+    if (selectedRectangleId === rectangle.id) {
+      await selectRectangle(null)
+    } else {
+      // Otherwise, select it
+      await selectRectangle(rectangle.id)
+    }
+  }, [selectRectangle, selectedRectangleId])
 
   // Handle rectangle drag start
   const handleRectangleDragStart = useCallback(async (rectangle: RectangleType) => {
