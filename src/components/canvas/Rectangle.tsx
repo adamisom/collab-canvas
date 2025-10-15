@@ -3,6 +3,7 @@ import { Rect, Group } from 'react-konva'
 import type { Rectangle } from '../../services/canvasService'
 import { DEFAULT_RECT, SELECTION_COLORS, RESIZE_DIRECTIONS } from '../../utils/constants'
 import { calculateResizeHandlePositions, calculateResizeUpdate } from '../../utils/canvasHelpers'
+import { useAuth } from '../../contexts/AuthContext'
 import ResizeHandle from './ResizeHandle'
 
 interface RectangleProps {
@@ -28,6 +29,11 @@ const RectangleComponent: React.FC<RectangleProps> = ({
 }) => {
   const [isResizing, setIsResizing] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
+  
+  const { user } = useAuth()
+  
+  // Check if rectangle is selected by another user
+  const isSelectedByOther = rectangle.selectedBy && rectangle.selectedBy !== user?.uid
 
   const handleClick = (e: any) => {
     e.cancelBubble = true // Prevent event from bubbling to stage
@@ -120,9 +126,22 @@ const RectangleComponent: React.FC<RectangleProps> = ({
         y={rectangle.y}
         width={rectangle.width}
         height={rectangle.height}
-        fill={DEFAULT_RECT.FILL}
-        stroke={isSelected ? SELECTION_COLORS.STROKE : DEFAULT_RECT.STROKE}
-        strokeWidth={isSelected ? SELECTION_COLORS.STROKE_WIDTH : DEFAULT_RECT.STROKE_WIDTH}
+        fill={rectangle.color}
+        stroke={
+          isSelected 
+            ? SELECTION_COLORS.STROKE 
+            : isSelectedByOther 
+              ? '#f59e0b' // Orange for other user's selection
+              : DEFAULT_RECT.STROKE
+        }
+        strokeWidth={
+          isSelected 
+            ? SELECTION_COLORS.STROKE_WIDTH 
+            : isSelectedByOther 
+              ? 2 
+              : DEFAULT_RECT.STROKE_WIDTH
+        }
+        dash={isSelectedByOther ? [5, 5] : undefined}
         draggable={isSelected && !isResizing}
         onClick={handleClick}
         onTap={handleClick} // For touch devices

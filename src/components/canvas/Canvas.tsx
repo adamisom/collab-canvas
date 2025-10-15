@@ -5,6 +5,9 @@ import { useCursors } from '../../hooks/useCursors'
 import { VIEWPORT_WIDTH, VIEWPORT_HEIGHT } from '../../utils/constants'
 import Cursor from './Cursor'
 import Rectangle from './Rectangle'
+import ColorPicker from './ColorPicker'
+import UsersList from './UsersList'
+import Toast from '../ui/Toast'
 import type { Rectangle as RectangleType } from '../../services/canvasService'
 import './Canvas.css'
 
@@ -25,7 +28,18 @@ const Canvas: React.FC<CanvasProps> = ({
   const [isRectangleResizing, setIsRectangleResizing] = useState(false)
   
   // Get canvas context
-  const { rectangles, selectedRectangleId, createRectangle, updateRectangle, resizeRectangle, deleteRectangle, selectRectangle } = useCanvas()
+  const { 
+    rectangles, 
+    selectedRectangleId, 
+    createRectangle, 
+    updateRectangle, 
+    resizeRectangle, 
+    deleteRectangle, 
+    selectRectangle,
+    changeRectangleColor,
+    toastMessage,
+    clearToast
+  } = useCanvas()
   
   // Get cursors context
   const { cursors, updateCursor, error: cursorsError } = useCursors()
@@ -124,7 +138,7 @@ const Canvas: React.FC<CanvasProps> = ({
     // Only handle clicks on the stage background (not on shapes)
     if (e.target === e.target.getStage()) {
       // Deselect any selected rectangle
-      selectRectangle(null)
+      await selectRectangle(null)
       
       // Create new rectangle at click position
       const stage = e.target.getStage()
@@ -151,14 +165,14 @@ const Canvas: React.FC<CanvasProps> = ({
   }, [createRectangle, selectRectangle, getCurrentStagePosition, getCurrentStageScale])
 
   // Handle rectangle click (selection)
-  const handleRectangleClick = useCallback((rectangle: RectangleType) => {
-    selectRectangle(rectangle.id)
+  const handleRectangleClick = useCallback(async (rectangle: RectangleType) => {
+    await selectRectangle(rectangle.id)
   }, [selectRectangle])
 
   // Handle rectangle drag start
-  const handleRectangleDragStart = useCallback((rectangle: RectangleType) => {
+  const handleRectangleDragStart = useCallback(async (rectangle: RectangleType) => {
     setIsRectangleDragging(true)
-    selectRectangle(rectangle.id)
+    await selectRectangle(rectangle.id)
   }, [selectRectangle])
 
   // Handle rectangle drag end (update position)
@@ -195,6 +209,16 @@ const Canvas: React.FC<CanvasProps> = ({
   const handleResizeEnd = useCallback(() => {
     setIsRectangleResizing(false)
   }, [])
+
+  // Handle color change
+  const handleColorChange = useCallback(async (color: string) => {
+    if (selectedRectangleId) {
+      await changeRectangleColor(selectedRectangleId, color)
+    }
+  }, [selectedRectangleId, changeRectangleColor])
+
+  // Get selected rectangle
+  const selectedRectangle = rectangles.find(r => r.id === selectedRectangleId)
 
   // Keyboard controls for canvas navigation and rectangle resizing
   useEffect(() => {
@@ -355,7 +379,30 @@ const Canvas: React.FC<CanvasProps> = ({
             ))}
           </Layer>
         </Stage>
+        
+        {/* Color Picker */}
+        {selectedRectangle && (
+          <div className="color-picker-container">
+            <ColorPicker
+              selectedColor={selectedRectangle.color}
+              onColorChange={handleColorChange}
+            />
+          </div>
+        )}
+        
+        {/* Users List */}
+        <div className="users-list-container">
+          <UsersList cursors={cursors} />
+        </div>
       </div>
+      
+      {/* Toast Messages */}
+      {toastMessage && (
+        <Toast
+          message={toastMessage}
+          onDismiss={clearToast}
+        />
+      )}
     </div>
   )
 }

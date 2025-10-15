@@ -10,7 +10,7 @@ import {
   dbRemove
 } from './firebaseService'
 import type { DatabaseReference, DataSnapshot } from './firebaseService'
-import { DB_PATHS } from '../utils/constants'
+import { DB_PATHS, RECTANGLE_COLORS } from '../utils/constants'
 
 export interface Rectangle {
   id: string
@@ -18,6 +18,9 @@ export interface Rectangle {
   y: number
   width: number
   height: number
+  color: string
+  selectedBy?: string | null
+  selectedByUsername?: string | null
   createdBy: string
   createdAt: number
   updatedAt: number
@@ -28,6 +31,7 @@ export interface RectangleInput {
   y: number
   width: number
   height: number
+  color?: string
   createdBy: string
 }
 
@@ -51,6 +55,7 @@ export class CanvasService {
       const rectangle: Rectangle = {
         id: newRectangleRef.key,
         ...rectangleData,
+        color: rectangleData.color || RECTANGLE_COLORS.BLUE,
         createdAt: now,
         updatedAt: now
       }
@@ -197,6 +202,63 @@ export class CanvasService {
       return null
     } catch (error) {
       console.error('Error fetching rectangle:', error)
+      throw error
+    }
+  }
+
+  // Select a rectangle (exclusive selection)
+  async selectRectangle(rectangleId: string, userId: string, username: string): Promise<boolean> {
+    try {
+      const rectangleRef = dbRef(firebaseDatabase, `${DB_PATHS.RECTANGLES}/${rectangleId}`)
+      const snapshot = await dbGet(rectangleRef)
+      
+      if (!snapshot.exists()) {
+        return false // Rectangle doesn't exist
+      }
+      
+      const rectangle = snapshot.val() as Rectangle
+      
+      // Check if already selected by another user
+      if (rectangle.selectedBy && rectangle.selectedBy !== userId) {
+        return false // Already selected by someone else
+      }
+      
+      // Select the rectangle
+      await dbUpdate(rectangleRef, {
+        selectedBy: userId,
+        selectedByUsername: username,
+        updatedAt: Date.now()
+      })
+      
+      return true
+    } catch (error) {
+      console.error('Error selecting rectangle:', error)
+      throw error
+    }
+  }
+
+  // Deselect a rectangle
+  async deselectRectangle(rectangleId: string, userId: string): Promise<void> {
+    try {
+      const rectangleRef = dbRef(firebaseDatabase, `${DB_PATHS.RECTANGLES}/${rectangleId}`)
+      const snapshot = await dbGet(rectangleRef)
+      
+      if (!snapshot.exists()) {
+        return // Rectangle doesn't exist, nothing to deselect
+      }
+      
+      const rectangle = snapshot.val() as Rectangle
+      
+      // Only deselect if this user selected it
+      if (rectangle.selectedBy === userId) {
+        await dbUpdate(rectangleRef, {
+          selectedBy: null,
+          selectedByUsername: null,
+          updatedAt: Date.now()
+        })
+      }
+    } catch (error) {
+      console.error('Error deselecting rectangle:', error)
       throw error
     }
   }

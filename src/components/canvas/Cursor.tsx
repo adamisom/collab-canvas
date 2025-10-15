@@ -1,5 +1,5 @@
 import React from 'react'
-import { Group, Circle, Text } from 'react-konva'
+import { Group, Circle, Text, Rect } from 'react-konva'
 import type { CursorPosition } from '../../services/cursorService'
 
 interface CursorProps {
@@ -71,29 +71,27 @@ const Cursor: React.FC<CursorProps> = ({ cursor, isOwnCursor = false }) => {
       </Group>
       
       {/* Username label */}
-      <Group x={15} y={-10}>
+      <Group x={15} y={-15}>
         {/* Label background */}
-        <Text
-          text={cursor.username}
-          fontSize={12}
-          fontFamily="Inter, system-ui, sans-serif"
-          fill="white"
-          padding={4}
-          align="left"
-          verticalAlign="middle"
-          // Background will be added via a Rect in the next version if needed
+        <Rect
+          width={cursor.username.length * 14 + 8}
+          height={28}
+          fill="rgba(0, 0, 0, 0.7)"
+          cornerRadius={4}
         />
         
         {/* Username text */}
         <Text
           text={cursor.username}
-          fontSize={12}
+          fontSize={24}
           fontFamily="Inter, system-ui, sans-serif"
           fill={cursorColor}
-          fontStyle="bold"
-          padding={4}
+          stroke="white"
+          strokeWidth={1}
           align="left"
           verticalAlign="middle"
+          x={4}
+          y={2}
         />
       </Group>
     </Group>

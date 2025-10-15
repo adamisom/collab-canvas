@@ -16,11 +16,24 @@ export const DB_PATHS = {
   RECTANGLES: 'rectangles'
 } as const
 
+// Rectangle color options
+export const RECTANGLE_COLORS = {
+  RED: '#ef4444',
+  BLUE: '#3b82f6', 
+  GREEN: '#22c55e'
+} as const
+
+export const RECTANGLE_COLOR_OPTIONS = [
+  { name: 'Red', value: RECTANGLE_COLORS.RED },
+  { name: 'Blue', value: RECTANGLE_COLORS.BLUE },
+  { name: 'Green', value: RECTANGLE_COLORS.GREEN }
+] as const
+
 // Default rectangle properties
 export const DEFAULT_RECT = {
   WIDTH: 100,
   HEIGHT: 80,
-  FILL: '#3b82f6',
+  FILL: RECTANGLE_COLORS.BLUE,
   STROKE: '#1e40af',
   STROKE_WIDTH: 2
 } as const

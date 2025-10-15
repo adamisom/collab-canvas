@@ -8,18 +8,21 @@ interface CanvasContextType {
   selectedRectangleId: string | null
   loading: boolean
   error: string | null
+  toastMessage: string | null
   
   // Rectangle operations
   createRectangle: (x: number, y: number) => Promise<Rectangle | null>
   updateRectangle: (rectangleId: string, updates: Partial<Omit<Rectangle, 'id' | 'createdBy' | 'createdAt'>>) => Promise<void>
   resizeRectangle: (rectangleId: string, newWidth: number, newHeight: number, newX?: number, newY?: number) => Promise<void>
   deleteRectangle: (rectangleId: string) => Promise<void>
+  changeRectangleColor: (rectangleId: string, color: string) => Promise<void>
   
   // Selection operations
-  selectRectangle: (rectangleId: string | null) => void
+  selectRectangle: (rectangleId: string | null) => Promise<void>
   
   // Utility operations
   clearError: () => void
+  clearToast: () => void
   refreshRectangles: () => Promise<void>
 }
 
@@ -42,6 +45,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
   const [selectedRectangleId, setSelectedRectangleId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [toastMessage, setToastMessage] = useState<string | null>(null)
   
   // Use ref to access current selectedRectangleId in Firebase callback
   const selectedRectangleIdRef = useRef<string | null>(null)
@@ -51,7 +55,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     selectedRectangleIdRef.current = selectedRectangleId
   }, [selectedRectangleId])
   
-  const { user } = useAuth()
+  const { user, username } = useAuth()
 
   // Initialize canvas state and set up real-time listeners
   useEffect(() => {
@@ -156,14 +160,51 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     }
   }, [selectedRectangleId])
 
-  // Select or deselect a rectangle
-  const selectRectangle = useCallback((rectangleId: string | null) => {
-    setSelectedRectangleId(rectangleId)
-  }, [])
+  // Select or deselect a rectangle (with exclusive selection logic)
+  const selectRectangle = useCallback(async (rectangleId: string | null) => {
+    if (!user || !username) return
+
+    // Deselect current rectangle first
+    if (selectedRectangleId) {
+      await canvasService.deselectRectangle(selectedRectangleId, user.uid)
+    }
+
+    if (rectangleId) {
+      // Try to select the new rectangle
+      const success = await canvasService.selectRectangle(rectangleId, user.uid, username)
+      
+      if (success) {
+        setSelectedRectangleId(rectangleId)
+      } else {
+        // Rectangle is already selected by another user
+        const rectangle = rectangles.find(r => r.id === rectangleId)
+        if (rectangle && rectangle.selectedByUsername) {
+          setToastMessage(`Rectangle selected by ${rectangle.selectedByUsername}`)
+        }
+      }
+    } else {
+      setSelectedRectangleId(null)
+    }
+  }, [user, username, selectedRectangleId, rectangles])
 
   // Clear any error messages
   const clearError = useCallback(() => {
     setError(null)
+  }, [])
+
+  // Clear toast messages
+  const clearToast = useCallback(() => {
+    setToastMessage(null)
+  }, [])
+
+  // Change rectangle color
+  const changeRectangleColor = useCallback(async (rectangleId: string, color: string): Promise<void> => {
+    try {
+      await canvasService.updateRectangle(rectangleId, { color })
+    } catch (error) {
+      console.error('Error changing rectangle color:', error)
+      setError('Failed to change rectangle color')
+    }
   }, [])
 
   // Refresh rectangles manually
@@ -187,12 +228,15 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     selectedRectangleId,
     loading,
     error,
+    toastMessage,
     createRectangle,
     updateRectangle,
     resizeRectangle,
     deleteRectangle,
+    changeRectangleColor,
     selectRectangle,
     clearError,
+    clearToast,
     refreshRectangles
   }
 
