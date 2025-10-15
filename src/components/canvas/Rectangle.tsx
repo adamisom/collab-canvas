@@ -33,6 +33,9 @@ const RectangleComponent: React.FC<RectangleProps> = ({
   // Store the rectangle state at the start of resize to avoid stale prop issues
   const [resizeStartRect, setResizeStartRect] = useState<typeof rectangle | null>(null)
   
+  // Track the current visual rectangle dimensions during resize for handle positioning
+  const [currentVisualRect, setCurrentVisualRect] = useState<typeof rectangle | null>(null)
+  
   const { user } = useAuth()
   
   // Check if rectangle is selected by another user
@@ -106,25 +109,36 @@ const RectangleComponent: React.FC<RectangleProps> = ({
       deltaY
     )
 
+    // Update the current visual rectangle for handle positioning
+    setCurrentVisualRect({
+      ...rectangle,
+      x: resizeUpdate.x,
+      y: resizeUpdate.y,
+      width: resizeUpdate.width,
+      height: resizeUpdate.height
+    })
+
     // Apply optimistic update for smooth resizing
     onResize(rectangle, resizeUpdate.width, resizeUpdate.height, resizeUpdate.x, resizeUpdate.y)
   }
 
   const handleResizeEnd = (_direction: string) => {
     setIsResizing(false)
-    // Clear the captured resize start state
+    // Clear the captured resize start state and current visual rect
     setResizeStartRect(null)
+    setCurrentVisualRect(null)
     if (onResizeEnd) {
       onResizeEnd()
     }
   }
 
-  // Calculate resize handle positions
+  // Calculate resize handle positions using current visual rectangle during resize
+  const rectForHandles = isResizing && currentVisualRect ? currentVisualRect : rectangle
   const handlePositions = calculateResizeHandlePositions(
-    rectangle.x, 
-    rectangle.y, 
-    rectangle.width, 
-    rectangle.height
+    rectForHandles.x, 
+    rectForHandles.y, 
+    rectForHandles.width, 
+    rectForHandles.height
   )
 
   return (
