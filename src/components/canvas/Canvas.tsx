@@ -330,6 +330,17 @@ const Canvas: React.FC<CanvasProps> = ({
           })()})</span>
           <span>Rectangles: {rectangles.length}</span>
           <span>Cursors: {Object.keys(cursors).length}</span>
+          
+          {/* Color Picker - only show when rectangle is selected */}
+          {selectedRectangle && (
+            <div className="header-color-picker">
+              <span className="color-label">Color:</span>
+              <ColorPicker
+                selectedColor={selectedRectangle.color}
+                onColorChange={handleColorChange}
+              />
+            </div>
+          )}
         </div>
         <div className="canvas-controls">
           <span>🖱️ Click+Drag to pan</span>
@@ -386,36 +397,6 @@ const Canvas: React.FC<CanvasProps> = ({
           </Layer>
         </Stage>
         
-        {/* Color Picker Toast - positioned above selected rectangle */}
-        {selectedRectangle && (() => {
-          const stagePos = getCurrentStagePosition()
-          const stageScale = getCurrentStageScale()
-          
-          if (!stagePos || !stageScale) return null
-          
-          // Convert canvas coordinates to screen coordinates
-          const screenX = (selectedRectangle.x * stageScale) + stagePos.x + (selectedRectangle.width * stageScale) / 2
-          const screenY = (selectedRectangle.y * stageScale) + stagePos.y - 60
-          
-          return (
-            <div 
-              className="color-picker-toast"
-              style={{
-                position: 'absolute',
-                left: screenX,
-                top: screenY,
-                transform: 'translateX(-50%)', // Center horizontally
-                zIndex: 1000,
-                pointerEvents: 'auto'
-              }}
-            >
-              <ColorPicker
-                selectedColor={selectedRectangle.color}
-                onColorChange={handleColorChange}
-              />
-            </div>
-          )
-        })()}
         
       </div>
       

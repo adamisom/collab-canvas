@@ -316,3 +316,40 @@
     transform: translateX(-50%) translateY(0);
   }
 }
+
+/* Header Color Picker */
+.header-color-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 16px;
+  padding-left: 16px;
+  border-left: 1px solid #e2e8f0;
+}
+
+.color-label {
+  font-size: 14px;
+  color: #4a5568;
+  font-weight: 500;
+}
+
+/* Override ColorPicker styles for header layout */
+.header-color-picker .color-picker {
+  flex-direction: row;
+  gap: 6px;
+}
+
+.header-color-picker .color-picker-title {
+  display: none; /* Hide title in header version */
+}
+
+.header-color-picker .color-picker-options {
+  display: flex;
+  flex-direction: row;
+  gap: 6px;
+}
+
+.header-color-picker .color-option {
+  width: 20px;
+  height: 20px;
+}
