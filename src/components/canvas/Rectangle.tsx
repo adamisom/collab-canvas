@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { Rect, Group } from 'react-konva'
 import type { Rectangle } from '../../services/canvasService'
-import { DEFAULT_RECT, SELECTION_COLORS, RESIZE_DIRECTIONS } from '../../utils/constants'
+import { DEFAULT_RECT, SELECTION_COLORS, RESIZE_DIRECTIONS, getRectangleBorderColor } from '../../utils/constants'
 import { calculateResizeHandlePositions, calculateResizeUpdate } from '../../utils/canvasHelpers'
 import { useAuth } from '../../contexts/AuthContext'
 import ResizeHandle from './ResizeHandle'
@@ -154,7 +154,7 @@ const RectangleComponent: React.FC<RectangleProps> = ({
             ? SELECTION_COLORS.STROKE 
             : isSelectedByOther 
               ? '#f59e0b' // Orange for other user's selection
-              : DEFAULT_RECT.STROKE
+              : getRectangleBorderColor(rectangle.color)
         }
         strokeWidth={
           isSelected 

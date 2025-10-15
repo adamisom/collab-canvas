@@ -29,6 +29,18 @@ export const RECTANGLE_COLOR_OPTIONS = [
   { name: 'Green', value: RECTANGLE_COLORS.GREEN }
 ] as const
 
+// Darker border colors for each rectangle color
+export const RECTANGLE_BORDER_COLORS = {
+  [RECTANGLE_COLORS.RED]: '#dc2626',    // Darker red
+  [RECTANGLE_COLORS.BLUE]: '#1d4ed8',   // Darker blue  
+  [RECTANGLE_COLORS.GREEN]: '#16a34a'   // Darker green
+} as const
+
+// Function to get border color for a rectangle fill color
+export const getRectangleBorderColor = (fillColor: string): string => {
+  return RECTANGLE_BORDER_COLORS[fillColor as keyof typeof RECTANGLE_BORDER_COLORS] || '#374151'
+}
+
 // Default rectangle properties
 export const DEFAULT_RECT = {
   WIDTH: 100,
