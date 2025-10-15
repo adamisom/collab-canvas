@@ -156,6 +156,14 @@
   font-weight: 500;
 }
 
+.sidebar-section {
+  margin: 20px 0;
+  padding: 16px;
+  background: #f7fafc;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
 .test-controls {
   margin: 20px 0;
 }

@@ -6,7 +6,6 @@ import { VIEWPORT_WIDTH, VIEWPORT_HEIGHT } from '../../utils/constants'
 import Cursor from './Cursor'
 import Rectangle from './Rectangle'
 import ColorPicker from './ColorPicker'
-import UsersList from './UsersList'
 import Toast from '../ui/Toast'
 import type { Rectangle as RectangleType } from '../../services/canvasService'
 import './Canvas.css'
@@ -220,6 +219,7 @@ const Canvas: React.FC<CanvasProps> = ({
   // Get selected rectangle
   const selectedRectangle = rectangles.find(r => r.id === selectedRectangleId)
 
+
   // Keyboard controls for canvas navigation and rectangle resizing
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -380,20 +380,37 @@ const Canvas: React.FC<CanvasProps> = ({
           </Layer>
         </Stage>
         
-        {/* Color Picker */}
-        {selectedRectangle && (
-          <div className="color-picker-container">
-            <ColorPicker
-              selectedColor={selectedRectangle.color}
-              onColorChange={handleColorChange}
-            />
-          </div>
-        )}
+        {/* Color Picker Toast - positioned above selected rectangle */}
+        {selectedRectangle && (() => {
+          const stagePos = getCurrentStagePosition()
+          const stageScale = getCurrentStageScale()
+          
+          if (!stagePos || !stageScale) return null
+          
+          // Convert canvas coordinates to screen coordinates
+          const screenX = (selectedRectangle.x * stageScale) + stagePos.x + (selectedRectangle.width * stageScale) / 2
+          const screenY = (selectedRectangle.y * stageScale) + stagePos.y - 60
+          
+          return (
+            <div 
+              className="color-picker-toast"
+              style={{
+                position: 'absolute',
+                left: screenX,
+                top: screenY,
+                transform: 'translateX(-50%)', // Center horizontally
+                zIndex: 1000,
+                pointerEvents: 'auto'
+              }}
+            >
+              <ColorPicker
+                selectedColor={selectedRectangle.color}
+                onColorChange={handleColorChange}
+              />
+            </div>
+          )
+        })()}
         
-        {/* Users List */}
-        <div className="users-list-container">
-          <UsersList cursors={cursors} />
-        </div>
       </div>
       
       {/* Toast Messages */}
