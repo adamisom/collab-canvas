@@ -16,6 +16,10 @@ interface CanvasProps {
   height?: number
 }
 
+// REFACTORING NOTE: This component is 428 lines and handles multiple concerns:
+// pan/zoom, rectangle operations, keyboard controls, coordinate transforms, and UI.
+// Consider splitting into: CanvasControls, CanvasStats, ZoomPanHandler components
+// and extracting: useCoordinateTransform, useKeyboardControls, useCanvasZoom hooks
 const Canvas: React.FC<CanvasProps> = ({ 
   width = VIEWPORT_WIDTH, 
   height = VIEWPORT_HEIGHT 
@@ -68,7 +72,8 @@ const Canvas: React.FC<CanvasProps> = ({
     const pointer = stage.getPointerPosition()
     
     if (pointer) {
-      // Convert screen coordinates to canvas coordinates
+      // REFACTORING NOTE: This coordinate transformation logic is duplicated
+      // in handleStageClick. Consider extracting to useCoordinateTransform hook
       const stagePos = getCurrentStagePosition()
       const currentScale = getCurrentStageScale()
       
@@ -320,6 +325,8 @@ const Canvas: React.FC<CanvasProps> = ({
     <div className="canvas-container">
       <div className="canvas-info">
         <div className="canvas-stats">
+          {/* PERFORMANCE NOTE: These calculations run on every render. Consider memoizing
+              with useMemo() and state tracking for stage transforms to reduce DOM queries */}
           <span>Zoom: {(() => {
             const scale = getCurrentStageScale()
             return scale ? Math.round(scale * 100) : 100

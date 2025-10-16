@@ -37,6 +37,10 @@ export const useCursors = (): UseCursorsReturn => {
     setError(null)
   }, [])
 
+  // PERFORMANCE NOTE: These three useEffect hooks could potentially be consolidated
+  // into one, but Firebase cleanup timing is critical. Current separation provides
+  // clear concerns and safer cleanup behavior.
+
   // Set up cursor listeners
   useEffect(() => {
     if (!user) {
