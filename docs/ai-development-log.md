@@ -3,7 +3,7 @@
 
 ## Key Learnings About Working with AI Coding Agents
 
-Working with Claude turned out to be most effective when I treated it like a senior developer who needs clear context and specific direction. It excels at systematic implementation but requires human oversight for architectural decisions and quality control. Three key learnings emerged:
+It excels at systematic implementation but requires human oversight for architectural decisions and quality control. Three key learnings emerged:
 
 **Context is Everything**: Claude performs best when given comprehensive background through PRDs, clear requirements, and access to the existing codebase. Starting each major phase with "Read this PRD carefully and let me know if you have any questions" established a solid foundation.
 
