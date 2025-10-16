@@ -3,7 +3,7 @@
 
 ## Key Learnings About Working with AI Coding Agents
 
-Working with Claude turned out to be most effective when I treated it like a senior developer who needs clear context and specific direction. It excels at systematic implementation but definitely requires human oversight for architectural decisions and quality control. Three key learnings emerged:
+Working with Claude turned out to be most effective when I treated it like a senior developer who needs clear context and specific direction. It excels at systematic implementation but requires human oversight for architectural decisions and quality control. Three key learnings emerged:
 
 **Context is Everything**: Claude performs best when given comprehensive background through PRDs, clear requirements, and access to the existing codebase. Starting each major phase with "Read this PRD carefully and let me know if you have any questions" established a solid foundation.
 
@@ -21,9 +21,9 @@ Working with Claude turned out to be most effective when I treated it like a sen
 - **Documentation**: Maintained detailed task lists, progress tracking, and technical decisions
 
 ### Limitations:
-- **Architecture Bloat**: Created overly complex components (415-line Canvas.tsx) without considering separation of concerns
+- **Architecture Bloat**: Created overly complex components (415-line Canvas.tsx)
 - **Code Quality Drift**: Accumulated technical debt and redundant patterns without self-correction
-- **Requirement Interpretation**: Sometimes focused on literal task completion rather than understanding user intent (implementing movement vs. resizing)
+- **Requirement Interpretation**: Sometimes needed more detailed and prescriptive clarifications
 - **Context Loss**: Needed reminders about previous decisions and established patterns across long sessions
 
 ## Effective Prompting Strategies
@@ -41,7 +41,7 @@ When Claude misunderstood requirements, specific corrections with concrete examp
 ### 3. **Quality Audit Prompting**
 *"Check each file for bloat or anything that's not best practices... Focus on files greater than 300 lines"*
 
-Explicit quality control requests with specific criteria (line count, best practices) surfaced issues that weren't caught during development. Claude needed permission to critique its own work.
+Explicit quality control requests with specific criteria (line count, best practices) surfaced issues that weren't caught during development. (Perhaps Claude needed permission to critique its own work.)
 
 ### 4. **Systematic Task Prompting**
 *"Please implement the tasks for PR 7"*
@@ -53,4 +53,4 @@ Referring to predefined task lists maintained focus and ensured completeness. Wh
 
 When encountering specific technical issues, providing exact error messages with requests for concise solutions generated targeted fixes without unnecessary explanation.
 
-The most successful pattern was establishing clear requirements upfront, maintaining systematic task tracking, providing specific feedback when course correction was needed, and explicitly requesting quality audits at logical checkpoints. This approach leveraged Claude's implementation speed while maintaining human control over architecture and quality standards.
+The most successful pattern was establishing clear requirements upfront, maintaining systematic task tracking, providing specific feedback when course correction was needed, and explicitly requesting quality audits at logical checkpoints. This approach took advantage of Claude's implementation speed while letting me, the human, maintain quality standards—and feel important and needed. (Can't let Claude have all the fun.)
