@@ -1,6 +1,7 @@
 import React from 'react'
 import { Group, Circle, Text, Rect } from 'react-konva'
 import type { CursorPosition } from '../../services/cursorService'
+import { getUserColor } from '../../utils/userColors'
 
 interface CursorProps {
   cursor: CursorPosition
@@ -13,29 +14,6 @@ const Cursor: React.FC<CursorProps> = ({ cursor, isOwnCursor = false }) => {
     return null
   }
 
-  // Generate a consistent color based on the userId
-  const getUserColor = (userId: string): string => {
-    const colors = [
-      '#FF6B6B', // Red
-      '#4ECDC4', // Teal  
-      '#45B7D1', // Blue
-      '#96CEB4', // Green
-      '#FFEAA7', // Yellow
-      '#DDA0DD', // Plum
-      '#98D8C8', // Mint
-      '#F7DC6F', // Light Yellow
-      '#BB8FCE', // Light Purple
-      '#85C1E9'  // Light Blue
-    ]
-    
-    // Simple hash function to get consistent color
-    let hash = 0
-    for (let i = 0; i < userId.length; i++) {
-      hash = userId.charCodeAt(i) + ((hash << 5) - hash)
-    }
-    
-    return colors[Math.abs(hash) % colors.length]
-  }
 
   const cursorColor = getUserColor(cursor.userId)
   

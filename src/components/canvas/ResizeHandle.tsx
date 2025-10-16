@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { Rect } from 'react-konva'
 import { RESIZE_HANDLE, RESIZE_DIRECTIONS } from '../../utils/constants'
+import { stopEventPropagation, setStageCursor, resetStageCursor } from '../../utils/eventHelpers'
 
 interface ResizeHandleProps {
   x: number
@@ -44,28 +45,18 @@ const ResizeHandle: React.FC<ResizeHandleProps> = ({
 
   const handleMouseEnter = (e: any) => {
     setIsHover(true)
-    const container = e.target.getStage()?.container()
-    if (container) {
-      container.style.cursor = getCursor(direction)
-    }
+    setStageCursor(e, getCursor(direction))
   }
 
   const handleMouseLeave = (e: any) => {
     if (!isDragging) {
       setIsHover(false)
-      const container = e.target.getStage()?.container()
-      if (container) {
-        container.style.cursor = 'default'
-      }
+      resetStageCursor(e)
     }
   }
 
   const handleDragStart = (e: any) => {
-    // Aggressively stop all propagation 
-    e.cancelBubble = true
-    e.evt?.stopPropagation()
-    e.evt?.preventDefault()
-    e.evt?.stopImmediatePropagation?.()
+    stopEventPropagation(e)
     
     setIsDragging(true)
     const pos = e.target.getStage().getPointerPosition()
@@ -80,11 +71,7 @@ const ResizeHandle: React.FC<ResizeHandleProps> = ({
   const handleDragMove = (e: any) => {
     if (!isDragging) return
     
-    // Aggressively stop all propagation
-    e.cancelBubble = true
-    e.evt?.stopPropagation()
-    e.evt?.preventDefault()
-    e.evt?.stopImmediatePropagation?.()
+    stopEventPropagation(e)
     
     const pos = e.target.getStage().getPointerPosition()
     // Calculate delta from the INITIAL drag start position, not the previous position
@@ -97,19 +84,11 @@ const ResizeHandle: React.FC<ResizeHandleProps> = ({
   }
 
   const handleDragEnd = (e: any) => {
-    // Aggressively stop all propagation
-    e.cancelBubble = true
-    e.evt?.stopPropagation()
-    e.evt?.preventDefault()
-    e.evt?.stopImmediatePropagation?.()
+    stopEventPropagation(e)
     
     setIsDragging(false)
     setIsHover(false)
-    
-    const container = e.target.getStage()?.container()
-    if (container) {
-      container.style.cursor = 'default'
-    }
+    resetStageCursor(e)
     
     if (onDragEnd) {
       onDragEnd(direction)
@@ -126,24 +105,9 @@ const ResizeHandle: React.FC<ResizeHandleProps> = ({
       stroke={isHover || isDragging ? RESIZE_HANDLE.HOVER_STROKE : RESIZE_HANDLE.STROKE}
       strokeWidth={RESIZE_HANDLE.STROKE_WIDTH}
       draggable={true}
-      onClick={(e) => {
-        e.cancelBubble = true
-        e.evt?.stopPropagation()
-        e.evt?.preventDefault()
-        e.evt?.stopImmediatePropagation?.()
-      }}
-      onTap={(e) => {
-        e.cancelBubble = true
-        e.evt?.stopPropagation()
-        e.evt?.preventDefault()
-        e.evt?.stopImmediatePropagation?.()
-      }}
-      onMouseDown={(e) => {
-        e.cancelBubble = true
-        e.evt?.stopPropagation()
-        e.evt?.preventDefault()
-        e.evt?.stopImmediatePropagation?.()
-      }}
+      onClick={stopEventPropagation}
+      onTap={stopEventPropagation}
+      onMouseDown={stopEventPropagation}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       onDragStart={handleDragStart}

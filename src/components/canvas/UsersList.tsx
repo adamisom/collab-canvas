@@ -1,16 +1,11 @@
 import React from 'react'
 import type { CursorPosition } from '../../services/cursorService'
+import { getUserColor } from '../../utils/userColors'
 
 interface UsersListProps {
   cursors: Record<string, CursorPosition>
 }
 
-// Function to get user color (same logic as in Cursor.tsx)
-const getUserColor = (userId: string): string => {
-  const colors = ['#ef4444', '#3b82f6', '#22c55e', '#f59e0b', '#8b5cf6', '#ec4899']
-  const hash = userId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
-  return colors[hash % colors.length]
-}
 
 const UsersList: React.FC<UsersListProps> = ({ cursors }) => {
   const otherUsers = Object.values(cursors).filter(cursor => cursor.username)

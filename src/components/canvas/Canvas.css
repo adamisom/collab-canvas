@@ -353,3 +353,11 @@
   width: 20px;
   height: 20px;
 }
+
+/* Placeholder to maintain consistent height when no rectangle is selected */
+.color-picker-placeholder {
+  /* Uses the exact same DOM structure as real content, so dimensions will match perfectly */
+  display: flex;
+  align-items: center;
+  gap: 8px; /* Same gap as the parent container */
+}

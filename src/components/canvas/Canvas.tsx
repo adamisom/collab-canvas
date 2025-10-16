@@ -331,16 +331,29 @@ const Canvas: React.FC<CanvasProps> = ({
           <span>Rectangles: {rectangles.length}</span>
           <span>Cursors: {Object.keys(cursors).length}</span>
           
-          {/* Color Picker - only show when rectangle is selected */}
-          {selectedRectangle && (
-            <div className="header-color-picker">
-              <span className="color-label">Color:</span>
-              <ColorPicker
-                selectedColor={selectedRectangle.color}
-                onColorChange={handleColorChange}
-              />
-            </div>
-          )}
+          {/* Color Picker - always reserve space to prevent layout shift */}
+          <div className="header-color-picker">
+            {selectedRectangle ? (
+              <>
+                <span className="color-label">Color:</span>
+                <ColorPicker
+                  selectedColor={selectedRectangle.color}
+                  onColorChange={handleColorChange}
+                />
+              </>
+            ) : (
+              <div className="color-picker-placeholder">
+                <span className="color-label" style={{ opacity: 0 }}>Color:</span>
+                <div className="color-picker" style={{ opacity: 0 }}>
+                  <div className="color-picker-options">
+                    <div className="color-option" />
+                    <div className="color-option" />
+                    <div className="color-option" />
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
         <div className="canvas-controls">
           <span>🖱️ Click+Drag to pan</span>

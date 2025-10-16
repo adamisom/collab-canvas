@@ -4,6 +4,7 @@ import type { Rectangle } from '../../services/canvasService'
 import { DEFAULT_RECT, SELECTION_COLORS, RESIZE_DIRECTIONS, getRectangleBorderColor } from '../../utils/constants'
 import { calculateResizeHandlePositions, calculateResizeUpdate } from '../../utils/canvasHelpers'
 import { useAuth } from '../../contexts/AuthContext'
+import { stopEventPropagation, setStageCursor } from '../../utils/eventHelpers'
 import ResizeHandle from './ResizeHandle'
 
 interface RectangleProps {
@@ -42,9 +43,7 @@ const RectangleComponent: React.FC<RectangleProps> = ({
   const isSelectedByOther = rectangle.selectedBy && rectangle.selectedBy !== user?.uid
 
   const handleClick = (e: any) => {
-    e.cancelBubble = true // Prevent event from bubbling to stage
-    e.evt?.stopPropagation() // Additional stopPropagation for better event handling
-    e.evt?.preventDefault() // Prevent default behavior
+    stopEventPropagation(e)
     if (onClick && !isResizing) {
       onClick(rectangle)
     }
@@ -53,13 +52,7 @@ const RectangleComponent: React.FC<RectangleProps> = ({
   const handleDragStart = (e: any) => {
     if (isResizing) return // Don't drag while resizing
     
-    // Aggressively stop all propagation
-    e.cancelBubble = true
-    e.evt?.stopPropagation()
-    e.evt?.preventDefault()
-    
-    // Stop immediate propagation to prevent other handlers
-    e.evt?.stopImmediatePropagation?.()
+    stopEventPropagation(e)
     
     setIsDragging(true)
     if (onDragStart) {
@@ -70,11 +63,7 @@ const RectangleComponent: React.FC<RectangleProps> = ({
   const handleDragEnd = (e: any) => {
     if (isResizing) return // Don't drag while resizing
     
-    // Aggressively stop all propagation
-    e.cancelBubble = true
-    e.evt?.stopPropagation()
-    e.evt?.preventDefault()
-    e.evt?.stopImmediatePropagation?.()
+    stopEventPropagation(e)
     
     setIsDragging(false)
     const newX = e.target.x()
@@ -167,13 +156,7 @@ const RectangleComponent: React.FC<RectangleProps> = ({
         draggable={isSelected && !isResizing}
         onClick={handleClick}
         onTap={handleClick} // For touch devices
-        onMouseDown={(e) => {
-          // Prevent stage from starting drag on rectangle mousedown
-          e.cancelBubble = true
-          e.evt?.stopPropagation()
-          e.evt?.preventDefault()
-          e.evt?.stopImmediatePropagation?.()
-        }}
+        onMouseDown={stopEventPropagation}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
         // Visual feedback
@@ -183,18 +166,12 @@ const RectangleComponent: React.FC<RectangleProps> = ({
         // Hover effects
         onMouseEnter={(e) => {
           if (!isResizing && !isDragging) {
-            const container = e.target.getStage()?.container()
-            if (container) {
-              container.style.cursor = isSelected ? 'move' : 'pointer'
-            }
+            setStageCursor(e, isSelected ? 'move' : 'pointer')
           }
         }}
         onMouseLeave={(e) => {
           if (!isResizing && !isDragging) {
-            const container = e.target.getStage()?.container()
-            if (container) {
-              container.style.cursor = 'default'
-            }
+            setStageCursor(e, 'default')
           }
         }}
       />
