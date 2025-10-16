@@ -9,6 +9,7 @@ import {
   dbGet
 } from '../services/firebaseService'
 import type { User } from '../services/firebaseService'
+import { cursorService } from '../services/cursorService'
 
 interface AuthContextType {
   user: User | null
@@ -102,6 +103,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const signOut = async () => {
     try {
+      // Clean up cursor data before signing out
+      if (user) {
+        await cursorService.removeCursor(user.uid)
+      }
+      
       await firebaseAuth.signOut()
       localStorage.removeItem('username')
     } catch (error) {

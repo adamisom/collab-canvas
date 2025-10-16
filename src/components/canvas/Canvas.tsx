@@ -336,7 +336,7 @@ const Canvas: React.FC<CanvasProps> = ({
             return pos ? `${Math.round(pos.x)}, ${Math.round(pos.y)}` : '0, 0'
           })()})</span>
           <span>Rectangles: {rectangles.length}</span>
-          <span>Cursors: {Object.keys(cursors).length}</span>
+          <span>Friends: {Object.keys(cursors).length}</span>
           
           {/* Color Picker - always reserve space to prevent layout shift */}
           <div className="header-color-picker">
@@ -368,7 +368,6 @@ const Canvas: React.FC<CanvasProps> = ({
           <span>⌨️ Arrow keys to navigate</span>
           <span>⇧+Arrows: Resize selected</span>
           <span>🗑️ Delete/Backspace: Delete selected</span>
-          <span>👥 Real-time cursors</span>
         </div>
         {cursorsError && (
           <div className="cursor-error">

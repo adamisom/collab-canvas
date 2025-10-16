@@ -74,19 +74,24 @@ export const useCursors = (): UseCursorsReturn => {
 
   // Clean up user's cursor on unmount or user change
   useEffect(() => {
+    let previousUserId: string | null = null
+    
+    if (user) {
+      previousUserId = user.uid
+    }
+    
     return () => {
-      if (user) {
-        cursorService.removeCursor(user.uid).catch(error => {
+      if (previousUserId) {
+        cursorService.removeCursor(previousUserId).catch(error => {
           console.error('Error cleaning up cursor on unmount:', error)
         })
       }
     }
   }, [user])
 
-  // Cleanup cursor when user signs out
+  // Clear cursors state when user signs out
   useEffect(() => {
     if (!user) {
-      // User signed out, no need to clean up cursor as it will be handled by Firebase disconnect
       setCursors({})
     }
   }, [user])

@@ -146,27 +146,17 @@ src/
    firebase deploy --only hosting
    ```
 
+   **Alternative: GitHub Actions Deployment**
+   
+   The repository includes GitHub Action workflows that automatically deploy to Firebase on push to main. You can also deploy manually using a CI token:
+   ```bash
+   firebase login:ci  # Generate a CI token
+   firebase deploy --token "$FIREBASE_TOKEN"
+   ```
+
 4. **Update Firebase Database Rules for Production:**
    
-   Go to Firebase Console > Realtime Database > Rules and update:
-   ```json
-   {
-     "rules": {
-       "rectangles": {
-         ".read": "auth != null",
-         ".write": "auth != null"
-       },
-       "cursors": {
-         ".read": "auth != null", 
-         ".write": "auth != null"
-       },
-       "users": {
-         ".read": "auth != null",
-         ".write": "auth != null"  
-       }
-     }
-   }
-   ```
+   Go to Firebase Console > Realtime Database > Rules and ensure the rules allow authenticated users to read and write data for the rectangles, cursors, and users nodes.
 
 5. **Test Production Deployment:**
    - Open the deployed URL
@@ -181,15 +171,26 @@ src/
 
 ## MVP Features
 
+### Core Features
 - ✅ Anonymous authentication with usernames
-- ✅ Real-time cursor sharing with user names
+- ✅ Real-time cursor sharing with user names (24px font size)
 - ✅ Rectangle creation and movement
-- ✅ Rectangle resizing with 8-point handles
-- ✅ Rectangle deletion (Delete/Backspace keys)
-- ✅ Canvas pan and zoom (trackpad/mouse wheel)
+- ✅ Rectangle selection and deselection (click to toggle)
+- ✅ Canvas pan and zoom (trackpad/mouse wheel with intuitive direction)
 - ✅ State persistence across page refreshes
 - ✅ Multi-user real-time collaboration
+
+### Advanced Features
+- ✅ Rectangle resizing with 8-point handles
+- ✅ Rectangle deletion (Delete/Backspace keys)
+- ✅ Rectangle color customization (3 color options in header)
+- ✅ Dynamic rectangle borders (darker shades of fill color)
+- ✅ Exclusive selection logic (prevents conflicts between users)
+- ✅ Active users list (shows all online collaborators)
+- ✅ Toast notifications for selection conflicts
 - ✅ Race condition protection for concurrent edits
+- ✅ Selection state cleanup on user sign-out
+- ✅ Admin override for rectangle management
 - ✅ Professional UX with smooth interactions
 
 ## Contributing
