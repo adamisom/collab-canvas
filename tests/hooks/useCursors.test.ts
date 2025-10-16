@@ -3,7 +3,7 @@ import { renderHook, act } from '@testing-library/react'
 import { useCursors } from '../../src/hooks/useCursors'
 
 // Mock the AuthContext
-const mockUser = { uid: 'user1' }
+const mockUser = { uid: 'user1' } as any
 const mockUsername = 'Alice'
 
 vi.mock('../../src/contexts/AuthContext', () => ({
@@ -53,7 +53,7 @@ describe('useCursors Hook', () => {
       const { result } = renderHook(() => useCursors())
 
       await act(async () => {
-        await result.current.updateCursor(150, 250)
+        result.current.updateCursor(150, 250)
       })
 
       expect(mockUpdateCursor).toHaveBeenCalledWith('user1', 150, 250, 'Alice')
@@ -71,7 +71,7 @@ describe('useCursors Hook', () => {
       }
 
       // Mock the onCursorsChange to simulate receiving data with own cursor
-      vi.mocked(mockOnCursorsChange).mockImplementation((callback) => {
+      vi.mocked(mockOnCursorsChange).mockImplementation((callback: any) => {
         const allCursors = {
           ...mockOtherUsersCursors,
           'user1': { // Own cursor should be filtered out
@@ -94,7 +94,7 @@ describe('useCursors Hook', () => {
     })
 
     it('should handle empty cursors object', () => {
-      vi.mocked(mockOnCursorsChange).mockImplementation((callback) => {
+      vi.mocked(mockOnCursorsChange).mockImplementation((callback: any) => {
         callback({}) // Empty cursors
         return vi.fn()
       })
@@ -107,7 +107,7 @@ describe('useCursors Hook', () => {
     it('should update cursors when other users move', () => {
       let mockCallback: ((cursors: any) => void) | null = null
       
-      vi.mocked(mockOnCursorsChange).mockImplementation((callback) => {
+      vi.mocked(mockOnCursorsChange).mockImplementation((callback: any) => {
         mockCallback = callback
         return vi.fn()
       })
@@ -151,12 +151,18 @@ describe('useCursors Hook', () => {
 
     it('should not update cursor when user is null', async () => {
       const { useAuth } = await import('../../src/contexts/AuthContext')
-      vi.mocked(useAuth).mockReturnValue({ user: null, username: null })
+      vi.mocked(useAuth).mockReturnValue({ 
+        user: null, 
+        username: null, 
+        loading: false, 
+        signIn: vi.fn(), 
+        signOut: vi.fn() 
+      })
 
       const { result } = renderHook(() => useCursors())
 
       await act(async () => {
-        await result.current.updateCursor(100, 200)
+        result.current.updateCursor(100, 200)
       })
 
       expect(mockUpdateCursor).not.toHaveBeenCalled()
@@ -164,12 +170,18 @@ describe('useCursors Hook', () => {
 
     it('should not update cursor when username is null', async () => {
       const { useAuth } = await import('../../src/contexts/AuthContext')
-      vi.mocked(useAuth).mockReturnValue({ user: mockUser, username: null })
+      vi.mocked(useAuth).mockReturnValue({ 
+        user: mockUser, 
+        username: null, 
+        loading: false, 
+        signIn: vi.fn(), 
+        signOut: vi.fn() 
+      })
 
       const { result } = renderHook(() => useCursors())
 
       await act(async () => {
-        await result.current.updateCursor(100, 200)
+        result.current.updateCursor(100, 200)
       })
 
       expect(mockUpdateCursor).not.toHaveBeenCalled()
@@ -187,7 +199,13 @@ describe('useCursors Hook', () => {
 
     it('should not call removeCursor if no user', async () => {
       const { useAuth } = await import('../../src/contexts/AuthContext')
-      vi.mocked(useAuth).mockReturnValue({ user: null, username: null })
+      vi.mocked(useAuth).mockReturnValue({ 
+        user: null, 
+        username: null, 
+        loading: false, 
+        signIn: vi.fn(), 
+        signOut: vi.fn() 
+      })
 
       const { unmount } = renderHook(() => useCursors())
 
