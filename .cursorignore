@@ -1,0 +1,38 @@
+# Cursor ignore file
+# Files and directories to exclude from Cursor's indexing
+
+# GitHub workflows and actions
+.github/
+
+# Build outputs
+dist/
+build/
+
+# Dependencies
+node_modules/
+
+# Firebase
+.firebase/
+
+# Environment files
+.env.local
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Cache directories
+.cache/
+.temp/
+.tmp/
+
+# IDE files
+.vscode/
+.idea/
+
+# Test coverage
+coverage/
