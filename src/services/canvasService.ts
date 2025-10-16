@@ -10,7 +10,7 @@ import {
   dbRemove
 } from './firebaseService'
 import type { DatabaseReference, DataSnapshot } from './firebaseService'
-import { DB_PATHS, RECTANGLE_COLORS } from '../utils/constants'
+import { DB_PATHS, RECTANGLE_COLORS, RECTANGLE_CONSTRAINTS, CANVAS_BOUNDS } from '../utils/constants'
 
 export interface Rectangle {
   id: string
@@ -42,6 +42,24 @@ export class CanvasService {
     this.rectanglesRef = dbRef(firebaseDatabase, DB_PATHS.RECTANGLES)
   }
 
+  // Validate that a rectangle exists and return its data
+  private async validateRectangleExists(rectangleId: string): Promise<Rectangle | null> {
+    try {
+      const rectangleRef = dbRef(firebaseDatabase, `${DB_PATHS.RECTANGLES}/${rectangleId}`)
+      const snapshot = await dbGet(rectangleRef)
+      
+      if (!snapshot.exists()) {
+        console.log(`Rectangle ${rectangleId} no longer exists`)
+        return null
+      }
+      
+      return snapshot.val() as Rectangle
+    } catch (error) {
+      console.error('Error validating rectangle existence:', error)
+      throw error
+    }
+  }
+
   // Create a new rectangle
   async createRectangle(rectangleData: RectangleInput): Promise<Rectangle> {
     try {
@@ -71,16 +89,14 @@ export class CanvasService {
   // Update an existing rectangle
   async updateRectangle(rectangleId: string, updates: Partial<Omit<Rectangle, 'id' | 'createdBy' | 'createdAt'>>): Promise<void> {
     try {
-      const rectangleRef = dbRef(firebaseDatabase, `${DB_PATHS.RECTANGLES}/${rectangleId}`)
-      
-      // Check if rectangle still exists before updating (handles race conditions)
-      const snapshot = await dbGet(rectangleRef)
-      if (!snapshot.exists()) {
-        // Rectangle was deleted by another user - silently ignore the update
-        console.log(`Rectangle ${rectangleId} no longer exists, skipping update`)
+      // Validate rectangle exists (handles race conditions)
+      const existingRectangle = await this.validateRectangleExists(rectangleId)
+      if (!existingRectangle) {
+        console.log(`Skipping update for non-existent rectangle ${rectangleId}`)
         return
       }
       
+      const rectangleRef = dbRef(firebaseDatabase, `${DB_PATHS.RECTANGLES}/${rectangleId}`)
       const updateData = {
         ...updates,
         updatedAt: Date.now()
@@ -102,16 +118,10 @@ export class CanvasService {
     newY?: number
   ): Promise<void> {
     try {
-      // Import constants inside the method to avoid circular dependencies
-      const { RECTANGLE_CONSTRAINTS, CANVAS_BOUNDS } = await import('../utils/constants')
-      
-      const rectangleRef = dbRef(firebaseDatabase, `${DB_PATHS.RECTANGLES}/${rectangleId}`)
-      
-      // Check if rectangle still exists before resizing (handles race conditions)
-      const snapshot = await dbGet(rectangleRef)
-      if (!snapshot.exists()) {
-        // Rectangle was deleted by another user - silently ignore the resize
-        console.log(`Rectangle ${rectangleId} no longer exists, skipping resize`)
+      // Validate rectangle exists (handles race conditions)
+      const existingRectangle = await this.validateRectangleExists(rectangleId)
+      if (!existingRectangle) {
+        console.log(`Skipping resize for non-existent rectangle ${rectangleId}`)
         return
       }
       
@@ -134,6 +144,7 @@ export class CanvasService {
         updateData.y = Math.max(CANVAS_BOUNDS.MIN_Y, Math.min(newY, CANVAS_BOUNDS.MAX_Y - validatedHeight))
       }
       
+      const rectangleRef = dbRef(firebaseDatabase, `${DB_PATHS.RECTANGLES}/${rectangleId}`)
       await dbUpdate(rectangleRef, updateData)
     } catch (error) {
       console.error('Error resizing rectangle:', error)
@@ -209,14 +220,11 @@ export class CanvasService {
   // Select a rectangle (exclusive selection)
   async selectRectangle(rectangleId: string, userId: string, username: string): Promise<boolean> {
     try {
-      const rectangleRef = dbRef(firebaseDatabase, `${DB_PATHS.RECTANGLES}/${rectangleId}`)
-      const snapshot = await dbGet(rectangleRef)
-      
-      if (!snapshot.exists()) {
+      // Validate rectangle exists
+      const rectangle = await this.validateRectangleExists(rectangleId)
+      if (!rectangle) {
         return false // Rectangle doesn't exist
       }
-      
-      const rectangle = snapshot.val() as Rectangle
       
       // Check if already selected by another user
       if (rectangle.selectedBy && rectangle.selectedBy !== userId) {
@@ -224,6 +232,7 @@ export class CanvasService {
       }
       
       // Select the rectangle
+      const rectangleRef = dbRef(firebaseDatabase, `${DB_PATHS.RECTANGLES}/${rectangleId}`)
       await dbUpdate(rectangleRef, {
         selectedBy: userId,
         selectedByUsername: username,
@@ -240,17 +249,15 @@ export class CanvasService {
   // Deselect a rectangle
   async deselectRectangle(rectangleId: string, userId: string): Promise<void> {
     try {
-      const rectangleRef = dbRef(firebaseDatabase, `${DB_PATHS.RECTANGLES}/${rectangleId}`)
-      const snapshot = await dbGet(rectangleRef)
-      
-      if (!snapshot.exists()) {
+      // Validate rectangle exists
+      const rectangle = await this.validateRectangleExists(rectangleId)
+      if (!rectangle) {
         return // Rectangle doesn't exist, nothing to deselect
       }
       
-      const rectangle = snapshot.val() as Rectangle
-      
       // Only deselect if this user selected it
       if (rectangle.selectedBy === userId) {
+        const rectangleRef = dbRef(firebaseDatabase, `${DB_PATHS.RECTANGLES}/${rectangleId}`)
         await dbUpdate(rectangleRef, {
           selectedBy: null,
           selectedByUsername: null,

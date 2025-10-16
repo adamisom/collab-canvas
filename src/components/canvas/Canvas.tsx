@@ -3,6 +3,7 @@ import { Stage, Layer } from 'react-konva'
 import { useCanvas } from '../../contexts/CanvasContext'
 import { useCursors } from '../../hooks/useCursors'
 import { VIEWPORT_WIDTH, VIEWPORT_HEIGHT } from '../../utils/constants'
+import { stopEventPropagation } from '../../utils/eventHelpers'
 import Cursor from './Cursor'
 import Rectangle from './Rectangle'
 import ColorPicker from './ColorPicker'
@@ -119,8 +120,7 @@ const Canvas: React.FC<CanvasProps> = ({
   const handleDragStart = useCallback((e: any) => {
     // Don't allow stage dragging if we're interacting with rectangles
     if (isRectangleDragging || isRectangleResizing) {
-      e.evt?.preventDefault()
-      e.evt?.stopPropagation()
+      stopEventPropagation(e)
       return false
     }
     setIsDragging(true)

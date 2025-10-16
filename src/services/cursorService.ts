@@ -2,6 +2,7 @@ import {
   firebaseDatabase,
   dbRef,
   dbSet,
+  dbGet,
   dbOnValue,
   dbOff,
   dbRemove
@@ -25,6 +26,7 @@ export interface CursorData {
 export class CursorService {
   private cursorsRef: DatabaseReference
   private throttledUpdateCursor: (userId: string, position: Omit<CursorPosition, 'userId'>) => void
+  private static readonly CURSOR_STALE_THRESHOLD_MS = 30000 // 30 seconds
 
   constructor() {
     this.cursorsRef = dbRef(firebaseDatabase, DB_PATHS.CURSORS)
@@ -36,6 +38,20 @@ export class CursorService {
       },
       CURSOR_THROTTLE_MS
     )
+  }
+
+  // Filter out stale cursors (older than threshold)
+  private filterStaleCursors(cursorsData: CursorData): CursorData {
+    const now = Date.now()
+    const activeCursors: CursorData = {}
+    
+    Object.entries(cursorsData).forEach(([userId, cursor]) => {
+      if (cursor && cursor.timestamp && (now - cursor.timestamp) < CursorService.CURSOR_STALE_THRESHOLD_MS) {
+        activeCursors[userId] = cursor
+      }
+    })
+    
+    return activeCursors
   }
 
   // Update cursor position (throttled)
@@ -83,17 +99,7 @@ export class CursorService {
     const handleChange = (snapshot: DataSnapshot) => {
       if (snapshot.exists()) {
         const cursorsData = snapshot.val() as CursorData
-        
-        // Filter out stale cursors (older than 30 seconds)
-        const now = Date.now()
-        const activeCursors: CursorData = {}
-        
-        Object.entries(cursorsData).forEach(([userId, cursor]) => {
-          if (cursor && cursor.timestamp && (now - cursor.timestamp) < 30000) {
-            activeCursors[userId] = cursor
-          }
-        })
-        
+        const activeCursors = this.filterStaleCursors(cursorsData)
         callback(activeCursors)
       } else {
         callback({})
@@ -111,23 +117,11 @@ export class CursorService {
   // Get all cursor positions (one-time read)
   async getAllCursors(): Promise<CursorData> {
     try {
-      const { dbGet } = await import('./firebaseService')
       const snapshot = await dbGet(this.cursorsRef)
       
       if (snapshot.exists()) {
         const cursorsData = snapshot.val() as CursorData
-        
-        // Filter out stale cursors
-        const now = Date.now()
-        const activeCursors: CursorData = {}
-        
-        Object.entries(cursorsData).forEach(([userId, cursor]) => {
-          if (cursor && cursor.timestamp && (now - cursor.timestamp) < 30000) {
-            activeCursors[userId] = cursor
-          }
-        })
-        
-        return activeCursors
+        return this.filterStaleCursors(cursorsData)
       }
       
       return {}
@@ -144,7 +138,7 @@ export class CursorService {
       const now = Date.now()
       
       const cleanupPromises = Object.entries(cursors).map(async ([userId, cursor]) => {
-        if (cursor && cursor.timestamp && (now - cursor.timestamp) > 30000) {
+        if (cursor && cursor.timestamp && (now - cursor.timestamp) > CursorService.CURSOR_STALE_THRESHOLD_MS) {
           await this.removeCursor(userId)
         }
       })
