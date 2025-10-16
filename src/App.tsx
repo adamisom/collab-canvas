@@ -46,6 +46,9 @@ const CanvasContent: React.FC = () => {
             <ul>
               <li>Click empty space to create rectangle</li>
               <li>Click rectangle to select it</li>
+              <li>Click rectangle again to deselect it</li>
+              <li>Drag a corner or an edge to resize a rectangle</li>
+              <li>Change rectangle color with color picker that appears when selected</li>
               <li>Drag selected rectangle to move it</li>
               <li>See real-time updates from other users</li>
             </ul>
