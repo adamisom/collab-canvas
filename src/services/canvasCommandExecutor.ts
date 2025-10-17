@@ -34,6 +34,7 @@ export interface CanvasContextMethods {
   deleteRectangle: (rectangleId: string) => Promise<void>
   changeRectangleColor: (rectangleId: string, color: string) => Promise<void>
   selectRectangle: (rectangleId: string | null) => Promise<void>
+  setSelectionLocked: (locked: boolean) => void
 }
 
 export class CanvasCommandExecutor {

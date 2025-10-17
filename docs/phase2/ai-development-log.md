@@ -313,7 +313,146 @@ Created the Canvas Command Executor service to execute AI-generated commands and
 
 ---
 
-## PR #3: AI Service Client & Cloud Function Integration
+## PR #3: AI Service Client & Cloud Function Integration ✅
+
+**Status:** Completed  
+**Date:** October 17, 2025  
+**Branch:** `ai-spike`
+
+### Overview
+Created the AI Service Client to call the Cloud Function and execute AI-generated commands with proper error handling, selection locking, and emulator support.
+
+### Files Created (3 files)
+
+1. **`/src/utils/aiErrors.ts`** (Error Handling)
+   - `mapAIError()` - Maps Firebase/OpenAI errors to user-friendly messages
+   - Classifies errors as retryable or non-retryable
+   - `formatPartialSuccessMessage()` - Formats multi-step command partial failures
+   - **Error Code Mapping:**
+     - `unauthenticated` → "You must be logged in" (non-retryable)
+     - `resource-exhausted` → "AI command limit reached" (non-retryable)
+     - `failed-precondition` → "Canvas has too many rectangles" or "AI service not available" (non-retryable)
+     - `deadline-exceeded` → "AI service temporarily unavailable" (retryable)
+     - `invalid-argument` → "Invalid request format" (non-retryable)
+     - `internal` → "Error processing command" (retryable)
+     - `unavailable`/`aborted` → "Service temporarily unavailable" (retryable)
+   - **Executor Error Handling:**
+     - Rectangle not found → Non-retryable
+     - Invalid color → Non-retryable
+     - Viewport not available → Retryable
+     - Network errors → Retryable
+
+2. **`/src/services/aiAgent.ts`** (AI Agent Service)
+   - `AIAgent` class with CanvasContextMethods dependency injection
+   - **Main Flow:**
+     1. Capture immutable snapshot (canvas state, viewport, selection)
+     2. Validate snapshot (viewport must be available)
+     3. Lock selection to prevent user changes
+     4. Call Cloud Function with snapshot
+     5. Execute commands sequentially
+     6. Handle auto-selection for single rectangle creation
+     7. Unlock selection (in finally block)
+     8. Return result with error classification
+   - **Key Methods:**
+     - `processCommand(userMessage)` - Main entry point, returns AIAgentResult
+     - `captureSnapshot()` - Creates immutable CommandSnapshot
+     - `callCloudFunction()` - Calls Firebase httpsCallable function
+     - `executeCommands()` - Executes commands sequentially with error handling
+     - `executeCreateRectangleCommand()` - Special handling for first createRectangle
+   - **Error Handling:**
+     - All errors caught and mapped to user-friendly messages
+     - Partial success reporting (e.g., "Completed 2 of 5 steps. Error: ...")
+     - Always unlocks selection even if errors occur
+
+3. **`/src/hooks/useAIAgent.ts`** (React Hook)
+   - `useAIAgent()` - React hook for AI agent integration
+   - **State:**
+     - `isProcessing` - Boolean indicating if command is executing
+     - `lastResult` - Last AIAgentResult (success/error/message)
+   - **Methods:**
+     - `processCommand(userMessage)` - Execute AI command
+     - `clearResult()` - Clear last result
+   - Memoizes AIAgent instance for performance
+   - Handles empty input validation
+   - Manages loading state automatically
+
+### Files Updated (2 files)
+
+1. **`/src/config/firebase.ts`** (Emulator Support)
+   - Added imports: `connectAuthEmulator`, `connectDatabaseEmulator`, `connectFunctionsEmulator`
+   - Exported `functions` for use in aiAgent
+   - **Emulator Connection (Development Mode):**
+     - Checks `import.meta.env.DEV && VITE_USE_EMULATORS === 'true'`
+     - Connects to Auth emulator (localhost:9099)
+     - Connects to Database emulator (localhost:9000)
+     - Connects to Functions emulator (localhost:5001)
+     - Logs connection status to console
+   - Production mode uses real Firebase services
+
+2. **`/src/services/canvasCommandExecutor.ts`** (Interface Update)
+   - Added `setSelectionLocked` to `CanvasContextMethods` interface
+   - Required for AIAgent to lock/unlock selection during processing
+
+### Files Updated (Documentation)
+
+**`/README.md`** (Emulator Instructions)
+- Updated "Option 2: Test from your React app" section
+- Documented `VITE_USE_EMULATORS=true` environment variable
+- Simplified instructions (no manual code changes needed)
+- Added step to disable emulators for production
+
+### Key Technical Decisions
+
+1. **Immutable Snapshot Pattern**
+   - Captures canvas state, viewport, and selection at command submission time
+   - Prevents race conditions when user changes selection during AI processing
+   - Snapshot passed to Cloud Function, not live state
+
+2. **Selection Locking**
+   - Locks selection before Cloud Function call
+   - Prevents user from changing selection during command execution
+   - Always unlocks in `finally` block (even on errors)
+   - Implemented in CanvasContext's `selectRectangle()` method
+
+3. **Error Classification (Retryable vs Non-Retryable)**
+   - Retryable: Timeout, network errors, service unavailable
+   - Non-retryable: Auth errors, quota exceeded, invalid data, rectangle not found
+   - UI will show "Retry" button for retryable errors, "OK" for non-retryable
+
+4. **Partial Success Reporting**
+   - Multi-step commands report which step failed
+   - Shows success count (e.g., "Completed 3 of 5 steps")
+   - Helps user understand what was accomplished
+
+5. **Emulator Support**
+   - Controlled by `VITE_USE_EMULATORS` environment variable
+   - Only enabled in development mode (`import.meta.env.DEV`)
+   - Allows easy switching between local and production Firebase
+
+6. **Firebase Functions httpsCallable**
+   - Type-safe with `ProcessAICommandRequest` and `ProcessAICommandResponse`
+   - Automatic serialization/deserialization
+   - Built-in retry logic for network errors
+
+### Build Verification
+
+✅ TypeScript compilation successful (no errors)  
+✅ All 3 new files created  
+✅ All 2 existing files updated  
+✅ Vite production build successful (816.11 KB bundle)  
+
+### Next Steps (PR #4)
+
+- Create AI Chat Interface Component (`/src/components/ai/AIChat.tsx`)
+- Create AI Chat CSS (`/src/components/ai/AIChat.css`)
+- Create Command Suggestions Component (optional)
+- Update App.tsx to include AI Chat
+- Update index.css for AI Chat styling
+- Implement retry/OK buttons based on error retryability
+
+---
+
+## PR #4: AI Chat Interface Component
 
 **Status:** Not Started  
 **Branch:** `ai-spike`

@@ -55,7 +55,7 @@ export interface AICommand {
 // Command snapshot captured at submission time (immutable)
 export interface CommandSnapshot {
   canvasState: CanvasState;
-  viewportInfo: ViewportInfo;
+  viewportInfo?: ViewportInfo;
   selectedShapeId: string | null;
 }
 

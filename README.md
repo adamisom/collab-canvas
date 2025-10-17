@@ -148,30 +148,29 @@ node test-function.js
 
 **Option 2: Test from your React app**
 
-To connect your local React app to the emulators, add this to your `src/config/firebase.ts`:
+To connect your local React app to the emulators, set the environment variable:
 
-```typescript
-// Add after firebase initialization
-if (import.meta.env.DEV) {
-  // Connect to Functions emulator
-  const functions = getFunctions(app);
-  connectFunctionsEmulator(functions, 'localhost', 5001);
-  
-  // Connect to Database emulator
-  const db = getDatabase(app);
-  connectDatabaseEmulator(db, 'localhost', 9000);
-}
+```bash
+# In your .env.local file
+VITE_USE_EMULATORS=true
 ```
+
+The app is already configured to connect to emulators when `VITE_USE_EMULATORS=true` is set in development mode.
 
 Then:
 1. Start the emulators: `npm run emulators`
 2. In a separate terminal, start your React app: `npm run dev`
 3. Open `http://localhost:5173` and test AI commands
 4. The app will use local emulators instead of production Firebase
+5. Remove or set `VITE_USE_EMULATORS=false` to use production
 
-### Check Logs and Database
+**Option 3: Emulator UI**
 
-Open `http://localhost:4000`, click *Logs*. You can also inspect database data.
+Open `http://localhost:4000` to:
+- View function logs in real-time
+- Inspect database data
+- Manually trigger functions
+- Monitor performance
 
 ## Deployment
 
