@@ -69,8 +69,7 @@ The AI agent must manipulate the canvas through natural language using function 
 - Command count increments with each AI request, regardless of success/failure
 - Count tracked at `/users/{userId}/aiCommandCount` in Firebase Realtime Database
 - When user reaches 1000 commands, return error and block further AI requests
-- **Note**: Anonymous authentication allows users to bypass limit by clearing browser data
-  - **Post-MVP**: Implement proper authentication (email/social login) for better rate limiting
+- *Note*: Authentication will need to be upgraded to properly enforce command rate limiting
 
 ### Coordinate System & Positioning
 - **Viewport center**: The center of what the user currently sees on screen (changes with pan/zoom)
@@ -502,27 +501,23 @@ LangChain is overkill for your MVP. OpenAI SDK is solid but gives you less flexi
 
 ## Post-MVP Roadmap
 
-The following enhancements should be considered after MVP completion:
+The following enhancements should be considered after MVP completion, in this order:
 
-### High Priority
-1. **Proper Authentication**
+1. **Upgraded Authentication**
    - Replace anonymous auth with email/Google/GitHub login
    - Prevents rate limit bypass via cookie clearing
    - Enables per-account usage tracking and billing
-   - Required for production deployment
+   - Required for widespread use
 
-2. **Command History & Undo**
-   - Store AI command history in Firebase
-   - Allow users to review past commands
-   - Implement undo/redo for AI actions
-   - Show "AI created this" timestamps
-
-3. **Enhanced Selection**
+2. **Enhanced Selection**
    - Multi-select support for batch modifications
    - "Select all blue rectangles" AI command
    - Visual AI selection indicators
+   
+3. **AI Voice Commands**
+   - Speech-to-text input
+   - Hands-free canvas manipulation
 
-### Medium Priority
 4. **Advanced Commands**
    - "Arrange rectangles in a grid"
    - "Align all selected rectangles"
@@ -534,15 +529,16 @@ The following enhancements should be considered after MVP completion:
    - "Make it bigger" followed by "now move it right"
    - Remember previous commands in session
 
-6. **Usage Analytics**
+6. **Command History & Undo**
+   - Store AI command history in Firebase
+   - Allow users to review past commands
+   - Implement undo/redo for AI actions
+   - Show "AI created this" timestamps
+
+7. **Usage Analytics**
    - Track most-used commands
    - Monitor AI accuracy and errors
    - Cost tracking per user
-
-### Low Priority
-7. **AI Voice Commands**
-   - Speech-to-text input
-   - Hands-free canvas manipulation
 
 8. **Smart Defaults**
    - Learn user preferences (default colors, sizes)
