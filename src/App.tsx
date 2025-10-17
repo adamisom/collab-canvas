@@ -7,6 +7,7 @@ import LoginForm from './components/auth/LoginForm'
 import Header from './components/layout/Header'
 import Canvas from './components/canvas/Canvas'
 import UsersList from './components/canvas/UsersList'
+import AIChat from './components/ai/AIChat'
 
 const CanvasContent: React.FC = () => {
   const { loading, error } = useCanvas()
@@ -59,6 +60,9 @@ const CanvasContent: React.FC = () => {
       <div className="canvas-area">
         <Canvas />
       </div>
+      
+      {/* AI Chat Interface */}
+      <AIChat />
     </main>
   )
 }
