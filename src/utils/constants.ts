@@ -93,3 +93,20 @@ export const CANVAS_BOUNDS = {
   MAX_X: CANVAS_WIDTH,
   MAX_Y: CANVAS_HEIGHT
 } as const
+
+// AI Agent constants
+export const AI_CONSTANTS = {
+  MAX_CANVAS_RECTANGLES: 1000,
+  MAX_USER_COMMANDS: 1000,
+  DEFAULT_BATCH_OFFSET: 25,
+  MIN_BATCH_OFFSET: 10,
+  MAX_BATCH_OFFSET: 100,
+  MAX_BATCH_COUNT: 50
+} as const
+
+// Valid colors for AI commands (must match Cloud Function)
+export const VALID_AI_COLORS = [
+  RECTANGLE_COLORS.RED,
+  RECTANGLE_COLORS.BLUE,
+  RECTANGLE_COLORS.GREEN
+] as const

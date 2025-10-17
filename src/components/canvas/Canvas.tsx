@@ -42,7 +42,8 @@ const Canvas: React.FC<CanvasProps> = ({
     selectRectangle,
     changeRectangleColor,
     toastMessage,
-    clearToast
+    clearToast,
+    updateViewportInfo
   } = useCanvas()
   
   // Get cursors context
@@ -63,6 +64,32 @@ const Canvas: React.FC<CanvasProps> = ({
     if (!stageRef.current) return null
     return stageRef.current.scaleX()
   }, [])
+
+  // Calculate and update viewport info (for AI agent)
+  const sendViewportInfo = useCallback(() => {
+    if (!stageRef.current) return
+
+    const stage = stageRef.current
+    const scale = stage.scaleX()
+    const stagePos = { x: stage.x(), y: stage.y() }
+
+    // Calculate viewport center in canvas coordinates
+    const centerX = (width / 2 - stagePos.x) / scale
+    const centerY = (height / 2 - stagePos.y) / scale
+
+    // Calculate visible bounds in canvas coordinates
+    const left = (-stagePos.x) / scale
+    const top = (-stagePos.y) / scale
+    const right = (width - stagePos.x) / scale
+    const bottom = (height - stagePos.y) / scale
+
+    updateViewportInfo({
+      centerX,
+      centerY,
+      zoom: scale,
+      visibleBounds: { left, top, right, bottom }
+    })
+  }, [width, height, updateViewportInfo])
 
   // Handle mouse move for cursor broadcasting
   const handleMouseMove = useCallback((e: any) => {
@@ -119,7 +146,10 @@ const Canvas: React.FC<CanvasProps> = ({
     stage.scaleY(newScale)
     stage.x(newPos.x)
     stage.y(newPos.y)
-  }, [])
+    
+    // Update viewport info for AI agent
+    sendViewportInfo()
+  }, [sendViewportInfo])
 
   // Handle drag start
   const handleDragStart = useCallback((e: any) => {
@@ -135,7 +165,10 @@ const Canvas: React.FC<CanvasProps> = ({
   const handleDragEnd = useCallback((_e: any) => {
     // Reset dragging state
     setIsDragging(false)
-  }, [])
+    
+    // Update viewport info for AI agent
+    sendViewportInfo()
+  }, [sendViewportInfo])
 
   // Handle stage click (for rectangle creation and deselection)
   const handleStageClick = useCallback(async (e: any) => {
@@ -320,6 +353,22 @@ const Canvas: React.FC<CanvasProps> = ({
       window.removeEventListener('keydown', handleKeyDown)
     }
   }, [selectedRectangleId, rectangles, handleRectangleResize, deleteRectangle, isRectangleDragging, isRectangleResizing])
+
+  // Update viewport info on mount and window resize
+  useEffect(() => {
+    // Initial viewport info
+    sendViewportInfo()
+
+    // Update on window resize
+    const handleResize = () => {
+      sendViewportInfo()
+    }
+
+    window.addEventListener('resize', handleResize)
+    return () => {
+      window.removeEventListener('resize', handleResize)
+    }
+  }, [sendViewportInfo])
 
   return (
     <div className="canvas-container">

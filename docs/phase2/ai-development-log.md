@@ -181,7 +181,139 @@ node test-function.js
 
 ---
 
-## PR #2: Canvas Command Executor Service
+## PR #2: Canvas Command Executor Service ✅
+
+**Status:** Completed  
+**Date:** October 17, 2025  
+**Branch:** `ai-spike`
+
+### Overview
+Created the Canvas Command Executor service to execute AI-generated commands and manage viewport/selection context for the AI agent.
+
+### Files Created (2 files)
+
+1. **`/src/types/ai.ts`** (Client-Side AI Types)
+   - `CanvasState` - All rectangles on canvas
+   - `ViewportInfo` - User's viewport (center, zoom, visible bounds)
+   - `SelectedShape` - Currently selected rectangle
+   - `ProcessAICommandRequest` - Request to Cloud Function
+   - `ProcessAICommandResponse` - Response from Cloud Function
+   - `AICommand` - Individual tool call structure
+   - `CommandSnapshot` - Immutable snapshot for command execution
+   - **Note:** Types must match `/functions/src/types.ts` exactly
+
+2. **`/src/services/canvasCommandExecutor.ts`** (Command Executor)
+   - `CanvasCommandExecutor` class with dependency injection
+   - **Context Gathering Methods:**
+     - `getCanvasState()` - Returns all rectangles
+     - `getViewportInfo()` - Returns current viewport from CanvasContext
+     - `getSelectedShape()` - Returns selected rectangle or null
+   - **Command Execution Methods:**
+     - `executeCommand()` - Main dispatcher for all 6 tools
+     - `executeCreateRectangle()` - Create single rectangle
+     - `executeChangeColor()` - Modify rectangle color
+     - `executeMoveRectangle()` - Update position
+     - `executeResizeRectangle()` - Change dimensions
+     - `executeDeleteRectangle()` - Remove rectangle
+     - `executeCreateMultipleRectangles()` - Batch creation with layouts
+   - **Critical Delegation Pattern:** Only calls CanvasContext methods, never writes to Firebase directly
+   - **Hybrid Validation:** 
+     - Color validation (strict VALID_AI_COLORS check)
+     - Parameter clamping (x, y, width, height to valid ranges)
+     - Rectangle existence checks
+   - **Auto-Selection Support:** Accepts optional `createdRectangleId` for multi-step commands
+   - **Layout Calculation:** row, column, grid patterns for batch creation
+
+### Files Updated (3 files)
+
+1. **`/src/utils/constants.ts`**
+   - Added `AI_CONSTANTS`:
+     - `MAX_CANVAS_RECTANGLES: 1000`
+     - `MAX_USER_COMMANDS: 1000`
+     - `DEFAULT_BATCH_OFFSET: 25`
+     - `MIN_BATCH_OFFSET: 10`
+     - `MAX_BATCH_OFFSET: 100`
+     - `MAX_BATCH_COUNT: 50`
+   - Added `VALID_AI_COLORS` array (matches Cloud Function)
+
+2. **`/src/contexts/CanvasContext.tsx`** (Viewport & Selection Tracking)
+   - Added `ViewportInfo` type import
+   - Added state: `selectionLocked` (boolean)
+   - Added ref: `viewportInfoRef` (useRef, no re-renders)
+   - **New Methods:**
+     - `getViewportInfo()` - Returns current viewport from ref
+     - `updateViewportInfo(info)` - Updates viewport ref
+     - `setSelectionLocked(locked)` - Controls selection changes during AI processing
+   - **Modified `selectRectangle()`:**
+     - Checks `selectionLocked` before allowing changes
+     - Logs and returns early if locked
+   - **Context Interface Updates:**
+     - Added `selectionLocked` to state
+     - Added viewport methods to interface
+     - Updated context value object
+
+3. **`/src/components/canvas/Canvas.tsx`** (Viewport Tracking)
+   - Imported `updateViewportInfo` from useCanvas
+   - **New Method: `sendViewportInfo()`:**
+     - Calculates viewport center in canvas coordinates
+     - Calculates visible bounds (left, top, right, bottom)
+     - Gets current zoom level
+     - Updates CanvasContext via `updateViewportInfo()`
+   - **Viewport Updates On:**
+     - Mount (initial viewport)
+     - Wheel zoom (`handleWheel` - after zoom applied)
+     - Pan end (`handleDragEnd` - after pan completed)
+     - Window resize (new useEffect with resize listener)
+   - Formula: `centerX = (width/2 - stageX) / scale`
+
+### Key Technical Decisions
+
+1. **useRef for Viewport Info**
+   - Chosen over useState to avoid re-renders
+   - Updated frequently (zoom, pan, resize) but only read during AI commands
+   - CanvasContext exposes getter/setter methods
+
+2. **Selection Locking**
+   - Prevents race conditions when user changes selection during AI processing
+   - Implemented in `selectRectangle()` with early return
+   - Console logging for debugging
+
+3. **Delegation Pattern (Critical)**
+   - `canvasCommandExecutor` ONLY calls CanvasContext methods
+   - CanvasContext handles ALL Firebase writes
+   - Prevents duplicate broadcasts and data inconsistencies
+
+4. **Hybrid Parameter Validation**
+   - Executor clamps numeric values to valid ranges (safety net)
+   - Strict color validation (throws error if invalid)
+   - Rectangle existence checks before modifications
+
+5. **Batch Creation Layouts**
+   - Row: Horizontal spacing
+   - Column: Vertical spacing  
+   - Grid: Square/rectangular grid (√count columns)
+   - All use configurable offset
+
+### Build Verification
+
+✅ TypeScript compilation successful (no errors)  
+✅ All 2 new files created  
+✅ All 3 existing files updated  
+✅ Vite production build successful (810.58 KB bundle)  
+
+### Next Steps (PR #3)
+
+- Create AI Service Client (`/src/services/aiAgent.ts`)
+- Create AI Agent Hook (`/src/hooks/useAIAgent.ts`)
+- Create AI Error Utilities (`/src/utils/aiErrors.ts`)
+- Update Firebase config for emulator support
+- Implement command snapshot capture
+- Implement selection locking during AI execution
+- Implement auto-selection logic for single vs. multiple creation
+
+---
+
+## PR #3: AI Service Client & Cloud Function Integration
 
 **Status:** Not Started  
 **Branch:** `ai-spike`
