@@ -41,21 +41,99 @@ npm install ai @ai-sdk/openai zod firebase-functions firebase-admin
 #### `/functions/src/index.ts`
 - Export `processAICommand` callable function
 - Enforce authentication check
-- Check user command quota at `/users/{userId}/aiCommandCount`
+- Check user command quota at `/users/{userId}/aiCommandCount` (read atomically)
 - Check canvas rectangle limit (1000 max)
-- Call OpenAI GPT-4o via Vercel AI SDK
-- Increment command counter
-- Return structured tool calls to client
+- Call OpenAI GPT-4o via Vercel AI SDK with **6 second timeout**
+- If OpenAI unreachable/timeout: Return error "AI service temporarily unavailable. Please try again."
+- Increment command counter using **Firebase atomic increment** (prevents race conditions)
+- Return structured response: `{ commands: AICommand[], message?: string }`
+- Commands array contains tool calls, optional message for AI explanations/errors
 - Handle errors with proper HttpsError codes
+- **IMPORTANT**: Use atomic increment to avoid race conditions between multiple tabs/users
 
 #### `/functions/src/tools.ts`
 Define 6 Zod tool schemas:
-1. `createRectangle` - x, y, width, height, color
+1. `createRectangle` - x, y, width, height, color (default size: 100x80)
 2. `changeColor` - shapeId, color
 3. `moveRectangle` - shapeId, x, y
 4. `resizeRectangle` - shapeId, width, height
 5. `deleteRectangle` - shapeId
-6. `createMultipleRectangles` - count, color, layout, offsetPixels
+6. `createMultipleRectangles` - count, color, layout, offsetPixels (default offset: 25px)
+
+**Color Validation**: Only accept exact hex codes: `#ef4444`, `#3b82f6`, `#22c55e`
+
+#### `/functions/src/utils/systemPrompt.ts`
+Build comprehensive system prompt:
+
+```typescript
+export const buildSystemPrompt = (canvasState, viewportInfo, selectedShape) => `
+You are a canvas manipulation assistant. You can create and modify rectangles through natural language.
+
+AVAILABLE COLORS (use exact hex codes):
+- red: #ef4444
+- blue: #3b82f6  
+- green: #22c55e
+
+DEFAULT RECTANGLE SIZE: 100 x 80 pixels
+VIEWPORT CENTER: (${viewportInfo.centerX}, ${viewportInfo.centerY})
+
+RULES FOR MULTI-STEP COMMANDS:
+- You can execute multiple actions in sequence (max 5 steps)
+- Multi-step is ONLY allowed if the FIRST action creates exactly ONE rectangle
+- After creating one rectangle, it will be auto-selected for subsequent modifications
+- Examples of valid multi-step:
+  * "Create a blue rectangle and resize it to 200x200"
+  * "Create a red rectangle at 100,100 and make it 150 pixels wide"
+- Invalid multi-step patterns (REFUSE these):
+  * "Create 5 rectangles and make them all bigger" (cannot modify multiple)
+  * "Make it bigger and change color" without creating first (unless already selected)
+
+SELECTION CONTEXT:
+${selectedShape ? `- User has selected: ${selectedShape.color} rectangle at (${selectedShape.x}, ${selectedShape.y})` : '- No rectangle currently selected'}
+${!selectedShape ? '- Modification commands (resize, move, change color, delete) require selection' : ''}
+
+CANVAS STATE:
+- Total rectangles: ${canvasState.rectangles.length}
+- Canvas limit: 1000 rectangles max
+
+IMPORTANT CONSTRAINTS:
+- If user requests invalid color (not red/blue/green), respond: "Invalid color. Available colors: red, blue, green"
+- If modification requested without selection, respond: "Please select a rectangle first"
+- If impossible multi-step pattern, explain: "I can only modify rectangles when creating one at a time"
+- If command is ambiguous, ask for clarification
+- Always use exact hex codes for colors in tool calls
+
+When user says "in the center", use viewport center coordinates shown above.
+`;
+```
+
+#### `/functions/src/utils/rateLimiter.ts`
+Implement atomic command counter:
+
+```typescript
+import { getDatabase, ref, get, update, increment } from 'firebase-admin/database';
+
+export async function checkAndIncrementCommandCount(userId: string): Promise<void> {
+  const db = getDatabase();
+  const userRef = ref(db, `users/${userId}`);
+  
+  // Read current count
+  const snapshot = await get(userRef);
+  const currentCount = snapshot.val()?.aiCommandCount || 0;
+  
+  if (currentCount >= 1000) {
+    throw new functions.https.HttpsError(
+      'resource-exhausted',
+      'AI command limit reached (1000 commands per user)'
+    );
+  }
+  
+  // Atomic increment (prevents race conditions)
+  await update(userRef, {
+    aiCommandCount: increment(1)
+  });
+}
+```
 
 #### `/functions/src/types.ts`
 ```typescript
@@ -97,16 +175,78 @@ export interface ProcessAICommandRequest {
   viewportInfo: ViewportInfo;
   selectedShape: SelectedShape | null;
 }
+
+export interface ProcessAICommandResponse {
+  commands: AICommand[];
+  message?: string;  // Optional AI explanation or error message
+}
+
+export interface AICommand {
+  tool: string;
+  parameters: Record<string, any>;
+}
 ```
+
+### Firebase Security Rules
+
+Add to `/firebase.json` or update via Firebase Console:
+
+```json
+{
+  "database": {
+    "rules": "database.rules.json"
+  }
+}
+```
+
+Create `/database.rules.json`:
+
+```json
+{
+  "rules": {
+    "users": {
+      "$userId": {
+        "aiCommandCount": {
+          ".read": "auth.uid === $userId",
+          ".write": "auth.uid === $userId && (
+            !data.exists() || 
+            newData.val() > data.val()
+          )"
+        }
+      }
+    },
+    "rectangles": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "cursors": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    }
+  }
+}
+```
+
+**Security Rule Explanation**:
+- `aiCommandCount` can only increase (prevents users from resetting their quota)
+- Users can only read/write their own command count
+- Rectangles and cursors require authentication (existing rules)
 
 ### Testing Checklist
 - [ ] Cloud Function deploys successfully
 - [ ] Function enforces authentication
 - [ ] Function checks command quota (blocks at 1000)
+- [ ] Function uses atomic increment (test with concurrent requests)
 - [ ] Function checks canvas limits (blocks at 1000 rectangles)
-- [ ] Function calls OpenAI and returns tool calls
-- [ ] Function increments command counter
-- [ ] Error handling works (auth, quota, limits)
+- [ ] Function calls OpenAI with 6 second timeout
+- [ ] Timeout error returns user-friendly message
+- [ ] Function returns commands + optional message
+- [ ] System prompt includes color hex codes
+- [ ] System prompt includes multi-step rules
+- [ ] AI refuses invalid colors with error message
+- [ ] AI refuses impossible multi-step patterns
+- [ ] Firebase security rules prevent quota manipulation
+- [ ] Error handling works (auth, quota, limits, timeout)
 
 ---
 
@@ -120,8 +260,9 @@ export interface ProcessAICommandRequest {
 
 ### Files to Update
 - `/src/services/canvasService.ts` - May need minor updates for new operations
-- `/src/contexts/CanvasContext.tsx` - Expose additional helper methods
-- `/src/components/canvas/Canvas.tsx` - Expose viewport info methods
+- `/src/contexts/CanvasContext.tsx` - **CRITICAL: Add viewport info management with useRef**
+- `/src/components/canvas/Canvas.tsx` - Update viewport info on pan/zoom/resize/mount
+- `/src/utils/constants.ts` - Verify DEFAULT_RECT values (should be 100x80)
 
 ### Implementation Details
 
@@ -131,24 +272,35 @@ Create service class with methods:
 **Context Gathering Methods:**
 - `getCanvasState(): CanvasState`
   - Returns all rectangles from CanvasContext
-  - Maps to simplified format for AI
+  - Maps to simplified format for AI (id, x, y, width, height, color only)
+  - Omits metadata like createdBy, timestamps, selectedBy
+  - Returns all rectangles (up to 1000) for full canvas context
   
 - `getViewportInfo(): ViewportInfo`
-  - Access Canvas component's stage ref
-  - Calculate viewport center from stage position and zoom
-  - Return zoom level and visible bounds
-  - Formula: centerX = -stageX / zoom + viewportWidth / (2 * zoom)
+  - **IMPORTANT**: Gets viewport info from CanvasContext (NOT directly from stage ref)
+  - CanvasContext maintains viewport info via useRef (updated by Canvas component)
+  - Returns: centerX, centerY, zoom, visibleBounds
+  - This info is recalculated immediately before AI command execution
   
 - `getSelectedShape(): SelectedShape | null`
   - Returns currently selected rectangle from CanvasContext
   - Returns null if no selection
+  - Used to pass selection context to AI
 
 **Command Execution Methods:**
+
+**CRITICAL DELEGATION PATTERN**: 
+- Command executor **ONLY** calls CanvasContext methods
+- CanvasContext handles **ALL** Firebase writes
+- Command executor is purely orchestration layer
+- **NEVER** write directly to Firebase from command executor
+
 - `createRectangle(x: number, y: number, width: number, height: number, color: string): Promise<string>`
   - Call CanvasContext.createRectangle()
-  - Use default width/height if not specified (100x100)
-  - Validate color against RECTANGLE_COLORS
+  - Use default width/height if not specified (100x80 from DEFAULT_RECT constants)
+  - Validate color against RECTANGLE_COLORS (#ef4444, #3b82f6, #22c55e)
   - Return created rectangle ID
+  - **Note**: This method does NOT auto-select (that's handled by aiAgent layer)
   
 - `changeColor(shapeId: string, color: string): Promise<void>`
   - Validate shapeId exists
@@ -216,14 +368,110 @@ export interface AICommand {
 
 ### Updates to Existing Files
 
-#### `/src/contexts/CanvasContext.tsx`
-- Add `getAllRectangles(): Rectangle[]` method to context
-- Ensure it's accessible to command executor
+#### `/src/contexts/CanvasContext.tsx` - **CRITICAL VIEWPORT INFO IMPLEMENTATION**
+
+Add viewport info management with useRef pattern:
+
+```typescript
+// Add to CanvasContext interface
+interface CanvasContextType {
+  // ... existing methods
+  getViewportInfo: () => ViewportInfo;
+  updateViewportInfo: (stage: Konva.Stage, width: number, height: number) => void;
+}
+
+// In CanvasProvider component
+const viewportInfoRef = useRef<ViewportInfo>({
+  centerX: 0,
+  centerY: 0,
+  zoom: 1,
+  visibleBounds: { left: 0, top: 0, right: 1200, bottom: 800 }
+});
+
+// Getter method (no re-renders)
+const getViewportInfo = useCallback(() => {
+  return { ...viewportInfoRef.current };
+}, []);
+
+// Update method (called by Canvas component)
+const updateViewportInfo = useCallback((stage: Konva.Stage, width: number, height: number) => {
+  if (!stage) return;
+  
+  const scale = stage.scaleX();
+  const stageX = stage.x();
+  const stageY = stage.y();
+  
+  // Konva viewport center calculation formula
+  viewportInfoRef.current = {
+    centerX: -stageX / scale + (width / 2) / scale,
+    centerY: -stageY / scale + (height / 2) / scale,
+    zoom: scale,
+    visibleBounds: {
+      left: -stageX / scale,
+      top: -stageY / scale,
+      right: (-stageX + width) / scale,
+      bottom: (-stageY + height) / scale
+    }
+  };
+}, []);
+```
+
+**Why useRef?**
+- No re-renders on viewport changes (performance)
+- Always current when accessed
+- Clean separation from Canvas component
 
 #### `/src/components/canvas/Canvas.tsx`
-- Create `getViewportInfo()` method that accesses stage ref
-- Export or make accessible to command executor
-- Consider using React ref forwarding or context
+
+Add viewport update calls:
+
+```typescript
+const { updateViewportInfo } = useCanvas();
+
+// Update on mount
+useEffect(() => {
+  if (stageRef.current) {
+    updateViewportInfo(stageRef.current, width, height);
+  }
+}, [updateViewportInfo, width, height]);
+
+// Update on drag end (not drag move - performance)
+const handleDragEnd = useCallback(() => {
+  setIsDragging(false);
+  if (stageRef.current) {
+    updateViewportInfo(stageRef.current, width, height);
+  }
+}, [updateViewportInfo, width, height]);
+
+// Update on wheel (zoom)
+const handleWheel = useCallback((e: KonvaEventObject<WheelEvent>) => {
+  // ... existing zoom logic ...
+  
+  // After zoom calculation
+  if (stageRef.current) {
+    updateViewportInfo(stageRef.current, width, height);
+  }
+}, [updateViewportInfo, width, height]);
+
+// Update on window resize
+useEffect(() => {
+  const handleResize = () => {
+    if (stageRef.current) {
+      updateViewportInfo(stageRef.current, window.innerWidth, window.innerHeight);
+    }
+  };
+  
+  window.addEventListener('resize', handleResize);
+  return () => window.removeEventListener('resize', handleResize);
+}, [updateViewportInfo]);
+```
+
+**Update Triggers**:
+- Component mount (initial state)
+- Drag end (after pan)
+- Wheel (after zoom)
+- Window resize (viewport size changes)
+- **Also updated immediately before AI command execution** (in aiAgent.ts)
 
 ### Testing Checklist
 - [ ] `getCanvasState()` returns all rectangles
@@ -275,6 +523,12 @@ export class AIAgent {
     commandsExecuted: number;
   }> {
     try {
+      // Ensure viewport info is fresh before gathering context
+      const canvas = document.querySelector('.canvas-wrapper');
+      if (canvas && stageRef) {
+        updateViewportInfo(stageRef.current, canvas.clientWidth, canvas.clientHeight);
+      }
+      
       // Gather context
       const canvasState = canvasCommandExecutor.getCanvasState();
       const viewportInfo = canvasCommandExecutor.getViewportInfo();
@@ -289,18 +543,45 @@ export class AIAgent {
         selectedShape
       });
       
-      const { commands } = result.data as { commands: AICommand[] };
+      const { commands, message } = result.data as { commands: AICommand[], message?: string };
       
-      // Execute commands
-      let executedCount = 0;
-      for (const command of commands) {
-        await this.executeCommand(command);
-        executedCount++;
+      // If AI returned message without commands, return it
+      if (!commands || commands.length === 0) {
+        return {
+          success: message ? true : false,
+          message: message || 'No commands to execute',
+          commandsExecuted: 0
+        };
       }
+      
+      // Execute commands with auto-selection logic
+      let executedCount = 0;
+      let autoSelectedId: string | null = null;
+      
+      for (let i = 0; i < commands.length; i++) {
+        const command = commands[i];
+        
+        // FIRST command: check for single rectangle creation
+        if (i === 0 && command.tool === 'createRectangle') {
+          const rectangleId = await this.executeSingleCommand(command);
+          autoSelectedId = rectangleId;
+          
+          // Auto-select for subsequent modifications
+          await canvasContext.selectRectangle(rectangleId);
+          executedCount++;
+        } 
+        // Subsequent commands or non-create first command
+        else {
+          await this.executeSingleCommand(command);
+          executedCount++;
+        }
+      }
+      
+      const resultMessage = message || `Successfully executed ${executedCount} command(s)`;
       
       return {
         success: true,
-        message: `Successfully executed ${executedCount} command(s)`,
+        message: resultMessage,
         commandsExecuted: executedCount
       };
       
@@ -313,50 +594,57 @@ export class AIAgent {
     }
   }
   
-  private async executeCommand(command: AICommand): Promise<void> {
+  private async executeSingleCommand(command: AICommand): Promise<string | null> {
     const { tool, parameters } = command;
     
     switch (tool) {
       case 'createRectangle':
-        await canvasCommandExecutor.createRectangle(
+        // Returns rectangle ID for auto-selection
+        return await canvasCommandExecutor.createRectangle(
           parameters.x,
           parameters.y,
           parameters.width,
           parameters.height,
           parameters.color
         );
-        break;
+        
       case 'changeColor':
         await canvasCommandExecutor.changeColor(
           parameters.shapeId,
           parameters.color
         );
-        break;
+        return null;
+        
       case 'moveRectangle':
         await canvasCommandExecutor.moveRectangle(
           parameters.shapeId,
           parameters.x,
           parameters.y
         );
-        break;
+        return null;
+        
       case 'resizeRectangle':
         await canvasCommandExecutor.resizeRectangle(
           parameters.shapeId,
           parameters.width,
           parameters.height
         );
-        break;
+        return null;
+        
       case 'deleteRectangle':
         await canvasCommandExecutor.deleteRectangle(parameters.shapeId);
-        break;
+        return null;
+        
       case 'createMultipleRectangles':
+        // Multiple rectangles - no auto-selection
         await canvasCommandExecutor.createMultipleRectangles(
           parameters.count,
           parameters.color,
           parameters.layout,
           parameters.offsetPixels
         );
-        break;
+        return null;
+        
       default:
         throw new Error(`Unknown command: ${tool}`);
     }
@@ -365,6 +653,13 @@ export class AIAgent {
 
 export const aiAgent = new AIAgent();
 ```
+
+**Key Auto-Selection Logic:**
+- If first command is `createRectangle` → auto-select the created rectangle
+- If first command is `createMultipleRectangles` → no auto-selection (user must select manually)
+- Subsequent commands in multi-step sequence use the auto-selected rectangle
+- Max 5 commands per sequence (enforced by system prompt)
+- Partial success acceptable: if step 2 fails, step 1 rectangle still exists
 
 #### `/src/hooks/useAIAgent.ts`
 ```typescript
@@ -456,13 +751,21 @@ export const functions = getFunctions(app);
 
 ### Testing Checklist
 - [ ] `aiAgent.processCommand()` calls Cloud Function
-- [ ] Command context gathering works
+- [ ] Viewport info refreshed before gathering context
+- [ ] Command context gathering works (canvas state, viewport, selection)
 - [ ] All 6 command types execute correctly
+- [ ] Single rectangle creation auto-selects the rectangle
+- [ ] Multiple rectangle creation does NOT auto-select
+- [ ] Multi-step commands work (create + modify)
+- [ ] Multi-step: "create rectangle and resize" succeeds
+- [ ] Multi-step: "create 5 and resize" fails appropriately (no selection)
+- [ ] AI message-only responses display correctly (no commands)
 - [ ] Error handling works for all error types
 - [ ] Error messages are user-friendly
 - [ ] Loading states work
 - [ ] Success messages display
-- [ ] Multiple commands execute in sequence
+- [ ] Partial failure handling (step 1 succeeds, step 2 fails)
+- [ ] TypeScript interfaces match Cloud Function types exactly
 
 ---
 
@@ -784,16 +1087,17 @@ import AIChat from './components/ai/AIChat';
 - AI returns error "Please select a rectangle first"
 - Error message displays in UI
 
-#### Scenario 4: Color Mismatch Error
-- User selects a red rectangle
-- User types "Change the blue rectangle to green"
-- AI returns error "You have a red rectangle selected, not a blue one"
+#### Scenario 4: Invalid Color Error
+- User types "Create a yellow rectangle"
+- AI returns error "Invalid color. Available colors: red, blue, green"
 - Error message displays in UI
+- No rectangle created
 
 #### Scenario 5: Batch Creation
-- User types "Create 5 yellow rectangles"
-- AI calls `createMultipleRectangles` with count=5, color=yellow
+- User types "Create 5 green rectangles"
+- AI calls `createMultipleRectangles` with count=5, color=#22c55e
 - 5 rectangles appear with offsets at viewport center
+- None are auto-selected
 - All rectangles sync to other users
 
 #### Scenario 6: Move Rectangle
@@ -838,6 +1142,60 @@ import AIChat from './components/ai/AIChat';
 - User types "Create a rectangle"
 - Rectangle appears at visible viewport center (not 0,0)
 
+#### Scenario 13: Auto-Selection (Single Rectangle)
+- User types "Create a blue rectangle"
+- AI creates rectangle
+- Rectangle is automatically selected (red border)
+- User types "Make it bigger" (no manual selection needed)
+- Rectangle resizes successfully
+
+#### Scenario 14: No Auto-Selection (Multiple Rectangles)
+- User types "Create 3 red rectangles"
+- AI creates 3 rectangles
+- None are selected
+- User types "Make it bigger"
+- AI returns error "Please select a rectangle first"
+
+#### Scenario 15: Multi-Step Command (Create + Modify)
+- User types "Create a blue rectangle and resize it to 200x200"
+- AI returns 2 commands: [createRectangle, resizeRectangle]
+- Executor: Creates rectangle → Auto-selects → Resizes
+- Final result: 200x200 blue rectangle, selected
+- Syncs to all users
+
+#### Scenario 16: Multi-Step Command (Create + Multiple Modifications)
+- User types "Create a red rectangle, move it to 500,500, and make it 150 pixels wide"
+- AI returns 3 commands: [createRectangle, moveRectangle, resizeRectangle]
+- Executor: Creates → Auto-selects → Moves → Resizes
+- All modifications apply to the created rectangle
+- Syncs to all users
+
+#### Scenario 17: Multi-Step Impossible Pattern
+- User types "Create 5 rectangles and make them all green"
+- AI detects impossible pattern (can't modify multiple)
+- AI returns message: "I can only modify rectangles when creating one at a time"
+- No commands executed
+
+#### Scenario 18: Partial Failure (Network Drop)
+- User types "Create rectangle and resize to 300x300"
+- Rectangle created successfully
+- Network drops before resize
+- Result: Rectangle exists but not resized (acceptable)
+- User can retry resize command
+
+#### Scenario 19: OpenAI Timeout
+- OpenAI API unresponsive or slow
+- After 6 seconds, timeout occurs
+- Error message: "AI service temporarily unavailable. Please try again."
+- User can retry command
+
+#### Scenario 20: Atomic Counter Race Condition
+- Open 2 browser tabs as same user
+- Tab 1: Issue AI command
+- Tab 2: Issue AI command simultaneously
+- Both succeed, counter increments to 2 (not 1)
+- Atomic increment prevents race condition
+
 ### Performance Testing
 - [ ] Measure Cloud Function cold start latency
 - [ ] Measure Cloud Function warm latency
@@ -852,33 +1210,55 @@ import AIChat from './components/ai/AIChat';
 - [ ] Verify no conflicts with selections
 
 ### Edge Case Testing
-- [ ] Invalid colors (e.g., "neon sparkle")
-- [ ] Extreme positions (negative, very large)
+- [ ] Invalid colors (e.g., "neon sparkle", "yellow", "purple")
+- [ ] Extreme positions (negative, very large numbers)
 - [ ] Extreme sizes (0x0, 10000x10000)
-- [ ] Empty commands
+- [ ] Empty commands ("")
 - [ ] Very long commands (>500 characters)
-- [ ] Ambiguous commands (e.g., "do something")
-- [ ] Commands with typos
+- [ ] Ambiguous commands (e.g., "do something", "fix it")
+- [ ] Commands with typos (e.g., "crete a rectingle")
+- [ ] Commands in different languages (should fail gracefully)
+- [ ] More than 5 steps in multi-step command
+- [ ] Modification without prior creation or selection
+- [ ] Delete while another user is editing (race condition)
+- [ ] Canvas exactly at 1000 rectangles (boundary test)
+- [ ] User exactly at 1000 commands (boundary test)
 
 ### Bug Fix Areas to Watch
-- Viewport center calculation with pan/zoom
-- Command executor accessing Canvas stage ref
+- Viewport center calculation with pan/zoom (using useRef pattern)
+- Viewport info staleness during AI processing
 - Firebase RTDB sync timing
-- Error message propagation
-- Loading state timing
-- Command counter race conditions
+- Error message propagation from Cloud Function to UI
+- Loading state timing and cancellation
+- Command counter atomic increment
+- Auto-selection timing (ensure selection happens before next command)
+- Multi-step command partial failure handling
+- TypeScript interface drift between Cloud Function and client
 
 ### Testing Checklist
 - [ ] All 6 command types work end-to-end
+- [ ] Single rectangle creation auto-selects
+- [ ] Multiple rectangle creation does NOT auto-select
+- [ ] Multi-step commands work (create + modify)
+- [ ] Multi-step impossible patterns rejected gracefully
+- [ ] Max 5 steps enforced
+- [ ] Partial failure handling works (step 1 succeeds, step 2 fails)
 - [ ] Real-time sync verified for all commands
-- [ ] Error handling works for all scenarios
-- [ ] Rate limiting enforced correctly
-- [ ] Canvas limits enforced correctly
-- [ ] Multi-user scenarios work
-- [ ] Performance targets met (<2s)
-- [ ] Viewport center positioning accurate
+- [ ] Error handling works for all scenarios (20+ scenarios)
+- [ ] Rate limiting enforced correctly with atomic increment
+- [ ] Canvas limits enforced correctly (1000 rectangle max)
+- [ ] Invalid color validation works
+- [ ] Color hex codes correct in AI responses
+- [ ] Multi-user scenarios work without conflicts
+- [ ] Performance targets met (<2s for warm functions, accept cold starts)
+- [ ] OpenAI timeout (6 seconds) works correctly
+- [ ] Viewport center positioning accurate with pan/zoom
+- [ ] Viewport info refresh before AI command
 - [ ] Selection context enforced
+- [ ] Firebase security rules prevent quota manipulation
+- [ ] TypeScript interfaces match between client and Cloud Function
 - [ ] UI/UX polished and intuitive
+- [ ] All 20 integration scenarios pass
 
 ---
 
@@ -998,13 +1378,13 @@ See `/docs/phase2/setup-guide.md` for detailed setup instructions.
 
 | PR # | Title | Files Created | Files Updated | Est. Time |
 |------|-------|---------------|---------------|-----------|
-| 1 | Firebase Cloud Functions Setup | 8 | 3 | 4-6 hours |
-| 2 | Canvas Command Executor Service | 2 | 3 | 6-8 hours |
-| 3 | AI Service Client Integration | 3 | 2 | 4-6 hours |
-| 4 | AI Chat Interface Component | 2 | 2 | 4-6 hours |
-| 5 | Integration & E2E Testing | 1-2 | 5+ | 8-12 hours |
-| 6 | Documentation & Cleanup | 4 | 3 | 4-6 hours |
-| **Total** | **6 PRs** | **20+ files** | **18+ files** | **30-44 hours** |
+| 1 | Firebase Cloud Functions Setup | 9 | 3 | 4-6 hours |
+| 2 | Canvas Command Executor Service | 2 | 4 | 6-8 hours |
+| 3 | AI Service Client Integration | 3 | 1-2 | 4-6 hours |
+| 4 | AI Chat Interface Component | 2-3 | 1-2 | 4-6 hours |
+| 5 | Integration & E2E Testing | 2 | 5+ | 8-12 hours |
+| 6 | Documentation & Cleanup | 3 | 4 | 4-6 hours |
+| **Total** | **6 PRs** | **21-22 files** | **19-20 files** | **30-44 hours** |
 
 ---
 

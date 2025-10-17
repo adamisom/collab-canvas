@@ -47,6 +47,35 @@ The AI agent must manipulate the canvas through natural language using function 
 - AI commands work only with the user's currently selected rectangle
 - Multiple users can issue AI commands simultaneously without conflicts (each works with their own selection)
 
+### Auto-Selection Rules
+- **Single rectangle creation**: When AI creates exactly ONE rectangle, it is automatically selected
+  - Enables commands like: "Create a blue rectangle and make it 200x200"
+  - Auto-selection happens before subsequent modifications in multi-step commands
+- **Multiple rectangle creation**: When AI creates multiple rectangles (batch), NONE are selected
+  - User must manually select to modify
+  - Prevents ambiguity about which rectangle to modify
+
+### Multi-Step Command Support
+- AI can execute **multiple commands in sequence** (max 5 steps)
+- Multi-step is **ONLY allowed** if the first command creates exactly ONE rectangle
+- Examples of valid multi-step commands:
+  - "Create a blue rectangle and resize it to 200x200"
+  - "Create a red rectangle at 100,100 and make it 150 pixels wide"
+  - "Create a green rectangle, move it to 500,500, and change it to red"
+- Invalid multi-step patterns (AI will refuse):
+  - "Create 5 rectangles and make them all bigger" (cannot modify multiple)
+  - "Make it bigger and change color" without creating first (unless user has pre-selected)
+- **Partial failure acceptable**: If step 1 (create) succeeds but step 2 (resize) fails, keep the created rectangle
+
+### Color Validation
+- **Available colors** (strict): Red, Blue, Green only
+- **Hex codes** (AI must use exact codes):
+  - Red: `#ef4444`
+  - Blue: `#3b82f6`
+  - Green: `#22c55e`
+- **Invalid color handling**: If user requests invalid color (e.g., "yellow", "purple"), AI returns error: "Invalid color. Available colors: red, blue, green"
+- No color mapping or approximation - strict validation only
+
 ### Error Handling
 - **No selection + modification command**: Return error "Please select a rectangle first"
 - **Color mismatch**: If user says "change the blue rectangle to red" but has a red rectangle selected, return error "You have a red rectangle selected, not a blue one"
@@ -68,17 +97,27 @@ The AI agent must manipulate the canvas through natural language using function 
 - **Usage quota**: 1000 AI commands per user (tracked in Firebase RTDB)
 - Command count increments with each AI request, regardless of success/failure
 - Count tracked at `/users/{userId}/aiCommandCount` in Firebase Realtime Database
+- **Atomic increment** used to prevent race conditions between multiple tabs/sessions
 - When user reaches 1000 commands, return error and block further AI requests
+- Firebase security rules prevent users from manually resetting their quota
 - *Note*: Authentication will need to be upgraded to properly enforce command rate limiting
+
+### Default Rectangle Properties
+- **Default size**: 100 pixels wide × 80 pixels tall
+- **Default color**: Blue (#3b82f6) if not specified
+- Values from `DEFAULT_RECT` constants in codebase
 
 ### Coordinate System & Positioning
 - **Viewport center**: The center of what the user currently sees on screen (changes with pan/zoom)
 - **Canvas center**: Fixed point at (0, 0) in canvas coordinate system (may be off-screen)
 - **Default positioning**: All new rectangles created at **viewport center** unless position specified
 - **"Create in center" commands**: Use viewport center (ensures user sees result immediately)
-- **Batch create positioning**: Stack at viewport center with slight offsets to prevent perfect overlap
-  - Example: "Create 5 rectangles" → place at viewport center with 20-30px offsets each
-- Use `getViewportInfo()` to retrieve current viewport coordinates for positioning calculations
+- **Batch create positioning**: Stack at viewport center with 25px offsets to prevent perfect overlap
+  - Example: "Create 5 rectangles" → place at viewport center with 25px diagonal offsets
+- **Viewport info management**: CanvasContext maintains viewport info using useRef (no re-renders)
+  - Updated on: component mount, drag end, wheel (zoom), window resize
+  - Refreshed immediately before AI command execution
+  - Konva formula: `centerX = -stageX / scale + (width / 2) / scale`
 
 ### User Experience Requirements
 - **No special visual indicators** for AI-created shapes - they should look identical to manually created shapes
@@ -115,7 +154,7 @@ export const processAICommand = functions.https.onCall(async (data, context) => 
     throw new functions.https.HttpsError('unauthenticated', 'Must be authenticated');
   }
   
-  // Check usage quota
+  // Check usage quota (atomic read)
   const userId = context.auth.uid;
   const commandCount = await checkCommandCount(userId);
   if (commandCount >= 1000) {
@@ -128,35 +167,60 @@ export const processAICommand = functions.https.onCall(async (data, context) => 
     throw new functions.https.HttpsError('failed-precondition', 'Canvas has too many rectangles');
   }
   
-  // Call OpenAI with tool definitions
-  const result = await generateText({
-    model: openai('gpt-4o'),
-    messages: [{ role: 'user', content: data.userMessage }],
-    tools: toolDefinitions,
-    system: buildSystemPrompt(data.canvasState, data.viewportInfo, data.selectedShape)
-  });
-  
-  // Increment command count
-  await incrementCommandCount(userId);
-  
-  // Return structured commands for client execution
-  return { commands: result.toolCalls };
+  // Call OpenAI with tool definitions (6 second timeout)
+  try {
+    const result = await Promise.race([
+      generateText({
+        model: openai('gpt-4o'),
+        messages: [{ role: 'user', content: data.userMessage }],
+        tools: toolDefinitions,
+        system: buildSystemPrompt(data.canvasState, data.viewportInfo, data.selectedShape)
+      }),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('AI request timeout')), 6000)
+      )
+    ]);
+    
+    // Atomic increment command count (prevents race conditions)
+    await incrementCommandCountAtomic(userId);
+    
+    // Return structured commands and optional message
+    return { 
+      commands: result.toolCalls || [], 
+      message: result.text // Optional AI explanation
+    };
+  } catch (error) {
+    if (error.message === 'AI request timeout') {
+      throw new functions.https.HttpsError('deadline-exceeded', 
+        'AI service temporarily unavailable. Please try again.');
+    }
+    throw error;
+  }
 });
 ```
 
 **Client Integration:**
 ```typescript
-// Client calls function
+// Client calls function (with fresh viewport info)
+updateViewportInfo(); // Refresh before gathering context
 const callable = httpsCallable(functions, 'processAICommand');
 const result = await callable({
-  userMessage: "Create a blue rectangle",
+  userMessage: "Create a blue rectangle and resize to 200x200",
   canvasState: getCanvasState(),
   viewportInfo: getViewportInfo(),
   selectedShape: getCurrentSelection()
 });
 
-// Client executes returned commands
-executeCommands(result.data.commands);
+// Client executes returned commands with auto-selection
+const { commands, message } = result.data;
+for (let i = 0; i < commands.length; i++) {
+  if (i === 0 && commands[i].tool === 'createRectangle') {
+    const rectangleId = await executeCommand(commands[i]);
+    await selectRectangle(rectangleId); // Auto-select for next commands
+  } else {
+    await executeCommand(commands[i]);
+  }
+}
 ```
 
 **Requirements:**
@@ -383,6 +447,52 @@ const tools = {
 
 LangChain is overkill for your MVP. OpenAI SDK is solid but gives you less flexibility and worse TypeScript experience. Vercel AI SDK hits the sweet spot.
 
+## Risks & Mitigations
+
+### High Priority Risks (Mitigated)
+
+**1. Command Counter Race Conditions**
+- **Risk**: Multiple tabs increment counter simultaneously, allowing users to exceed 1000 limit
+- **Mitigation**: Use Firebase atomic increment (`increment(1)`) to ensure accurate counting
+
+**2. Invalid Color Requests**
+- **Risk**: Users request unsupported colors, AI fails or creates wrong colors
+- **Mitigation**: Strict validation - AI returns error for invalid colors with list of valid options
+
+**3. Viewport Info Staleness**
+- **Risk**: Viewport info outdated when AI processes command (user panned/zoomed during processing)
+- **Mitigation**: Refresh viewport info immediately before gathering AI context; use snapshot from command issue time
+
+**4. TypeScript Interface Drift**
+- **Risk**: Cloud Function and client interfaces diverge, causing runtime errors
+- **Mitigation**: Validation step in PR #5 testing to ensure interfaces match exactly
+
+**5. Firebase Security Bypass**
+- **Risk**: Users manually reset their command counter via Firebase console
+- **Mitigation**: Firebase security rules prevent counter from decreasing
+
+**6. OpenAI API Reliability**
+- **Risk**: OpenAI API downtime or slow responses
+- **Mitigation**: 6-second timeout with user-friendly error message; users can retry
+
+### Acceptable Risks (Documented)
+
+**7. Cold Start Latency**
+- **Risk**: First Cloud Function call takes 1-2 seconds (exceeds 2s target)
+- **Acceptance**: Documented in requirements; subsequent calls fast; optional min instances for production
+
+**8. Partial Command Failure**
+- **Risk**: Multi-step command fails midway (step 1 succeeds, step 2 fails)
+- **Acceptance**: Keep partial success; user can retry failed step; no rollback mechanism in MVP
+
+**9. Anonymous Auth Bypass**
+- **Risk**: Users can clear browser data to reset quota
+- **Acceptance**: Documented for post-MVP upgrade to proper authentication
+
+**10. Network Partition During Execution**
+- **Risk**: Firebase connection drops during command execution
+- **Acceptance**: Partial success acceptable; each command is independent Firebase write; no data corruption
+
 ## Implementation Plan
 
 For detailed task breakdown organized by Pull Requests with specific file changes, see **[tasks.md](./tasks.md)**.
@@ -398,26 +508,41 @@ The implementation is organized into 6 PRs:
 ## Success Criteria
 
 **Functional:**
-- ✅ All 6 command types work reliably
+- ✅ All 6 command types work reliably with varied phrasings
+- ✅ Single rectangle creation auto-selects
+- ✅ Multiple rectangle creation does NOT auto-select
+- ✅ Multi-step commands work (create + modify, max 5 steps)
 - ✅ AI-created shapes sync to all users in real-time
-- ✅ Multiple users can use AI simultaneously
-- ✅ Natural language parsing handles varied phrasings
+- ✅ Multiple users can use AI simultaneously without conflicts
+- ✅ Color validation enforced (red, blue, green only)
+- ✅ AI uses correct hex codes in all commands
 
 **Performance:**
-- ✅ Single-step commands execute in <2 seconds
+- ✅ Single-step commands execute in <2 seconds (warm functions)
+- ✅ Cold starts acceptable (1-2 seconds first call)
+- ✅ OpenAI timeout at 6 seconds with retry option
 - ✅ No noticeable lag in real-time sync
 - ✅ UI remains responsive during AI processing
 
 **User Experience:**
 - ✅ Clear feedback during command processing
-- ✅ Error messages are helpful and actionable
+- ✅ Error messages are helpful and actionable (20+ scenarios)
 - ✅ Commands feel natural and intuitive
 - ✅ AI correctly interprets user intent
+- ✅ Multi-step commands work seamlessly
+- ✅ Partial failures handled gracefully
 
 **Security & Limits:**
-- ✅ API keys secure (not exposed client-side)
-- ✅ Rate limiting enforced (1000 commands per user)
+- ✅ API keys secure (Cloud Functions proxy, not exposed client-side)
+- ✅ Rate limiting enforced with atomic increment (1000 commands per user)
+- ✅ Firebase security rules prevent quota manipulation
 - ✅ Canvas limits enforced (max 1000 rectangles)
+
+**Architecture:**
+- ✅ Viewport info via CanvasContext with useRef (no re-renders)
+- ✅ Command executor delegates to CanvasContext (no direct Firebase writes)
+- ✅ TypeScript interfaces match between Cloud Function and client
+- ✅ All 20 integration test scenarios pass
 
 ## Post-MVP Roadmap
 
