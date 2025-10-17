@@ -1413,14 +1413,11 @@ import AIChat from './components/ai/AIChat';
 
 ### Files to Update
 - Any files with bugs discovered during integration
-- `/src/services/canvasCommandExecutor.ts` - Bug fixes
-- `/src/services/aiAgent.ts` - Bug fixes
-- `/src/components/ai/AIChat.tsx` - UX improvements
-- `/functions/src/index.ts` - Function improvements
+- `/docs/phase2/ai-development-log.md` - Development log (required for submission)
+- This file, under each scenario, log notes (such as bug fixes) from manual testing
 
 ### Files to Create
-- `/docs/phase2/ai-development-log.md` - Development log (required for submission)
-- `/docs/phase2/testing-notes.md` - Testing results and findings
+- `/docs/phase2/testing-plan.md` - Testing plan
 
 ### Integration Testing Scenarios
 
@@ -1449,29 +1446,29 @@ import AIChat from './components/ai/AIChat';
 - Error message displays in UI
 - No rectangle created
 
-#### Scenario 5: Batch Creation
-- User types "Create 5 green rectangles"
-- AI calls `createMultipleRectangles` with count=5, color=#22c55e
-- 5 rectangles appear with offsets at viewport center
-- None are auto-selected
-- All rectangles sync to other users
-
-#### Scenario 6: Move Rectangle
+#### Scenario 5: Move Rectangle
 - User selects a rectangle
 - User types "Move it to 400, 300"
 - AI calls `moveRectangle` with coordinates
 - Rectangle moves for all users
 
-#### Scenario 7: Resize Rectangle
+#### Scenario 6: Resize Rectangle
 - User selects a rectangle
 - User types "Make it 200 by 150"
 - AI calls `resizeRectangle` with dimensions
 - Rectangle resizes for all users
 
-#### Scenario 8: Delete Rectangle
+#### Scenario 7: Delete Rectangle
 - User selects a rectangle
 - User types "Delete it"
 - AI calls `deleteRectangle`
+
+#### Scenario 8: Batch Creation
+- User types "Create 5 green rectangles"
+- AI calls `createMultipleRectangles` with count=5, color=#22c55e
+- 5 rectangles appear with offsets at viewport center
+- None are auto-selected
+- All rectangles sync to other users
 - Rectangle removed for all users
 
 #### Scenario 9: Rate Limit

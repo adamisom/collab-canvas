@@ -411,10 +411,3 @@ These tests are **easy to write** and **catch the most bugs**:
 1. ✅ **`aiErrors.test.ts`** - 15 tests (~20 min)
 2. ✅ **`canvasCommandExecutor.test.ts`** - 25 tests (~1 hour)
 3. ✅ **`aiAgent.test.ts`** - 20 tests (~1.5 hours)
-
-**Total: ~3 hours** for 60 critical tests covering 80%+ of AI agent logic.
-
-**Integration tests can wait** until after initial production testing reveals real-world issues.
-
-Would you like me to start implementing any of these tests now?
-
