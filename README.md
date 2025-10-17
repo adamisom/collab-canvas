@@ -109,6 +109,69 @@ src/
 - `npm run preview` - Preview production build
 - `npm test` - Run tests
 - `npm run lint` - Run ESLint
+- `npm run emulators` - Start Firebase emulators (Functions + Database)
+- `npm run functions:serve` - Serve Cloud Functions locally
+- `npm run functions:deploy` - Deploy Cloud Functions only
+- `npm run functions:logs` - View Cloud Functions logs
+
+## Firebase Emulators (Local Testing)
+
+The Firebase Emulators allow you to test Cloud Functions and Database Rules locally before deploying.
+
+### Prerequisites
+
+- Java Runtime Environment (JRE) installed
+  ```bash
+  # Install via Homebrew (macOS)
+  brew install openjdk@17
+  sudo ln -sfn $(brew --prefix)/opt/openjdk@17/libexec/openjdk.jdk /Library/Java/JavaVirtualMachines/openjdk-17.jdk
+  ```
+
+### Starting the Emulators
+
+```bash
+# Start Functions and Database emulators
+npm run emulators
+```
+
+The emulators will start on:
+- **Functions:** `http://localhost:5001`
+- **Database:** `http://localhost:9000`
+- **Emulator UI:** `http://localhost:4000` (open this in your browser to see all emulators)
+
+### Testing Cloud Functions
+
+**Option 1: Run test script**
+```bash
+node test-function.js
+```
+
+**Option 2: Test from your React app**
+
+To connect your local React app to the emulators, add this to your `src/config/firebase.ts`:
+
+```typescript
+// Add after firebase initialization
+if (import.meta.env.DEV) {
+  // Connect to Functions emulator
+  const functions = getFunctions(app);
+  connectFunctionsEmulator(functions, 'localhost', 5001);
+  
+  // Connect to Database emulator
+  const db = getDatabase(app);
+  connectDatabaseEmulator(db, 'localhost', 9000);
+}
+```
+
+Then:
+1. Start the emulators: `npm run emulators`
+2. In a separate terminal, start your React app: `npm run dev`
+3. Open `http://localhost:5173` and test AI commands
+4. The app will use local emulators instead of production Firebase
+
+### Check Logs and Database
+
+Open `http://localhost:4000`, click *Logs*. You can also inspect database data.
 
 ## Deployment
 
