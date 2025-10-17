@@ -1427,6 +1427,12 @@ import AIChat from './components/ai/AIChat';
 - Rectangle appears on canvas for all users
 - Verify real-time sync
 
+**Manual Testing Notes:**
+- Notes: 
+- Bugs found & fixes applied: 
+
+---
+
 #### Scenario 2: Modify Selected Rectangle
 - User selects a rectangle (red border)
 - User types "Make it green"
@@ -1434,11 +1440,23 @@ import AIChat from './components/ai/AIChat';
 - Color changes for all users
 - Verify real-time sync
 
+**Manual Testing Notes:**
+- Notes: 
+- Bugs found & fixes applied: 
+
+---
+
 #### Scenario 3: No Selection Error
 - User has no rectangle selected
 - User types "Make it bigger"
 - AI returns error "Please select a rectangle first"
 - Error message displays in UI
+
+**Manual Testing Notes:**
+- Notes: 
+- Bugs found & fixes applied: 
+
+---
 
 #### Scenario 4: Invalid Color Error
 - User types "Create a yellow rectangle"
@@ -1446,11 +1464,23 @@ import AIChat from './components/ai/AIChat';
 - Error message displays in UI
 - No rectangle created
 
+**Manual Testing Notes:**
+- Notes: 
+- Bugs found & fixes applied: 
+
+---
+
 #### Scenario 5: Move Rectangle
 - User selects a rectangle
 - User types "Move it to 400, 300"
 - AI calls `moveRectangle` with coordinates
 - Rectangle moves for all users
+
+**Manual Testing Notes:**
+- Notes: 
+- Bugs found & fixes applied: 
+
+---
 
 #### Scenario 6: Resize Rectangle
 - User selects a rectangle
@@ -1458,10 +1488,23 @@ import AIChat from './components/ai/AIChat';
 - AI calls `resizeRectangle` with dimensions
 - Rectangle resizes for all users
 
+**Manual Testing Notes:**
+- Notes: 
+- Bugs found & fixes applied: 
+
+---
+
 #### Scenario 7: Delete Rectangle
 - User selects a rectangle
 - User types "Delete it"
 - AI calls `deleteRectangle`
+- Rectangle removed for all users
+
+**Manual Testing Notes:**
+- Notes: 
+- Bugs found & fixes applied: 
+
+---
 
 #### Scenario 8: Batch Creation
 - User types "Create 5 green rectangles"
@@ -1469,7 +1512,12 @@ import AIChat from './components/ai/AIChat';
 - 5 rectangles appear with offsets at viewport center
 - None are auto-selected
 - All rectangles sync to other users
-- Rectangle removed for all users
+
+**Manual Testing Notes:**
+- Notes: 
+- Bugs found & fixes applied: 
+
+---
 
 #### Scenario 9: Rate Limit
 - User reaches 1000 commands
@@ -1477,11 +1525,23 @@ import AIChat from './components/ai/AIChat';
 - Cloud Function blocks request
 - Error message displays: "AI command limit reached"
 
+**Manual Testing Notes:**
+- Notes: 
+- Bugs found & fixes applied: 
+
+---
+
 #### Scenario 10: Canvas Limit
 - Canvas has 1000+ rectangles
 - User tries AI command
 - Cloud Function blocks request
 - Error message displays: "Canvas has too many rectangles"
+
+**Manual Testing Notes:**
+- Notes: 
+- Bugs found & fixes applied: 
+
+---
 
 #### Scenario 11: Multi-User Concurrent Commands
 - User A types "Create a red rectangle"
@@ -1489,11 +1549,23 @@ import AIChat from './components/ai/AIChat';
 - Both rectangles created
 - Both sync to all users
 
+**Manual Testing Notes:**
+- Notes: 
+- Bugs found & fixes applied: 
+
+---
+
 #### Scenario 12: Viewport Center Accuracy
 - User pans canvas to position (1000, 1000)
 - User zooms to 2x
 - User types "Create a rectangle"
 - Rectangle appears at visible viewport center (not 0,0)
+
+**Manual Testing Notes:**
+- Notes: 
+- Bugs found & fixes applied: 
+
+---
 
 #### Scenario 13: Auto-Selection (Single Rectangle)
 - User types "Create a blue rectangle"
@@ -1502,12 +1574,24 @@ import AIChat from './components/ai/AIChat';
 - User types "Make it bigger" (no manual selection needed)
 - Rectangle resizes successfully
 
+**Manual Testing Notes:**
+- Notes: 
+- Bugs found & fixes applied: 
+
+---
+
 #### Scenario 14: No Auto-Selection (Multiple Rectangles)
 - User types "Create 3 red rectangles"
 - AI creates 3 rectangles
 - None are selected
 - User types "Make it bigger"
 - AI returns error "Please select a rectangle first"
+
+**Manual Testing Notes:**
+- Notes: 
+- Bugs found & fixes applied: 
+
+---
 
 #### Scenario 15: Multi-Step Command (Create + Modify)
 - User types "Create a blue rectangle and resize it to 200x200"
@@ -1516,6 +1600,12 @@ import AIChat from './components/ai/AIChat';
 - Final result: 200x200 blue rectangle, selected
 - Syncs to all users
 
+**Manual Testing Notes:**
+- Notes: 
+- Bugs found & fixes applied: 
+
+---
+
 #### Scenario 16: Multi-Step Command (Create + Multiple Modifications)
 - User types "Create a red rectangle, move it to 500,500, and make it 150 pixels wide"
 - AI returns 3 commands: [createRectangle, moveRectangle, resizeRectangle]
@@ -1523,11 +1613,23 @@ import AIChat from './components/ai/AIChat';
 - All modifications apply to the created rectangle
 - Syncs to all users
 
+**Manual Testing Notes:**
+- Notes: 
+- Bugs found & fixes applied: 
+
+---
+
 #### Scenario 17: Multi-Step Impossible Pattern
 - User types "Create 5 rectangles and make them all green"
 - AI detects impossible pattern (can't modify multiple)
 - AI returns message: "I can only modify rectangles when creating one at a time"
 - No commands executed
+
+**Manual Testing Notes:**
+- Notes: 
+- Bugs found & fixes applied: 
+
+---
 
 #### Scenario 18: Partial Failure (Network Drop)
 - User types "Create rectangle and resize to 300x300"
@@ -1536,11 +1638,23 @@ import AIChat from './components/ai/AIChat';
 - Result: Rectangle exists but not resized (acceptable)
 - User can retry resize command
 
+**Manual Testing Notes:**
+- Notes: 
+- Bugs found & fixes applied: 
+
+---
+
 #### Scenario 19: OpenAI Timeout
 - OpenAI API unresponsive or slow
 - After 6 seconds, timeout occurs
 - Error message: "AI service temporarily unavailable. Please try again."
 - User can retry command
+
+**Manual Testing Notes:**
+- Notes: 
+- Bugs found & fixes applied: 
+
+---
 
 #### Scenario 20: Atomic Counter Race Condition
 - Open 2 browser tabs as same user
@@ -1548,6 +1662,12 @@ import AIChat from './components/ai/AIChat';
 - Tab 2: Issue AI command simultaneously
 - Both succeed, counter increments to 2 (not 1)
 - Atomic increment prevents race condition
+
+**Manual Testing Notes:**
+- Notes: 
+- Bugs found & fixes applied: 
+
+---
 
 ### Performance Testing
 - [ ] Measure Cloud Function cold start latency
