@@ -77,6 +77,15 @@ AVAILABLE COLORS (use exact hex codes):
 DEFAULT RECTANGLE SIZE: 100 x 80 pixels
 VIEWPORT CENTER: (${viewportInfo.centerX}, ${viewportInfo.centerY})
 
+PARAMETER RANGES (validate user requests):
+- Rectangle dimensions: 20-3000 pixels (width and height)
+- Canvas positions: 0-3000 for x and y coordinates
+- Batch creation: maximum 50 rectangles at once
+- Offset spacing: 10-100 pixels (for batch layouts)
+
+If user requests values outside these ranges, respond with:
+"That value is outside the valid range. [Explain the valid range]"
+
 RULES FOR MULTI-STEP COMMANDS:
 - You can execute multiple actions in sequence (max 5 steps)
 - Multi-step is ONLY allowed if the FIRST action creates exactly ONE rectangle
@@ -260,7 +269,10 @@ Create `/database.rules.json`:
 
 ### Files to Update
 - `/src/services/canvasService.ts` - May need minor updates for new operations
-- `/src/contexts/CanvasContext.tsx` - **CRITICAL: Add viewport info management with useRef**
+- `/src/contexts/CanvasContext.tsx` - **CRITICAL Updates:**
+  - Add viewport info management with useRef (no re-renders)
+  - Add `setSelectionLocked()` method for locking selection during AI processing
+  - Modify `selectRectangle()` to check `selectionLocked` state
 - `/src/components/canvas/Canvas.tsx` - Update viewport info on pan/zoom/resize/mount
 - `/src/utils/constants.ts` - Verify DEFAULT_RECT values (should be 100x80)
 
@@ -303,28 +315,65 @@ Create service class with methods:
   - **Note**: This method does NOT auto-select (that's handled by aiAgent layer)
   
 - `changeColor(shapeId: string, color: string): Promise<void>`
-  - Validate shapeId exists
+  - **CRITICAL**: Validate rectangle exists before modifying
+  - `if (!rectangles.find(r => r.id === shapeId)) throw new Error('Rectangle not found - it may have been deleted')`
+  - Validate color against RECTANGLE_COLORS
   - Call CanvasContext.changeRectangleColor()
-  - Validate color
+  - Handles concurrent deletion by other users
   
 - `moveRectangle(shapeId: string, x: number, y: number): Promise<void>`
+  - **CRITICAL**: Validate rectangle exists before modifying
+  - `if (!rectangles.find(r => r.id === shapeId)) throw new Error('Rectangle not found - it may have been deleted')`
+  - Clamp position to canvas bounds (0-3000 for x and y)
   - Call CanvasContext.updateRectangle() with new position
-  - Keep within canvas bounds
   
 - `resizeRectangle(shapeId: string, width: number, height: number): Promise<void>`
+  - **CRITICAL**: Validate rectangle exists before modifying
+  - `if (!rectangles.find(r => r.id === shapeId)) throw new Error('Rectangle not found - it may have been deleted')`
+  - Clamp dimensions: MIN (20px) to MAX (3000px) for width and height
   - Call CanvasContext.resizeRectangle()
-  - Apply min/max constraints
+  - Safety net for AI values outside valid range
   
 - `deleteRectangle(shapeId: string): Promise<void>`
+  - **CRITICAL**: Validate rectangle exists before deleting
+  - `if (!rectangles.find(r => r.id === shapeId)) throw new Error('Rectangle not found - it may have been deleted')`
   - Call CanvasContext.deleteRectangle()
+  - Handles case where rectangle already deleted by another user
   
 - `createMultipleRectangles(count: number, color: string, layout?: 'row' | 'column' | 'grid', offsetPixels: number = 25): Promise<string[]>`
+  - Validate count: clamp to 1-50 (prevent canvas flooding)
+  - Validate offsetPixels: clamp to 10-100 (prevent extreme values)
   - Get viewport center
   - Loop and create rectangles with offsets
   - For 'row': increment X by (width + offsetPixels)
   - For 'column': increment Y by (height + offsetPixels)
   - For 'grid' or default: diagonal offset
   - Return array of created IDs
+
+**Error Handling Strategy:**
+
+The command executor uses **hybrid validation**:
+
+1. **Existence Validation** (Runtime):
+   - Check if target rectangle exists before all modification operations
+   - Throws descriptive error if not found: `"Rectangle not found - it may have been deleted"`
+   - aiAgent catches this and reports to user
+
+2. **Parameter Clamping** (Safety Net):
+   - Dimensions: Clamp to 20-3000px (AI should respect these, executor enforces)
+   - Positions: Clamp to canvas bounds 0-3000 (AI should calculate correctly, executor clamps edge cases)
+   - Count: Clamp batch creation to 1-50 rectangles
+   - Offsets: Clamp to 10-100px
+
+3. **Color Validation** (Strict):
+   - Only accept: `#ef4444`, `#3b82f6`, `#22c55e`
+   - Throw error for invalid colors (AI should prevent this, executor validates)
+
+**Why Hybrid?**
+- AI prevents most issues via system prompt (user-friendly explanations)
+- Executor enforces as safety net (prevents edge cases)
+- Clamping instead of throwing for numeric ranges (more forgiving)
+- Throws errors for logical issues (missing rectangle, invalid color)
 
 #### `/src/types/ai.ts`
 ```typescript
@@ -378,6 +427,7 @@ interface CanvasContextType {
   // ... existing methods
   getViewportInfo: () => ViewportInfo;
   updateViewportInfo: (stage: Konva.Stage, width: number, height: number) => void;
+  setSelectionLocked: (locked: boolean) => void;  // NEW: Lock selection during AI processing
 }
 
 // In CanvasProvider component
@@ -387,6 +437,8 @@ const viewportInfoRef = useRef<ViewportInfo>({
   zoom: 1,
   visibleBounds: { left: 0, top: 0, right: 1200, bottom: 800 }
 });
+
+const [selectionLocked, setSelectionLocked] = useState(false);
 
 // Getter method (no re-renders)
 const getViewportInfo = useCallback(() => {
@@ -420,6 +472,22 @@ const updateViewportInfo = useCallback((stage: Konva.Stage, width: number, heigh
 - No re-renders on viewport changes (performance)
 - Always current when accessed
 - Clean separation from Canvas component
+
+**Selection Locking Implementation:**
+```typescript
+// In selectRectangle method
+const selectRectangle = useCallback(async (rectangleId: string | null) => {
+  // Prevent selection changes while AI is processing
+  if (selectionLocked) {
+    console.log('Selection locked during AI processing');
+    return;
+  }
+  
+  // ... existing selection logic
+}, [selectionLocked, /* other deps */]);
+```
+
+This prevents users from clicking on different rectangles while AI commands are executing, avoiding race conditions where the AI is working on one rectangle but the user selects another mid-execution.
 
 #### `/src/components/canvas/Canvas.tsx`
 
@@ -509,9 +577,11 @@ useEffect(() => {
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { canvasCommandExecutor } from './canvasCommandExecutor';
 import { mapAIError } from '../utils/aiErrors';
+import { useCanvas } from '../contexts/CanvasContext';
 
 export class AIAgent {
   private functions: Functions;
+  private isProcessing: boolean = false;
   
   constructor() {
     this.functions = getFunctions();
@@ -521,7 +591,19 @@ export class AIAgent {
     success: boolean;
     message: string;
     commandsExecuted: number;
+    commandsFailed?: number;
   }> {
+    // Prevent concurrent command execution
+    if (this.isProcessing) {
+      return {
+        success: false,
+        message: 'Please wait for current command to complete',
+        commandsExecuted: 0
+      };
+    }
+    
+    this.isProcessing = true;
+    
     try {
       // Ensure viewport info is fresh before gathering context
       const canvas = document.querySelector('.canvas-wrapper');
@@ -529,10 +611,21 @@ export class AIAgent {
         updateViewportInfo(stageRef.current, canvas.clientWidth, canvas.clientHeight);
       }
       
-      // Gather context
-      const canvasState = canvasCommandExecutor.getCanvasState();
-      const viewportInfo = canvasCommandExecutor.getViewportInfo();
-      const selectedShape = canvasCommandExecutor.getSelectedShape();
+      // CRITICAL: Capture immutable snapshot at command submission
+      const commandSnapshot = {
+        selectedShapeId: canvasContext.selectedRectangleId,  // Lock this!
+        canvasState: canvasCommandExecutor.getCanvasState(),
+        viewportInfo: canvasCommandExecutor.getViewportInfo(),
+        selectedShape: canvasCommandExecutor.getSelectedShape(),
+        timestamp: Date.now()
+      };
+      
+      // Lock user selection during processing (prevents race conditions)
+      const selectionLocked = true;
+      canvasContext.setSelectionLocked?.(true);
+      
+      // Gather context from snapshot
+      const { canvasState, viewportInfo, selectedShape } = commandSnapshot;
       
       // Call Cloud Function
       const processAICommand = httpsCallable(this.functions, 'processAICommand');
@@ -554,52 +647,108 @@ export class AIAgent {
         };
       }
       
-      // Execute commands with auto-selection logic
+      // Execute commands with auto-selection logic and error handling
       let executedCount = 0;
+      let failedCount = 0;
       let autoSelectedId: string | null = null;
-      
-      for (let i = 0; i < commands.length; i++) {
-        const command = commands[i];
-        
-        // FIRST command: check for single rectangle creation
-        if (i === 0 && command.tool === 'createRectangle') {
-          const rectangleId = await this.executeSingleCommand(command);
-          autoSelectedId = rectangleId;
-          
-          // Auto-select for subsequent modifications
-          await canvasContext.selectRectangle(rectangleId);
-          executedCount++;
-        } 
-        // Subsequent commands or non-create first command
-        else {
-          await this.executeSingleCommand(command);
-          executedCount++;
-        }
-      }
-      
-      const resultMessage = message || `Successfully executed ${executedCount} command(s)`;
-      
-      return {
-        success: true,
-        message: resultMessage,
-        commandsExecuted: executedCount
+      const commandNames = {
+        createRectangle: 'create rectangle',
+        changeColor: 'change color',
+        moveRectangle: 'move rectangle',
+        resizeRectangle: 'resize rectangle',
+        deleteRectangle: 'delete rectangle',
+        createMultipleRectangles: 'create multiple rectangles'
       };
       
+      try {
+        for (let i = 0; i < commands.length; i++) {
+          const command = commands[i];
+          
+          try {
+            // FIRST command: check for single rectangle creation
+            if (i === 0 && command.tool === 'createRectangle') {
+              const rectangleId = await this.executeSingleCommand(command, commandSnapshot);
+              autoSelectedId = rectangleId;
+              
+              // Auto-select for subsequent modifications
+              await canvasContext.selectRectangle(rectangleId);
+              executedCount++;
+            } 
+            // Subsequent commands or non-create first command
+            else {
+              await this.executeSingleCommand(command, commandSnapshot);
+              executedCount++;
+            }
+          } catch (error: any) {
+            failedCount++;
+            
+            // If first command fails, total failure
+            if (i === 0) {
+              throw error;
+            }
+            
+            // Subsequent command failed - partial success
+            const failedAction = commandNames[command.tool] || command.tool;
+            return {
+              success: false,
+              message: `${this.describeSuccess(executedCount, commands)} but could not ${failedAction}: ${error.message}`,
+              commandsExecuted: executedCount,
+              commandsFailed: failedCount
+            };
+          }
+        }
+        
+        const resultMessage = message || this.describeSuccess(executedCount, commands);
+        
+        return {
+          success: true,
+          message: resultMessage,
+          commandsExecuted: executedCount,
+          commandsFailed: 0
+        };
+        
+      } finally {
+        // Always unlock selection when done
+        this.isProcessing = false;
+        canvasContext.setSelectionLocked?.(false);
+      }
+      
     } catch (error: any) {
+      this.isProcessing = false;
+      canvasContext.setSelectionLocked?.(false);
+      
       return {
         success: false,
         message: mapAIError(error),
-        commandsExecuted: 0
+        commandsExecuted: 0,
+        commandsFailed: commands?.length || 1
       };
     }
   }
   
-  private async executeSingleCommand(command: AICommand): Promise<string | null> {
+  // Helper to describe what succeeded
+  private describeSuccess(count: number, commands: AICommand[]): string {
+    if (count === 1 && commands[0].tool === 'createRectangle') {
+      return 'Created rectangle';
+    } else if (count === 1) {
+      return 'Command executed successfully';
+    } else if (count === commands.length) {
+      return `Successfully executed all ${count} commands`;
+    } else {
+      return `Successfully executed ${count} of ${commands.length} commands`;
+    }
+  }
+  
+  private async executeSingleCommand(
+    command: AICommand, 
+    snapshot: CommandSnapshot
+  ): Promise<string | null> {
     const { tool, parameters } = command;
     
     switch (tool) {
       case 'createRectangle':
         // Returns rectangle ID for auto-selection
+        // Uses viewport info from snapshot
         return await canvasCommandExecutor.createRectangle(
           parameters.x,
           parameters.y,
@@ -609,6 +758,7 @@ export class AIAgent {
         );
         
       case 'changeColor':
+        // Validates rectangle still exists before modifying
         await canvasCommandExecutor.changeColor(
           parameters.shapeId,
           parameters.color
@@ -616,6 +766,7 @@ export class AIAgent {
         return null;
         
       case 'moveRectangle':
+        // Validates rectangle still exists before modifying
         await canvasCommandExecutor.moveRectangle(
           parameters.shapeId,
           parameters.x,
@@ -624,6 +775,7 @@ export class AIAgent {
         return null;
         
       case 'resizeRectangle':
+        // Validates rectangle still exists before modifying
         await canvasCommandExecutor.resizeRectangle(
           parameters.shapeId,
           parameters.width,
@@ -632,11 +784,13 @@ export class AIAgent {
         return null;
         
       case 'deleteRectangle':
+        // Validates rectangle still exists before deleting
         await canvasCommandExecutor.deleteRectangle(parameters.shapeId);
         return null;
         
       case 'createMultipleRectangles':
         // Multiple rectangles - no auto-selection
+        // Uses viewport info from snapshot
         await canvasCommandExecutor.createMultipleRectangles(
           parameters.count,
           parameters.color,
@@ -651,8 +805,35 @@ export class AIAgent {
   }
 }
 
+interface CommandSnapshot {
+  selectedShapeId: string | null;
+  canvasState: CanvasState;
+  viewportInfo: ViewportInfo;
+  selectedShape: SelectedShape | null;
+  timestamp: number;
+}
+
 export const aiAgent = new AIAgent();
 ```
+
+**Key Implementation Details:**
+
+**Selection Locking During Execution:**
+- When AI command starts, user selection is locked (prevents concurrent modification)
+- User cannot select different rectangles while AI is processing
+- Prevents race condition where user selects different rectangle mid-execution
+- Selection unlocked in `finally` block (always runs, even on error)
+
+**Immutable Snapshot Strategy:**
+- Full context captured at command submission time
+- Selected shape ID locked in snapshot
+- Viewport info from snapshot used for positioning
+- If target rectangle deleted during execution, command fails with clear error
+
+**Partial Failure Handling:**
+- Multi-step: If step 1 succeeds but step 2 fails, keep step 1 results
+- Error message format: "Created rectangle but could not resize rectangle: Rectangle not found - it may have been deleted"
+- Returns detailed counts: `commandsExecuted` and `commandsFailed`
 
 **Key Auto-Selection Logic:**
 - If first command is `createRectangle` → auto-select the created rectangle
@@ -712,34 +893,130 @@ export const useAIAgent = () => {
 
 #### `/src/utils/aiErrors.ts`
 ```typescript
-export const mapAIError = (error: any): string => {
+export interface MappedError {
+  message: string;
+  retryable: boolean;  // Can user retry this error?
+}
+
+export const mapAIError = (error: any): MappedError => {
   // Firebase Functions error codes
   if (error.code) {
     switch (error.code) {
       case 'unauthenticated':
-        return 'You must be logged in to use AI commands';
+        return {
+          message: 'You must be logged in to use AI commands',
+          retryable: false  // Need to log in first
+        };
       case 'resource-exhausted':
-        return 'AI command limit reached (1000 commands per user)';
+        return {
+          message: 'AI command limit reached (1000 commands per user)',
+          retryable: false  // Hit quota limit
+        };
       case 'failed-precondition':
         if (error.message.includes('rectangles')) {
-          return 'Canvas has too many rectangles (limit: 1000)';
+          return {
+            message: 'Canvas has too many rectangles (limit: 1000)',
+            retryable: false  // Canvas full
+          };
         }
-        return error.message;
+        return {
+          message: error.message,
+          retryable: false
+        };
+      case 'deadline-exceeded':
+        return {
+          message: 'AI service temporarily unavailable. Please try again.',
+          retryable: true  // Timeout - can retry
+        };
+      case 'unavailable':
+        return {
+          message: 'Service unavailable. Please try again.',
+          retryable: true  // Network/service issue - can retry
+        };
       case 'invalid-argument':
-        return `Invalid command: ${error.message}`;
+        return {
+          message: `Invalid command: ${error.message}`,
+          retryable: false  // Bad request
+        };
       default:
-        return error.message || 'An error occurred';
+        return {
+          message: error.message || 'An error occurred',
+          retryable: false
+        };
     }
   }
   
-  // Network errors
-  if (error.message?.includes('network')) {
-    return 'Network error. Please check your connection.';
+  // Network errors (retryable)
+  if (error.message?.includes('network') || error.message?.includes('fetch')) {
+    return {
+      message: 'Network error. Please check your connection.',
+      retryable: true
+    };
   }
   
-  return error.message || 'An unexpected error occurred';
+  // Rectangle not found (from command executor)
+  if (error.message?.includes('not found')) {
+    return {
+      message: error.message,
+      retryable: false  // Rectangle was deleted
+    };
+  }
+  
+  // Default
+  return {
+    message: error.message || 'An unexpected error occurred',
+    retryable: false
+  };
 };
 ```
+
+**Error Classification:**
+
+**Retryable Errors** (show "Retry" button):
+- Network timeouts
+- Service unavailable
+- OpenAI timeout (deadline-exceeded)
+- Temporary Firebase issues
+
+**Non-Retryable Errors** (show "OK" button only):
+- Authentication errors (need to log in)
+- Quota exceeded (hit 1000 limit)
+- Canvas full (1000 rectangles)
+- Rectangle not found (was deleted)
+- Invalid parameters (AI/validation error)
+
+**Error Flow Diagram:**
+```
+Layer 1: Cloud Function
+├─ Auth check → HttpsError('unauthenticated') → Non-retryable
+├─ Quota check → HttpsError('resource-exhausted') → Non-retryable  
+├─ Canvas limit → HttpsError('failed-precondition') → Non-retryable
+├─ OpenAI timeout → HttpsError('deadline-exceeded') → Retryable
+└─ OpenAI error → HttpsError(code) → Varies
+
+Layer 2: AI (via system prompt)
+├─ Invalid color → Returns message only → Non-retryable (user education)
+├─ Impossible pattern → Returns message only → Non-retryable (user education)
+└─ Out of range → Returns message only → Non-retryable (user education)
+
+Layer 3: Command Executor
+├─ Rectangle not found → Throws Error → Non-retryable (concurrent deletion)
+├─ Invalid color → Throws Error → Non-retryable (validation)
+└─ Parameter clamping → Silent (no error, just clamps)
+
+Layer 4: AI Agent (orchestrates)
+├─ Catches all errors from executor
+├─ For multi-step: Partial failure → Detailed message
+├─ Maps via aiErrors.ts
+└─ Returns: { success, message, retryable, commandsExecuted, commandsFailed }
+
+Layer 5: UI
+├─ Success: Green message, auto-clear after 3s
+├─ Partial success: Yellow message with details
+├─ Error (retryable): Red message with "Retry" button
+└─ Error (non-retryable): Red message with "OK" button only
+```
+
 
 #### `/src/config/firebase.ts`
 ```typescript
@@ -792,23 +1069,45 @@ import './AIChat.css';
 
 const AIChat: React.FC = () => {
   const [inputValue, setInputValue] = useState('');
+  const [lastCommand, setLastCommand] = useState<string>('');
+  const [isRetryable, setIsRetryable] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const { processCommand, loading, error, successMessage, clearMessages } = useAIAgent();
   
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent, isRetry: boolean = false) => {
     e.preventDefault();
     
-    if (!inputValue.trim() || loading) return;
+    if (loading) return;
     
-    const command = inputValue.trim();
-    setInputValue(''); // Clear immediately for better UX
+    let command: string;
+    if (isRetry && lastCommand) {
+      command = lastCommand;
+    } else {
+      if (!inputValue.trim()) return;
+      command = inputValue.trim();
+      setLastCommand(command);  // Save for potential retry
+      setInputValue(''); // Clear immediately for better UX
+    }
     
-    await processCommand(command);
+    const result = await processCommand(command);
+    
+    // Track if error is retryable
+    if (!result.success && error) {
+      // Check if error indicates retryability
+      const retryable = error.includes('temporarily unavailable') || 
+                        error.includes('try again') ||
+                        error.includes('Network error');
+      setIsRetryable(retryable);
+    }
     
     // Auto-clear success messages after 3 seconds
-    if (successMessage) {
+    if (result.success && successMessage) {
       setTimeout(clearMessages, 3000);
     }
+  };
+  
+  const handleRetry = (e: React.MouseEvent) => {
+    handleSubmit(e as any, true);
   };
   
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -835,6 +1134,24 @@ const AIChat: React.FC = () => {
         {error && (
           <div className="ai-message ai-error">
             <strong>Error:</strong> {error}
+            <div className="ai-error-actions">
+              {isRetryable ? (
+                <button 
+                  onClick={handleRetry}
+                  className="ai-error-button ai-retry-button"
+                  disabled={loading}
+                >
+                  Retry
+                </button>
+              ) : (
+                <button 
+                  onClick={clearMessages}
+                  className="ai-error-button ai-ok-button"
+                >
+                  OK
+                </button>
+              )}
+            </div>
           </div>
         )}
         
@@ -949,6 +1266,45 @@ export default AIChat;
 .ai-error {
   background: #ffebee;
   color: #c62828;
+}
+
+.ai-error-actions {
+  margin-top: 8px;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.ai-error-button {
+  padding: 4px 12px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.ai-retry-button {
+  background: #1976d2;
+  color: white;
+}
+
+.ai-retry-button:hover:not(:disabled) {
+  background: #1565c0;
+}
+
+.ai-retry-button:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+.ai-ok-button {
+  background: #666;
+  color: white;
+}
+
+.ai-ok-button:hover {
+  background: #555;
 }
 
 .ai-success {
@@ -1448,4 +1804,5 @@ After MVP is complete, consider these improvements (from PRD Post-MVP Roadmap):
 *Last Updated: [Date]*
 *Branch: ai-spike*
 *Status: Planning Phase*
+
 
