@@ -383,97 +383,17 @@ const tools = {
 
 LangChain is overkill for your MVP. OpenAI SDK is solid but gives you less flexibility and worse TypeScript experience. Vercel AI SDK hits the sweet spot.
 
-## Task Breakdown
+## Implementation Plan
 
-### Phase 0: Firebase Cloud Functions Setup
-- [ ] Initialize Firebase Functions in project (`firebase init functions`)
-- [ ] Install dependencies in `/functions`: `ai`, `@ai-sdk/openai`, `zod`, `firebase-functions`
-- [ ] Set up OpenAI API key: `firebase functions:config:set openai.key="sk-..."`
-- [ ] Upgrade Firebase project to Blaze plan (required for Cloud Functions)
-- [ ] Create `/functions/src/index.ts` with `processAICommand` callable function
-- [ ] Define Zod schemas for all 6 tool types in Cloud Function
-- [ ] Implement usage quota check (read from `/users/{userId}/aiCommandCount`)
-- [ ] Implement canvas limits check (reject if >1000 rectangles)
-- [ ] Implement command counter increment logic
-- [ ] Test Cloud Function locally with Firebase emulator
-- [ ] Deploy Cloud Function: `firebase deploy --only functions`
+For detailed task breakdown organized by Pull Requests with specific file changes, see **[tasks.md](./tasks.md)**.
 
-### Phase 1: Canvas Command Executor (Client-Side)
-- [ ] Create `/src/services/canvasCommandExecutor.ts`
-- [ ] Implement `getCanvasState()` - returns all rectangles with properties
-- [ ] Implement `getViewportInfo()` - returns viewport center, zoom, bounds
-- [ ] Implement `getSelectedShape()` - returns currently selected rectangle or null
-- [ ] Implement `createRectangle(x, y, width, height, color)` - creates and syncs to Firebase
-- [ ] Implement `changeColor(shapeId, color)` - updates selected rectangle color
-- [ ] Implement `moveRectangle(shapeId, x, y)` - moves selected rectangle
-- [ ] Implement `resizeRectangle(shapeId, width, height)` - resizes selected rectangle
-- [ ] Implement `deleteRectangle(shapeId)` - deletes selected rectangle
-- [ ] Implement `createMultipleRectangles()` with viewport center + offsets logic
-- [ ] Ensure all functions broadcast changes to Firebase Realtime Database
-- [ ] Add validation and error handling for all operations
-
-### Phase 2: AI Service Client
-- [ ] Create `/src/services/aiAgent.ts` client-side service
-- [ ] Implement wrapper for calling `processAICommand` Cloud Function
-- [ ] Build context gathering: call `getCanvasState()`, `getViewportInfo()`, `getSelectedShape()`
-- [ ] Implement command execution logic (receive tool calls, execute via canvasCommandExecutor)
-- [ ] Add error handling for Cloud Function errors (auth, rate limits, canvas limits)
-- [ ] Add user-friendly error message mapping
-- [ ] Implement selection validation for modification commands
-- [ ] Test basic "create rectangle" command end-to-end
-
-### Phase 3: AI Chat Interface Component
-- [ ] Create `/src/components/ai/AIChat.tsx` component
-- [ ] Add text input field for natural language commands
-- [ ] Add submit button and keyboard shortcut (Enter to submit)
-- [ ] Display loading state while Cloud Function processes request
-- [ ] Show success confirmation messages
-- [ ] Display error states with helpful messages:
-  - "Please select a rectangle first" (no selection)
-  - "You have a red rectangle selected, not blue" (color mismatch)
-  - "AI command limit reached (1000 commands)" (quota exceeded)
-  - "Canvas has too many rectangles (limit: 1000)" (canvas limit)
-- [ ] Style component to match existing app design
-- [ ] Position component (sidebar? bottom panel? floating?)
-
-### Phase 4: Integration & Real-time Sync
-- [ ] Connect AI Chat component to main canvas view
-- [ ] Integrate with existing auth context to get userId
-- [ ] Test AI-generated rectangles sync to all users via Firebase RTDB
-- [ ] Test multi-user AI command scenarios (concurrent creation, each user's selections)
-- [ ] Verify viewport center calculation works correctly with pan/zoom
-- [ ] Test batch creation with offsets (verify no perfect overlaps)
-- [ ] Verify Firebase listeners properly update Konva canvas
-
-### Phase 5: Testing & Validation
-- [ ] Test all 6 command types with various phrasings:
-  - Create: "make a blue rectangle", "add a red square in the center"
-  - Change color: "make it green", "change color to yellow"
-  - Move: "move it to 100, 200", "move the rectangle to position 50, 50"
-  - Resize: "make it 200x300", "resize to 100 wide and 150 tall"
-  - Delete: "delete it", "remove the rectangle"
-  - Batch: "create 5 blue rectangles", "make 3 red squares"
-- [ ] Test selection context enforcement
-- [ ] Test with 2+ concurrent users issuing AI commands
-- [ ] Verify <2 second latency for simple commands (including cold starts)
-- [ ] Test edge cases:
-  - No selection + modification command
-  - Color mismatch (select red, say "change blue rectangle")
-  - Canvas with 1000+ rectangles (should fail gracefully)
-  - User at 1000 command quota (should fail gracefully)
-  - Invalid colors, extreme positions
-- [ ] Test with network throttling
-- [ ] Verify error handling and user feedback
-
-### Phase 6: Documentation & Cleanup
-- [ ] Update README with AI agent setup instructions
-- [ ] Document Firebase Cloud Functions setup process
-- [ ] Document OpenAI API key configuration
-- [ ] Document tool schema and available commands with examples
-- [ ] Document AI Service architecture (client + Cloud Function)
-- [ ] Add troubleshooting section (cold starts, quota issues, etc.)
-- [ ] Create AI Development Log (required for submission)
-- [ ] Document post-MVP improvements (proper authentication, etc.)
+The implementation is organized into 6 PRs:
+1. **Firebase Cloud Functions Setup** - Infrastructure and OpenAI integration
+2. **Canvas Command Executor Service** - Client-side command execution
+3. **AI Service Client Integration** - Cloud Function wrapper and command orchestration
+4. **AI Chat Interface Component** - User interface for AI commands
+5. **Integration & E2E Testing** - Full integration testing and bug fixes
+6. **Documentation & Cleanup** - Complete documentation and code cleanup
 
 ## Success Criteria
 
