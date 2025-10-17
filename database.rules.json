@@ -1,0 +1,21 @@
+{
+  "rules": {
+    "users": {
+      "$userId": {
+        "aiCommandCount": {
+          ".read": "auth.uid === $userId",
+          ".write": "auth.uid === $userId && (!data.exists() || newData.val() > data.val())"
+        }
+      }
+    },
+    "rectangles": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "cursors": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    }
+  }
+}
+

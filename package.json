@@ -8,7 +8,11 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "vitest"
+    "test": "vitest",
+    "functions:serve": "npm --prefix functions run serve",
+    "functions:deploy": "npm --prefix functions run deploy",
+    "functions:logs": "npm --prefix functions run logs",
+    "emulators": "firebase emulators:start --only functions,database"
   },
   "dependencies": {
     "firebase": "^11.1.0",

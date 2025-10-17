@@ -1,32 +1,140 @@
 /**
- * Import function triggers from their respective submodules:
- *
- * import {onCall} from "firebase-functions/v2/https";
- * import {onDocumentWritten} from "firebase-functions/v2/firestore";
- *
- * See a full list of supported triggers at https://firebase.google.com/docs/functions
+ * Firebase Cloud Functions for AI Canvas Agent
+ * Main entry point for the processAICommand callable function
  */
 
-import {setGlobalOptions} from "firebase-functions";
-import {onRequest} from "firebase-functions/https";
-import * as logger from "firebase-functions/logger";
+import * as functions from "firebase-functions";
+import {initializeApp} from "firebase-admin/app";
+import {generateText} from "ai";
+import {createOpenAI} from "@ai-sdk/openai";
+import {tools} from "./tools";
+import {buildSystemPrompt} from "./utils/systemPrompt";
+import {checkCommandQuota, incrementCommandCount} from "./utils/rateLimiter";
+import {
+  ProcessAICommandRequest,
+  ProcessAICommandResponse,
+} from "./types";
 
-// Start writing functions
-// https://firebase.google.com/docs/functions/typescript
+// Initialize Firebase Admin
+initializeApp();
 
-// For cost control, you can set the maximum number of containers that can be
-// running at the same time. This helps mitigate the impact of unexpected
-// traffic spikes by instead downgrading performance. This limit is a
-// per-function limit. You can override the limit for each function using the
-// `maxInstances` option in the function's options, e.g.
-// `onRequest({ maxInstances: 5 }, (req, res) => { ... })`.
-// NOTE: setGlobalOptions does not apply to functions using the v1 API. V1
-// functions should each use functions.runWith({ maxInstances: 10 }) instead.
-// In the v1 API, each function can only serve one request per container, so
-// this will be the maximum concurrent request count.
-setGlobalOptions({ maxInstances: 10 });
+/**
+ * Callable Cloud Function to process AI commands
+ * Receives user message and context, calls OpenAI, returns structured commands
+ */
+export const processAICommand = functions.https.onCall(
+  async (request): Promise<ProcessAICommandResponse> => {
+    // Enforce authentication
+    if (!request.auth) {
+      throw new functions.https.HttpsError(
+        "unauthenticated",
+        "You must be logged in to use AI commands"
+      );
+    }
 
-// export const helloWorld = onRequest((request, response) => {
-//   logger.info("Hello logs!", {structuredData: true});
-//   response.send("Hello from Firebase!");
-// });
+    const userId = request.auth.uid;
+    const data = request.data as ProcessAICommandRequest;
+    const {userMessage, canvasState, viewportInfo, selectedShape} = data;
+
+    // Validate request
+    if (!userMessage || typeof userMessage !== "string") {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "userMessage is required and must be a string"
+      );
+    }
+
+    try {
+      // Check usage quota
+      await checkCommandQuota(userId);
+
+      // Check canvas limits
+      if (canvasState.rectangles.length >= 1000) {
+        throw new functions.https.HttpsError(
+          "failed-precondition",
+          "Canvas has too many rectangles (limit: 1000)"
+        );
+      }
+
+      // Get OpenAI API key from environment
+      const apiKey = functions.config().openai?.key;
+      if (!apiKey) {
+        console.error("OpenAI API key not configured");
+        throw new functions.https.HttpsError(
+          "failed-precondition",
+          "AI service not configured"
+        );
+      }
+
+      // Build system prompt with context
+      const systemPrompt = buildSystemPrompt(
+        canvasState,
+        viewportInfo,
+        selectedShape
+      );
+
+      // Create OpenAI provider with API key
+      const openai = createOpenAI({
+        apiKey: apiKey,
+      });
+
+      // Call OpenAI with 6 second timeout
+      const result = await Promise.race([
+        generateText({
+          model: openai("gpt-4o"),
+          messages: [{role: "user", content: userMessage}],
+          tools,
+          system: systemPrompt,
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("AI request timeout")), 6000)
+        ),
+      ]);
+
+      // Atomically increment command count (after successful AI call)
+      await incrementCommandCount(userId);
+
+      // Extract tool calls from result
+      const toolCalls = result.toolCalls || [];
+      
+      // Return structured commands and optional message
+      const response: ProcessAICommandResponse = {
+        commands: toolCalls.map((call: any) => ({
+          tool: call.toolName,
+          parameters: call.args,
+        })),
+        message: result.text || undefined,
+      };
+
+      return response;
+    } catch (error: any) {
+      // Handle timeout
+      if (error.message === "AI request timeout") {
+        throw new functions.https.HttpsError(
+          "deadline-exceeded",
+          "AI service temporarily unavailable. Please try again."
+        );
+      }
+
+      // Handle OpenAI API errors
+      if (error.message?.includes("API key")) {
+        throw new functions.https.HttpsError(
+          "failed-precondition",
+          "AI service configuration error"
+        );
+      }
+
+      // Re-throw HttpsError as-is
+      if (error instanceof functions.https.HttpsError) {
+        throw error;
+      }
+
+      // Log unexpected errors
+      console.error("Error processing AI command:", error);
+      throw new functions.https.HttpsError(
+        "internal",
+        "An error occurred processing your command"
+      );
+    }
+  }
+);

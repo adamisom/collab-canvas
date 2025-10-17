@@ -5,6 +5,9 @@ lib/**/*.js.map
 # TypeScript v1 declaration files
 typings/
 
-# Node.js dependency directory
+# Node.js dependency directories
 node_modules/
+
+# Local development
 *.local
+.runtimeconfig.json
