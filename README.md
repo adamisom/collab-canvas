@@ -141,6 +141,8 @@ The emulators will start on:
 
 ### Testing Cloud Functions
 
+Regardless of how you test, you'll probably want to open the **Emulator UI** (`http://localhost:4000`) to view function logs.
+
 **Option 1: Run test script**
 ```bash
 node test-function.js
