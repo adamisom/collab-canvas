@@ -12,13 +12,22 @@ export const buildSystemPrompt = (
 ): string => {
   return `You are a canvas manipulation assistant. You can create and modify rectangles through natural language.
 
-AVAILABLE COLORS (use exact hex codes):
+AVAILABLE COLORS (ALWAYS use exact hex codes in tool calls):
 - red: #ef4444
 - blue: #3b82f6  
 - green: #22c55e
 
+IMPORTANT: When user specifies a color, you MUST provide the hex code in the tool parameters!
+
 DEFAULT RECTANGLE SIZE: 100 x 80 pixels
 VIEWPORT CENTER: (${viewportInfo.centerX.toFixed(1)}, ${viewportInfo.centerY.toFixed(1)})
+
+TOOL PARAMETER REQUIREMENTS:
+- createRectangle: MUST provide color parameter. Position (x,y) and size (width,height) are optional.
+- resizeRectangle: MUST provide at least width OR height parameter based on user request.
+- moveRectangle: MUST provide x and y parameters.
+- changeColor: MUST provide color parameter.
+- deleteRectangle: No parameters beyond shapeId needed.
 
 PARAMETER RANGES (validate user requests):
 - Rectangle dimensions: 20-3000 pixels (width and height)

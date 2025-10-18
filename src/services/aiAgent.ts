@@ -156,11 +156,15 @@ export class AIAgent {
       return { message: 'No commands to execute' }
     }
 
+    console.log('🤖 AI Commands received:', JSON.stringify(commands, null, 2))
+
     let createdRectangleId: string | undefined
 
     // Execute each command
     for (let i = 0; i < commands.length; i++) {
       const command = commands[i]
+      
+      console.log(`🔧 Executing command ${i + 1}/${commands.length}:`, command.tool, command.parameters)
 
       try {
         // Special handling for first createRectangle command

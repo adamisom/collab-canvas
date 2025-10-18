@@ -200,8 +200,8 @@ export class CanvasCommandExecutor {
       throw new Error('No rectangle ID provided')
     }
 
-    // Validate rectangle exists
-    if (!this.rectangleExists(shapeId)) {
+    // Only validate existence if not using createdRectangleId (to avoid race condition)
+    if (!createdRectangleId && !this.rectangleExists(shapeId)) {
       throw new Error(`Rectangle ${shapeId} not found or was deleted`)
     }
 
@@ -225,8 +225,8 @@ export class CanvasCommandExecutor {
       throw new Error('No rectangle ID provided')
     }
 
-    // Validate rectangle exists
-    if (!this.rectangleExists(shapeId)) {
+    // Only validate existence if not using createdRectangleId (to avoid race condition)
+    if (!createdRectangleId && !this.rectangleExists(shapeId)) {
       throw new Error(`Rectangle ${shapeId} not found or was deleted`)
     }
 
@@ -248,18 +248,21 @@ export class CanvasCommandExecutor {
       throw new Error('No rectangle ID provided')
     }
 
-    // Validate rectangle exists
-    if (!this.rectangleExists(shapeId)) {
+    // Only validate existence if not using createdRectangleId (to avoid race condition)
+    if (!createdRectangleId && !this.rectangleExists(shapeId)) {
       throw new Error(`Rectangle ${shapeId} not found or was deleted`)
     }
 
+    // Get current rectangle to use as defaults if dimensions not provided
+    const currentRect = this.context.rectangles.find(r => r.id === shapeId)
+    
     const width = this.clampNumber(
-      params.width,
+      params.width ?? currentRect?.width ?? DEFAULT_RECT.WIDTH,
       RECTANGLE_CONSTRAINTS.MIN_WIDTH,
       RECTANGLE_CONSTRAINTS.MAX_WIDTH
     )
     const height = this.clampNumber(
-      params.height,
+      params.height ?? currentRect?.height ?? DEFAULT_RECT.HEIGHT,
       RECTANGLE_CONSTRAINTS.MIN_HEIGHT,
       RECTANGLE_CONSTRAINTS.MAX_HEIGHT
     )
@@ -279,8 +282,8 @@ export class CanvasCommandExecutor {
       throw new Error('No rectangle ID provided')
     }
 
-    // Validate rectangle exists
-    if (!this.rectangleExists(shapeId)) {
+    // Only validate existence if not using createdRectangleId (to avoid race condition)
+    if (!createdRectangleId && !this.rectangleExists(shapeId)) {
       throw new Error(`Rectangle ${shapeId} not found or was deleted`)
     }
 
