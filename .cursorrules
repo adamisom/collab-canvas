@@ -11,6 +11,10 @@
 - Write succinct, clear commit messages
 - Only commit when code is working and tests pass
 
+## Deployment
+- Always prefix deploy commands with `time` to measure deployment duration
+- Example: `time firebase deploy` instead of `firebase deploy`
+
 ## Git History
 - NEVER rewrite git history (no force push, no rebase on shared branches, no --amend on pushed commits)
 - Keep commit history clean and intact for collaboration and debugging
