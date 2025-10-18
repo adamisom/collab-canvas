@@ -5,7 +5,7 @@
 **Work Level**: High  
 **Dependencies**: Phase 3B complete (multi-select foundation)
 
-> **⚠️ Before Implementation:** Review this plan and ask questions before proceeding. Consider whether any plans need to change first.
+> **⚠️ Before Implementation:** Review this plan and ask questions before proceeding. Consider whether any plans need to change first. Also re-read the sibling file README.md to ensure broader context.
 
 ---
 

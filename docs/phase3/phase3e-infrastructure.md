@@ -5,7 +5,7 @@
 **Work Level**: High  
 **Dependencies**: All previous phases complete (3A-3D)
 
-> **⚠️ Before Implementation:** Review this plan and ask questions before proceeding. Consider whether any plans need to change first.
+> **⚠️ Before Implementation:** Review this plan and ask questions before proceeding. Consider whether any plans need to change first. Also re-read the sibling file README.md to ensure broader context.
 
 ---
 
