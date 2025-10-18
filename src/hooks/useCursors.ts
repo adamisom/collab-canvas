@@ -81,9 +81,12 @@ export const useCursors = (): UseCursorsReturn => {
     }
     
     return () => {
-      if (previousUserId) {
-        cursorService.removeCursor(previousUserId).catch(error => {
-          console.error('Error cleaning up cursor on unmount:', error)
+      // Only clean up if there was a previous user and current user still exists
+      // This prevents cleanup errors when user has already signed out
+      // Silent failure is acceptable - stale cursor cleanup will handle it (5s threshold)
+      if (previousUserId && user) {
+        cursorService.removeCursor(previousUserId).catch(() => {
+          // Silently ignore cleanup errors - not critical
         })
       }
     }
