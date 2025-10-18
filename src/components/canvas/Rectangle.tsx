@@ -1,6 +1,7 @@
-import React, { useState } from 'react'
+import React, { useState, useRef } from 'react'
 import { Rect, Group } from 'react-konva'
 import type { KonvaEventObject } from 'konva/lib/Node'
+import type Konva from 'konva'
 import type { Rectangle } from '../../services/canvasService'
 import { DEFAULT_RECT, SELECTION_COLORS, RESIZE_DIRECTIONS, getRectangleBorderColor } from '../../utils/constants'
 import { calculateResizeHandlePositions, calculateResizeUpdate } from '../../utils/canvasHelpers'
@@ -38,6 +39,12 @@ const RectangleComponent: React.FC<RectangleProps> = ({
   // Track the current visual rectangle dimensions during resize for handle positioning
   const [currentVisualRect, setCurrentVisualRect] = useState<typeof rectangle | null>(null)
   
+  // Drag threshold state
+  const [mouseDownPos, setMouseDownPos] = useState<{x: number, y: number} | null>(null)
+  const [dragEnabled, setDragEnabled] = useState(false)
+  const DRAG_THRESHOLD = 5 // pixels
+  const rectRef = useRef<Konva.Rect>(null)
+  
   const { user } = useAuth()
   
   // Check if rectangle is selected by another user
@@ -45,14 +52,60 @@ const RectangleComponent: React.FC<RectangleProps> = ({
 
   const handleClick = (e: KonvaEventObject<MouseEvent>) => {
     stopEventPropagation(e)
-    if (onClick && !isResizing) {
+    if (onClick && !isResizing && !isDragging) {
       onClick(rectangle)
     }
   }
 
-  const handleDragStart = (e: KonvaEventObject<MouseEvent>) => {
-    if (isResizing) return // Don't drag while resizing
+  const handleMouseDown = (e: KonvaEventObject<MouseEvent>) => {
+    if (isResizing) return
+    stopEventPropagation(e)
     
+    // Record the starting position for drag threshold
+    setMouseDownPos({ x: e.evt.clientX, y: e.evt.clientY })
+    setDragEnabled(false)
+  }
+
+  const handleMouseMove = (e: KonvaEventObject<MouseEvent>) => {
+    if (isResizing || !mouseDownPos || dragEnabled) return
+    
+    // Calculate distance moved
+    const distance = Math.sqrt(
+      Math.pow(e.evt.clientX - mouseDownPos.x, 2) + 
+      Math.pow(e.evt.clientY - mouseDownPos.y, 2)
+    )
+    
+    // If moved more than threshold, enable dragging
+    if (distance > DRAG_THRESHOLD) {
+      setDragEnabled(true)
+      
+      // Select the rectangle if not already selected
+      if (!isSelected && onClick) {
+        onClick(rectangle)
+      }
+      
+      // Manually start the drag since the draggable prop update won't happen in time
+      if (rectRef.current) {
+        rectRef.current.startDrag()
+      }
+    }
+  }
+
+  const handleMouseUp = (e: KonvaEventObject<MouseEvent>) => {
+    if (isResizing) return
+    
+    // If we didn't drag (stayed within threshold), treat as click
+    if (mouseDownPos && !dragEnabled) {
+      handleClick(e)
+    }
+    
+    // Reset drag threshold state
+    setMouseDownPos(null)
+    setDragEnabled(false)
+  }
+
+  const handleDragStart = (e: KonvaEventObject<MouseEvent>) => {
+    if (isResizing) return
     stopEventPropagation(e)
     
     setIsDragging(true)
@@ -67,6 +120,9 @@ const RectangleComponent: React.FC<RectangleProps> = ({
     stopEventPropagation(e)
     
     setIsDragging(false)
+    setDragEnabled(false)
+    setMouseDownPos(null)
+    
     const newX = e.target.x()
     const newY = e.target.y()
     
@@ -134,6 +190,7 @@ const RectangleComponent: React.FC<RectangleProps> = ({
   return (
     <Group>
       <Rect
+        ref={rectRef}
         x={rectangle.x}
         y={rectangle.y}
         width={rectangle.width}
@@ -154,10 +211,11 @@ const RectangleComponent: React.FC<RectangleProps> = ({
               : DEFAULT_RECT.STROKE_WIDTH
         }
         dash={isSelectedByOther ? [5, 5] : undefined}
-        draggable={isSelected && !isResizing}
-        onClick={handleClick}
+        draggable={!isResizing && dragEnabled}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
         onTap={handleClick} // For touch devices
-        onMouseDown={stopEventPropagation}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
         // Visual feedback
