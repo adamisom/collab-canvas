@@ -1,3 +1,5 @@
+import { VALID_RECTANGLE_COLORS } from '../shared/types'
+
 // Canvas dimensions
 export const CANVAS_WIDTH = 3000
 export const CANVAS_HEIGHT = 3000
@@ -104,9 +106,5 @@ export const AI_CONSTANTS = {
   MAX_BATCH_COUNT: 50
 } as const
 
-// Valid colors for AI commands (must match Cloud Function)
-export const VALID_AI_COLORS = [
-  RECTANGLE_COLORS.RED,
-  RECTANGLE_COLORS.BLUE,
-  RECTANGLE_COLORS.GREEN
-] as const
+// Valid colors for AI commands (imported from shared types to ensure consistency with Cloud Function)
+export const VALID_AI_COLORS = VALID_RECTANGLE_COLORS

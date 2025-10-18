@@ -25,6 +25,7 @@ import {
   VALID_AI_COLORS,
   AI_CONSTANTS
 } from '../utils/constants'
+import { calculateBatchLayout } from '../utils/batchLayoutCalculator'
 import type { Rectangle } from './canvasService'
 
 /**
@@ -291,15 +292,15 @@ export class CanvasCommandExecutor {
     const startY = viewportInfo.centerY
 
     // Calculate positions based on layout
-    const positions = this.calculateBatchPositions(
+    const positions = calculateBatchLayout({
       count,
       layout,
       startX,
       startY,
-      DEFAULT_RECT.WIDTH,
-      DEFAULT_RECT.HEIGHT,
-      offsetPixels
-    )
+      width: DEFAULT_RECT.WIDTH,
+      height: DEFAULT_RECT.HEIGHT,
+      offset: offsetPixels
+    })
 
     // Create all rectangles
     for (const pos of positions) {
@@ -308,52 +309,6 @@ export class CanvasCommandExecutor {
         await this.context.updateRectangle(rect.id, { color: params.color })
       }
     }
-  }
-
-  /**
-   * Calculate positions for batch rectangle creation
-   */
-  private calculateBatchPositions(
-    count: number,
-    layout: string,
-    startX: number,
-    startY: number,
-    width: number,
-    height: number,
-    offset: number
-  ): Array<{ x: number; y: number }> {
-    const positions: Array<{ x: number; y: number }> = []
-
-    if (layout === 'row') {
-      // Horizontal row
-      for (let i = 0; i < count; i++) {
-        positions.push({
-          x: startX + i * (width + offset),
-          y: startY
-        })
-      }
-    } else if (layout === 'column') {
-      // Vertical column
-      for (let i = 0; i < count; i++) {
-        positions.push({
-          x: startX,
-          y: startY + i * (height + offset)
-        })
-      }
-    } else {
-      // Grid layout
-      const cols = Math.ceil(Math.sqrt(count))
-      for (let i = 0; i < count; i++) {
-        const col = i % cols
-        const row = Math.floor(i / cols)
-        positions.push({
-          x: startX + col * (width + offset),
-          y: startY + row * (height + offset)
-        })
-      }
-    }
-
-    return positions
   }
 
   /**

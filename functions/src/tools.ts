@@ -5,9 +5,13 @@
 
 import {tool} from "ai";
 import {z} from "zod";
-
-// Valid colors - must match client-side RECTANGLE_COLORS
-const VALID_COLORS = ["#ef4444", "#3b82f6", "#22c55e"] as const;
+import {VALID_RECTANGLE_COLORS} from "@shared/types";
+import {
+  CANVAS_BOUNDS,
+  RECTANGLE_CONSTRAINTS,
+  BATCH_CONSTRAINTS,
+  PARAM_DESCRIPTIONS,
+} from "./constants";
 
 /**
  * Tool 1: Create a single rectangle
@@ -15,11 +19,11 @@ const VALID_COLORS = ["#ef4444", "#3b82f6", "#22c55e"] as const;
 export const createRectangleTool = tool({
   description: "Create a single rectangle on the canvas at specified position with given dimensions and color",
   inputSchema: z.object({
-    x: z.number().describe("X coordinate (0-3000)"),
-    y: z.number().describe("Y coordinate (0-3000)"),
-    width: z.number().describe("Width in pixels (20-3000, default 100)"),
-    height: z.number().describe("Height in pixels (20-3000, default 80)"),
-    color: z.enum(VALID_COLORS).describe("Color hex code: #ef4444 (red), #3b82f6 (blue), or #22c55e (green)"),
+    x: z.number().min(CANVAS_BOUNDS.MIN_X).max(CANVAS_BOUNDS.MAX_X).describe(PARAM_DESCRIPTIONS.X_COORD),
+    y: z.number().min(CANVAS_BOUNDS.MIN_Y).max(CANVAS_BOUNDS.MAX_Y).describe(PARAM_DESCRIPTIONS.Y_COORD),
+    width: z.number().min(RECTANGLE_CONSTRAINTS.MIN_WIDTH).max(RECTANGLE_CONSTRAINTS.MAX_WIDTH).describe(PARAM_DESCRIPTIONS.WIDTH),
+    height: z.number().min(RECTANGLE_CONSTRAINTS.MIN_HEIGHT).max(RECTANGLE_CONSTRAINTS.MAX_HEIGHT).describe(PARAM_DESCRIPTIONS.HEIGHT),
+    color: z.enum(VALID_RECTANGLE_COLORS).describe(PARAM_DESCRIPTIONS.COLOR),
   }),
 });
 
@@ -29,8 +33,8 @@ export const createRectangleTool = tool({
 export const changeColorTool = tool({
   description: "Change the color of an existing rectangle. Requires a rectangle to be selected.",
   inputSchema: z.object({
-    shapeId: z.string().describe("ID of the rectangle to modify"),
-    color: z.enum(VALID_COLORS).describe("New color hex code: #ef4444 (red), #3b82f6 (blue), or #22c55e (green)"),
+    shapeId: z.string().describe(PARAM_DESCRIPTIONS.SHAPE_ID),
+    color: z.enum(VALID_RECTANGLE_COLORS).describe(PARAM_DESCRIPTIONS.COLOR),
   }),
 });
 
@@ -40,9 +44,9 @@ export const changeColorTool = tool({
 export const moveRectangleTool = tool({
   description: "Move an existing rectangle to a new position. Requires a rectangle to be selected.",
   inputSchema: z.object({
-    shapeId: z.string().describe("ID of the rectangle to move"),
-    x: z.number().describe("New X coordinate (0-3000)"),
-    y: z.number().describe("New Y coordinate (0-3000)"),
+    shapeId: z.string().describe(PARAM_DESCRIPTIONS.SHAPE_ID),
+    x: z.number().min(CANVAS_BOUNDS.MIN_X).max(CANVAS_BOUNDS.MAX_X).describe(PARAM_DESCRIPTIONS.X_COORD),
+    y: z.number().min(CANVAS_BOUNDS.MIN_Y).max(CANVAS_BOUNDS.MAX_Y).describe(PARAM_DESCRIPTIONS.Y_COORD),
   }),
 });
 
@@ -52,9 +56,9 @@ export const moveRectangleTool = tool({
 export const resizeRectangleTool = tool({
   description: "Resize an existing rectangle. Requires a rectangle to be selected.",
   inputSchema: z.object({
-    shapeId: z.string().describe("ID of the rectangle to resize"),
-    width: z.number().describe("New width in pixels (20-3000)"),
-    height: z.number().describe("New height in pixels (20-3000)"),
+    shapeId: z.string().describe(PARAM_DESCRIPTIONS.SHAPE_ID),
+    width: z.number().min(RECTANGLE_CONSTRAINTS.MIN_WIDTH).max(RECTANGLE_CONSTRAINTS.MAX_WIDTH).describe(PARAM_DESCRIPTIONS.WIDTH),
+    height: z.number().min(RECTANGLE_CONSTRAINTS.MIN_HEIGHT).max(RECTANGLE_CONSTRAINTS.MAX_HEIGHT).describe(PARAM_DESCRIPTIONS.HEIGHT),
   }),
 });
 
@@ -64,7 +68,7 @@ export const resizeRectangleTool = tool({
 export const deleteRectangleTool = tool({
   description: "Delete an existing rectangle. Requires a rectangle to be selected.",
   inputSchema: z.object({
-    shapeId: z.string().describe("ID of the rectangle to delete"),
+    shapeId: z.string().describe(PARAM_DESCRIPTIONS.SHAPE_ID),
   }),
 });
 
@@ -72,12 +76,12 @@ export const deleteRectangleTool = tool({
  * Tool 6: Create multiple rectangles at once
  */
 export const createMultipleRectanglesTool = tool({
-  description: "Create multiple rectangles at once with automatic spacing. Maximum 50 rectangles.",
+  description: `Create multiple rectangles at once with automatic spacing. Maximum ${BATCH_CONSTRAINTS.MAX_COUNT} rectangles.`,
   inputSchema: z.object({
-    count: z.number().min(1).max(50).describe("Number of rectangles to create (1-50)"),
-    color: z.enum(VALID_COLORS).describe("Color hex code: #ef4444 (red), #3b82f6 (blue), or #22c55e (green)"),
-    layout: z.enum(["row", "column", "grid"]).optional().describe("Layout pattern: row, column, or grid"),
-    offsetPixels: z.number().min(10).max(100).optional().describe("Spacing between rectangles in pixels (10-100, default 25)"),
+    count: z.number().min(BATCH_CONSTRAINTS.MIN_COUNT).max(BATCH_CONSTRAINTS.MAX_COUNT).describe(PARAM_DESCRIPTIONS.COUNT),
+    color: z.enum(VALID_RECTANGLE_COLORS).describe(PARAM_DESCRIPTIONS.COLOR),
+    layout: z.enum(["row", "column", "grid"]).optional().describe(PARAM_DESCRIPTIONS.LAYOUT),
+    offsetPixels: z.number().min(BATCH_CONSTRAINTS.MIN_OFFSET).max(BATCH_CONSTRAINTS.MAX_OFFSET).optional().describe(PARAM_DESCRIPTIONS.OFFSET),
   }),
 });
 

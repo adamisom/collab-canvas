@@ -1,7 +1,22 @@
 /**
- * TypeScript interfaces for AI Canvas Agent
- * These types must match exactly with Cloud Function types in /functions/src/types.ts
+ * Shared types and constants for AI Canvas Agent
+ * These types must match exactly between client and Cloud Functions
  */
+
+// ============================================================================
+// CONSTANTS
+// ============================================================================
+
+/**
+ * Valid rectangle colors (hex codes)
+ * Used for validation in AI tools and canvas operations
+ */
+export const VALID_RECTANGLE_COLORS = ['#ef4444', '#3b82f6', '#22c55e'] as const
+export type RectangleColor = typeof VALID_RECTANGLE_COLORS[number]
+
+// ============================================================================
+// TYPES & INTERFACES
+// ============================================================================
 
 export interface CanvasState {
   rectangles: Array<{
