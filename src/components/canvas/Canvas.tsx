@@ -328,7 +328,11 @@ const Canvas: React.FC<CanvasProps> = ({
       
       // Copy: Cmd+C (Mac) or Ctrl+C (Windows/Linux)
       if ((e.metaKey || e.ctrlKey) && e.key === 'c' && !isTyping) {
-        if (selectedRectangleId) {
+        // Check if user has selected text - if so, let browser handle it
+        const selection = window.getSelection()
+        const hasTextSelection = selection && selection.toString().length > 0
+        
+        if (selectedRectangleId && !hasTextSelection) {
           e.preventDefault()
           copyRectangleRef.current?.(selectedRectangleId)
         }
