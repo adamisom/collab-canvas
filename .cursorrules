@@ -6,6 +6,8 @@
 - For running tests with specific options, use `npx vitest run` with appropriate flags
 
 ## Commit Workflow
+- Commit during substantial PR implementation work, before user review
+- Do NOT commit during user's PR review/approval phase - user will handle review fixes
 - Before each commit: lint, build, and test (using `npx vitest run`)
 - Review changes and assess if high-value unit tests should be added
 - Write succinct, clear commit messages
