@@ -4,7 +4,7 @@
  */
 
 import * as functions from "firebase-functions";
-import {defineString} from "firebase-functions/params";
+import {defineSecret} from "firebase-functions/params";
 import {initializeApp} from "firebase-admin/app";
 import {generateText} from "ai";
 import {createOpenAI} from "@ai-sdk/openai";
@@ -15,13 +15,13 @@ import {
   ProcessAICommandRequest,
   ProcessAICommandResponse,
   AICommandParameters,
-} from "@shared/types";
+} from "../../src/shared/types";
 
 // Initialize Firebase Admin
 initializeApp();
 
-// Define OpenAI API key as an environment parameter for Functions v2
-const openaiApiKey = defineString("OPENAI_API_KEY");
+// Define OpenAI API key as a secret for Functions v2
+const openaiApiKey = defineSecret("OPENAI_API_KEY");
 
 /**
  * Callable Cloud Function to process AI commands

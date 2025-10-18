@@ -11,3 +11,8 @@ node_modules/
 # Local development
 *.local
 .runtimeconfig.json
+
+# Environment variables in files that could contain secrets if the files exist
+.env
+.env.*
+!.env.example

@@ -5,7 +5,7 @@
 
 import {tool} from "ai";
 import {z} from "zod";
-import {VALID_RECTANGLE_COLORS} from "@shared/types";
+import {VALID_RECTANGLE_COLORS} from "../../src/shared/types";
 import {
   CANVAS_BOUNDS,
   RECTANGLE_CONSTRAINTS,
