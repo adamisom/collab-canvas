@@ -26,7 +26,7 @@ export interface CursorData {
 export class CursorService {
   private cursorsRef: DatabaseReference
   private throttledUpdateCursor: (userId: string, position: Omit<CursorPosition, 'userId'>) => void
-  private static readonly CURSOR_STALE_THRESHOLD_MS = 30000 // 30 seconds
+  private static readonly CURSOR_STALE_THRESHOLD_MS = 5000 // 5 seconds
 
   constructor() {
     this.cursorsRef = dbRef(firebaseDatabase, DB_PATHS.CURSORS)
