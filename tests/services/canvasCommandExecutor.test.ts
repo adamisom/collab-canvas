@@ -159,8 +159,8 @@ describe('CanvasCommandExecutor', () => {
         parameters: { width: 100, height: 80, color: '#3b82f6' }
       })
 
-      // Should use viewport center (500, 400 from mockViewportInfo)
-      expect(mockCreateRectangle).toHaveBeenCalledWith(500, 400)
+      // Should use viewport center with offset (500-100, 400-70 = 400, 330 from mockViewportInfo)
+      expect(mockCreateRectangle).toHaveBeenCalledWith(400, 330)
     })
   })
 
