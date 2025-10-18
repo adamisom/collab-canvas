@@ -6,7 +6,8 @@ A real-time collaborative canvas application where multiple users can simultaneo
 
 - **Frontend:** React + TypeScript + Vite
 - **Canvas:** Konva.js (react-konva)
-- **Backend:** Firebase Realtime Database + Firebase Auth
+- **Backend:** Firebase Realtime Database + Firebase Auth + Cloud Functions
+- **AI:** OpenAI GPT-4o via Vercel AI SDK
 - **Testing:** Vitest + React Testing Library
 - **Deployment:** Firebase Hosting
 
@@ -14,9 +15,11 @@ A real-time collaborative canvas application where multiple users can simultaneo
 
 ### Prerequisites
 
-- Node.js (v16 or higher)
+- Node.js (v22 or higher)
 - npm or yarn
 - Firebase account
+- OpenAI API account (for AI commands)
+- Java Runtime Environment (for Firebase Emulators)
 
 ### Installation
 
@@ -55,14 +58,33 @@ A real-time collaborative canvas application where multiple users can simultaneo
    VITE_FIREBASE_APP_ID=your_app_id
    ```
 
-5. **Start development server:**
+5. **Install Cloud Functions dependencies:**
+   ```bash
+   cd functions
+   npm install
+   cd ..
+   ```
+
+6. **Set up OpenAI API key (required for AI commands):**
+   - Get API key from [platform.openai.com](https://platform.openai.com/api-keys)
+   - Configure Firebase Functions:
+     ```bash
+     firebase functions:config:set openai.key="sk-your-actual-api-key-here"
+     ```
+
+7. **Deploy Firebase Cloud Functions:**
+   ```bash
+   firebase deploy --only functions
+   ```
+
+8. **Start development server:**
    ```bash
    npm run dev
    ```
 
-6. **Run tests:**
+9. **Run tests:**
    ```bash
-   npm test
+   npx vitest run
    ```
 
 ### Multi-User Testing
@@ -92,14 +114,38 @@ For development, use these rules in Firebase Console:
 ```
 src/
 ├── config/          # Firebase configuration
-├── services/        # Firebase service layer
+├── services/        # Firebase service layer (canvas, cursor, AI agent)
 ├── contexts/        # React contexts (Auth, Canvas)
-├── hooks/           # Custom React hooks
+├── hooks/           # Custom React hooks (useCanvas, useCursors, useAIAgent)
 ├── components/      # React components
 │   ├── auth/        # Authentication components
-│   ├── canvas/      # Canvas-related components
-│   └── layout/      # Layout components
+│   ├── canvas/      # Canvas-related components (Canvas, Rectangle, etc.)
+│   ├── ai/          # AI Chat interface
+│   ├── layout/      # Layout components
+│   └── ui/          # UI components (Toast)
+├── shared/          # Shared types (client + Cloud Functions)
 └── utils/           # Utility functions and constants
+
+functions/
+├── src/
+│   ├── index.ts           # Main Cloud Function (processAICommand)
+│   ├── tools.ts           # AI tool definitions (6 tools)
+│   ├── constants.ts       # Cloud Function constants
+│   └── utils/
+│       ├── systemPrompt.ts   # Dynamic AI prompt builder
+│       └── rateLimiter.ts    # Quota management
+└── package.json       # Cloud Functions dependencies
+
+docs/
+├── phase1/            # Phase 1 documentation (collaborative canvas)
+└── phase2/            # Phase 2 documentation (AI agent)
+    ├── ai-agent-mvp-prd.md    # Product requirements
+    ├── tasks.md               # Task breakdown by PR
+    ├── architecture.md        # System architecture
+    ├── setup-guide.md         # Setup instructions
+    ├── user-guide.md          # End-user documentation
+    ├── testing-plan.md        # Testing strategy
+    └── ai-development-log.md  # Development journal
 ```
 
 ## Available Scripts
@@ -256,6 +302,61 @@ Open `http://localhost:4000` to:
 - ✅ Selection state cleanup on user sign-out
 - ✅ Admin override for rectangle management
 - ✅ Professional UX with smooth interactions
+
+### AI Agent Features (Phase 2)
+- 🤖 Natural language canvas control via OpenAI GPT-4o
+- 🎨 6 AI tools: create, change color, move, resize, delete, batch create
+- 🔄 Multi-step commands (create + modify in one command)
+- 🎯 Context-aware (understands viewport, selection state)
+- 🛡️ Hybrid validation (AI + safety net)
+- 📊 Rate limiting (1000 commands per user)
+- ⚡ Real-time execution with instant sync
+- 💬 User-friendly error messages with retry logic
+- 🔒 Selection locking during AI processing
+- 📦 Batch creation (up to 50 rectangles, 3 layouts)
+
+## Using AI Commands
+
+The AI Canvas Agent (bottom-right corner) allows you to control the canvas with natural language. Simply type a command and press Enter.
+
+### Example Commands
+
+**Create rectangles:**
+```
+"Create a blue rectangle"
+"Add 5 red rectangles in a row"
+"Make 10 green rectangles in a grid"
+```
+
+**Modify selected rectangle:**
+```
+"Make it bigger"
+"Change color to red"
+"Move it to the center"
+"Resize it to 200 by 150"
+"Delete it"
+```
+
+**Multi-step commands:**
+```
+"Create a blue rectangle and make it bigger"
+"Add a red square in the center and move it up"
+```
+
+### Requirements
+
+- **OpenAI API key** must be configured in Firebase Functions
+- **Selection context** required for color, move, resize, delete commands
+- **Command quota:** 1000 commands per user (lifetime)
+- **Canvas limit:** AI commands stop working if canvas has >1000 rectangles
+
+### Documentation
+
+For detailed setup and usage:
+- **Setup Guide:** `/docs/phase2/setup-guide.md`
+- **User Guide:** `/docs/phase2/user-guide.md`
+- **Architecture:** `/docs/phase2/architecture.md`
+- **Testing Plan:** `/docs/phase2/testing-plan.md`
 
 ## Contributing
 
