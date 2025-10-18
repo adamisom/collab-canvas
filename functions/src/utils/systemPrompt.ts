@@ -41,7 +41,9 @@ RULES FOR MULTI-STEP COMMANDS:
   * "Make it bigger and change color" without creating first (unless already selected)
 
 SELECTION CONTEXT:
-${selectedShape ? `- User has selected: ${selectedShape.color} rectangle at (${selectedShape.x}, ${selectedShape.y})` : "- No rectangle currently selected"}
+${selectedShape ? `- User has selected rectangle ID: ${selectedShape.id}
+  Color: ${selectedShape.color}, Position: (${selectedShape.x}, ${selectedShape.y}), Size: ${selectedShape.width}x${selectedShape.height}
+  Use this ID for modification commands (resize, move, changeColor, delete)` : "- No rectangle currently selected"}
 ${!selectedShape ? "- Modification commands (resize, move, change color, delete) require selection" : ""}
 
 CANVAS STATE:
