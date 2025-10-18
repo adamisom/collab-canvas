@@ -268,8 +268,16 @@ const Canvas: React.FC<CanvasProps> = ({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!stageRef.current) return
       
+      // Don't handle keyboard shortcuts if user is typing in an input/textarea
+      const activeElement = document.activeElement
+      const isTyping = activeElement instanceof HTMLInputElement || 
+                       activeElement instanceof HTMLTextAreaElement
+      
       // Handle rectangle deletion
       if ((e.key === 'Delete' || e.key === 'Backspace') && selectedRectangleId) {
+        // Don't delete if user is typing in an input field
+        if (isTyping) return
+        
         // Prevent deletion during active operations
         if (!isRectangleDragging && !isRectangleResizing) {
           e.preventDefault()
@@ -283,6 +291,9 @@ const Canvas: React.FC<CanvasProps> = ({
       
       // Check if we're resizing a selected rectangle
       if (selectedRectangleId && (e.shiftKey || e.ctrlKey)) {
+        // Don't resize if user is typing in an input field
+        if (isTyping) return
+        
         const selectedRect = rectangles.find(r => r.id === selectedRectangleId)
         if (selectedRect) {
           e.preventDefault() // Prevent default browser behavior
@@ -315,6 +326,9 @@ const Canvas: React.FC<CanvasProps> = ({
       
       // Canvas navigation (when not resizing)
       if (stageRef.current) {
+        // Don't navigate if user is typing in an input field
+        if (isTyping) return
+        
         const currentPos = getCurrentStagePosition()
         if (!currentPos || currentPos.x === undefined || currentPos.y === undefined) return
         
