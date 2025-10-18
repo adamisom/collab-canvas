@@ -361,3 +361,135 @@
   align-items: center;
   gap: 8px; /* Same gap as the parent container */
 }
+
+/* Enhanced Color Picker Styles */
+.color-quick-options {
+  display: flex;
+  gap: 6px;
+}
+
+.color-hex-form {
+  display: flex;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.color-hex-input {
+  flex: 1;
+  padding: 4px 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  font-size: 11px;
+  font-family: 'SF Mono', Monaco, monospace;
+  color: #374151;
+}
+
+.color-hex-input:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+}
+
+.color-hex-submit {
+  padding: 4px 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  background: white;
+  color: #374151;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s ease;
+}
+
+.color-hex-submit:hover:not(:disabled) {
+  background: #f8fafc;
+  border-color: #cbd5e0;
+}
+
+.color-hex-submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.color-history {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.color-history-option {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.color-history-option:hover {
+  transform: scale(1.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.color-history-option.selected {
+  border-color: #374151;
+  box-shadow: 0 0 0 2px white, 0 0 0 4px #374151;
+}
+
+/* Keyboard Shortcuts Collapsible Section */
+.canvas-shortcuts {
+  padding: 12px 16px;
+  background: #f8fafc;
+  border-top: 1px solid #e2e8f0;
+}
+
+.shortcuts-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: none;
+  font-size: 13px;
+  color: #4a5568;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.2s ease;
+}
+
+.shortcuts-toggle:hover {
+  color: #2d3748;
+}
+
+.shortcuts-expanded {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+  font-size: 12px;
+}
+
+.shortcuts-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.shortcuts-section strong {
+  color: #2d3748;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.shortcuts-section span {
+  color: #718096;
+  padding-left: 8px;
+}
+
+@media (max-width: 768px) {
+  .canvas-shortcuts {
+    display: none;
+  }
+}

@@ -33,6 +33,12 @@ const Canvas: React.FC<CanvasProps> = ({
   const [isRectangleDragging, setIsRectangleDragging] = useState(false)
   const [isRectangleResizing, setIsRectangleResizing] = useState(false)
   
+  // Keyboard shortcuts visibility (persisted in localStorage)
+  const [showShortcuts, setShowShortcuts] = useState(() => {
+    const stored = localStorage.getItem('collabcanvas_showShortcuts')
+    return stored !== null ? stored === 'true' : true // Default to expanded for new users
+  })
+  
   // Track if user just used AI command (to prevent accidental deselect on first click)
   const justUsedAICommandRef = useRef(false)
   
@@ -285,6 +291,11 @@ const Canvas: React.FC<CanvasProps> = ({
   // Get selected rectangle
   const selectedRectangle = rectangles.find(r => r.id === selectedRectangleId)
 
+  // Persist showShortcuts to localStorage
+  useEffect(() => {
+    localStorage.setItem('collabcanvas_showShortcuts', String(showShortcuts))
+  }, [showShortcuts])
+
   // Keep clipboard operation refs updated
   useEffect(() => {
     copyRectangleRef.current = copyRectangle
@@ -477,37 +488,50 @@ const Canvas: React.FC<CanvasProps> = ({
           <span>Rectangles: {rectangles.length}</span>
           <span>Friends: {Object.keys(cursors).length}</span>
           
-          {/* Color Picker - always reserve space to prevent layout shift */}
-          <div className="header-color-picker">
-            {selectedRectangle ? (
-              <>
-                <span className="color-label">Color:</span>
-                <ColorPicker
-                  selectedColor={selectedRectangle.color}
-                  onColorChange={handleColorChange}
-                />
-              </>
-            ) : (
-              <div className="color-picker-placeholder">
-                <span className="color-label" style={{ opacity: 0 }}>Color:</span>
-                <div className="color-picker" style={{ opacity: 0 }}>
-                  <div className="color-picker-options">
-                    <div className="color-option" />
-                    <div className="color-option" />
-                    <div className="color-option" />
-                  </div>
-                </div>
+          {/* Color Picker */}
+          {selectedRectangle && (
+            <div className="header-color-picker">
+              <span className="color-label">Color:</span>
+              <ColorPicker
+                selectedColor={selectedRectangle.color}
+                onColorChange={handleColorChange}
+              />
+            </div>
+          )}
+        </div>
+        
+        {/* Collapsible Keyboard Shortcuts */}
+        <div className="canvas-shortcuts">
+          <button 
+            className="shortcuts-toggle"
+            onClick={() => setShowShortcuts(!showShortcuts)}
+            aria-expanded={showShortcuts}
+          >
+            ⌨️ Keyboard Shortcuts {showShortcuts ? '▼' : '▶'}
+          </button>
+          
+          {showShortcuts && (
+            <div className="shortcuts-expanded">
+              <div className="shortcuts-section">
+                <strong>Canvas Navigation:</strong>
+                <span>🖱️ Click+Drag to pan</span>
+                <span>🔍 Scroll to zoom</span>
+                <span>⌨️ Arrow keys to navigate</span>
+                <span>0 - Reset zoom and position</span>
               </div>
-            )}
-          </div>
+              
+              <div className="shortcuts-section">
+                <strong>Rectangle Operations:</strong>
+                <span>⇧+Arrows - Resize selected</span>
+                <span>⌘/Ctrl+C - Copy selected</span>
+                <span>⌘/Ctrl+V - Paste</span>
+                <span>⌘/Ctrl+D - Duplicate selected</span>
+                <span>Delete/Backspace - Delete selected</span>
+              </div>
+            </div>
+          )}
         </div>
-        <div className="canvas-controls">
-          <span>🖱️ Click+Drag to pan</span>
-          <span>🔍 Scroll to zoom</span>
-          <span>⌨️ Arrow keys to navigate</span>
-          <span>⇧+Arrows: Resize selected</span>
-          <span>🗑️ Delete/Backspace: Delete selected</span>
-        </div>
+        
         {cursorsError && (
           <div className="cursor-error">
             <span>⚠️ Cursor sync: {cursorsError}</span>
