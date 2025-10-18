@@ -50,12 +50,14 @@ All work with single selection. Multi-select support comes automatically in PR #
 ### Implementation Strategy
 
 **Clipboard State:**
-- Store in CanvasContext state (not localStorage)
+- Store in CanvasContext state (not localStorage or Browser Clipboard API)
+- **Rationale:** Simple, works in all contexts, no permissions needed. Losing clipboard on refresh is standard web behavior.
 - Store full rectangle data (x, y, width, height, color)
 - Clear on sign out
 
 **Paste Behavior:**
-- Offset by +20px x and y from original
+- Offset by **fixed +20px x and y** from original
+- **Rationale:** Simple, predictable, matches Figma/Sketch behavior
 - Clamp to canvas bounds if would go outside
 - Auto-select the pasted rectangle
 - Can paste same rectangle multiple times (clipboard persists until next copy)
@@ -398,8 +400,10 @@ case 'duplicateRectangle':
 **Color Picker Enhancements:**
 - Keep existing 3-color buttons
 - Add hex input field with validation
-- Store color history in Firebase under `/users/{userId}/colorHistory`
+- Store color history in **localStorage** (not Firebase)
+- **Rationale:** Color history doesn't need cross-device sync. localStorage is instant, free, and simpler.
 - Show history in expandable section
+- Store as `collabcanvas_colorHistory` key
 
 **Shortcuts Modal:**
 - Press `?` to show modal overlay
@@ -413,10 +417,10 @@ case 'duplicateRectangle':
 ```typescript
 import React, { useState, useEffect } from 'react'
 import { useCanvas } from '../../contexts/CanvasContext'
-import { useAuth } from '../../contexts/AuthContext'
 import { RECTANGLE_COLORS } from '../../utils/constants'
-import { dbRef, dbGet, dbSet } from '../../services/firebaseService'
 import './EnhancedColorPicker.css'
+
+const COLOR_HISTORY_KEY = 'collabcanvas_colorHistory'
 
 interface EnhancedColorPickerProps {
   selectedRectangleId: string | null
@@ -426,24 +430,22 @@ const EnhancedColorPicker: React.FC<EnhancedColorPickerProps> = ({
   selectedRectangleId
 }) => {
   const { changeRectangleColor } = useCanvas()
-  const { user } = useAuth()
   const [hexInput, setHexInput] = useState('')
   const [colorHistory, setColorHistory] = useState<string[]>([])
   const [showHistory, setShowHistory] = useState(false)
 
-  // Load color history from Firebase on mount
+  // Load color history from localStorage on mount
   useEffect(() => {
-    if (user) {
-      const loadHistory = async () => {
-        const historyRef = dbRef(`users/${user.uid}/colorHistory`)
-        const snapshot = await dbGet(historyRef)
-        if (snapshot.exists()) {
-          setColorHistory(snapshot.val())
-        }
+    const stored = localStorage.getItem(COLOR_HISTORY_KEY)
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored)
+        setColorHistory(Array.isArray(parsed) ? parsed : [])
+      } catch (e) {
+        console.error('Failed to parse color history:', e)
       }
-      loadHistory()
     }
-  }, [user])
+  }, [])
 
   const handleQuickColor = async (color: string) => {
     if (selectedRectangleId) {
@@ -467,15 +469,12 @@ const EnhancedColorPicker: React.FC<EnhancedColorPickerProps> = ({
     setHexInput('')
   }
 
-  const addToHistory = async (color: string) => {
-    if (!user) return
-    
+  const addToHistory = (color: string) => {
     const updated = [color, ...colorHistory.filter(c => c !== color)].slice(0, 10)
     setColorHistory(updated)
     
-    // Save to Firebase
-    const historyRef = dbRef(`users/${user.uid}/colorHistory`)
-    await dbSet(historyRef, updated)
+    // Save to localStorage
+    localStorage.setItem(COLOR_HISTORY_KEY, JSON.stringify(updated))
   }
 
   return (
@@ -572,10 +571,8 @@ const SHORTCUTS: Shortcut[] = [
   { keys: 'Arrow keys', description: 'Resize selected / Pan canvas', category: 'Edit' },
   
   // Layers (PR #3)
-  { keys: 'Cmd/Ctrl+]', description: 'Bring forward', category: 'Layers' },
-  { keys: 'Cmd/Ctrl+[', description: 'Send backward', category: 'Layers' },
-  { keys: 'Cmd/Ctrl+Shift+]', description: 'Bring to front', category: 'Layers' },
-  { keys: 'Cmd/Ctrl+Shift+[', description: 'Send to back', category: 'Layers' },
+  { keys: 'Cmd/Ctrl+]', description: 'Bring to front', category: 'Layers' },
+  { keys: 'Cmd/Ctrl+[', description: 'Send to back', category: 'Layers' },
   
   // Help
   { keys: '?', description: 'Show keyboard shortcuts', category: 'Help' },
@@ -691,24 +688,8 @@ import EnhancedColorPicker from '../canvas/EnhancedColorPicker'
 <EnhancedColorPicker selectedRectangleId={selectedRectangleId} />
 ```
 
-#### `/database.rules.json`
-Add colorHistory to user data:
-
-```json
-{
-  "rules": {
-    "users": {
-      "$userId": {
-        ".read": "auth.uid === $userId",
-        ".write": "auth.uid === $userId",
-        "colorHistory": {
-          ".validate": "newData.isString() || newData.hasChildren()"
-        }
-      }
-    }
-  }
-}
-```
+#### No database changes needed
+Color history uses localStorage, so no Firebase rules or schema updates needed.
 
 ### Testing Checklist
 
@@ -717,7 +698,8 @@ Add colorHistory to user data:
 - [ ] Hex codes with or without # work (e.g., FF5733 or #FF5733)
 - [ ] Invalid hex codes show error message
 - [ ] Color history saves last 10 colors
-- [ ] Color history persists across sessions (Firebase)
+- [ ] Color history persists across sessions (localStorage)
+- [ ] Color history persists across page refreshes
 - [ ] Color history only shows when user has history
 - [ ] Quick color buttons still work
 - [ ] All disabled when no rectangle selected
@@ -731,7 +713,7 @@ Add colorHistory to user data:
 ### Success Criteria
 - ✅ Enhanced color picker works with hex input and history
 - ✅ Keyboard shortcuts modal is helpful and complete
-- ✅ Color history syncs across sessions
+- ✅ Color history persists in localStorage (instant, no Firebase overhead)
 - ✅ Real-time color changes sync to all users
 - ✅ No breaking changes
 - ✅ Code is clean and accessible
@@ -753,20 +735,22 @@ Add colorHistory to user data:
 
 ### What This PR Delivers
 
-Z-Index system with 4 layer operations:
-1. **Bring Forward** (`Cmd+]`): Move up one layer
-2. **Send Backward** (`Cmd+[`): Move down one layer  
-3. **Bring to Front** (`Cmd+Shift+]`): Move to top
-4. **Send to Back** (`Cmd+Shift+[`): Move to bottom
+Z-Index system with **2 layer operations** (simplified):
+1. **Bring to Front** (`Cmd+]`): Move to top layer
+2. **Send to Back** (`Cmd+[`): Move to bottom layer
+
+**Rationale for simplification:** Most users only use front/back operations. Forward/backward add complexity for minimal benefit. Can add later if needed.
 
 Plus AI support for "bring it to front", "send it to the back", etc.
 
 ### Implementation Strategy
 
-**Z-Index Assignment:**
-- New rectangles get `maxZIndex + 1` (always created on top)
-- Start at 0, increment by 1
-- Operations swap z-index values (maintain compactness)
+**Z-Index Assignment (with gaps for efficiency):**
+- New rectangles get `maxZIndex + 1000` (always created on top)
+- **Start at 1000, increment by 1000**
+- **Rationale:** Gaps between z-indexes allow O(1) operations - only update 1-2 rectangles instead of all rectangles. Critical for performance with 100+ shapes.
+- Bring to Front: Set to `maxZIndex + 1000`
+- Send to Back: Set to `minZIndex - 1000`
 
 **Rendering:**
 - Sort rectangles by zIndex before rendering
@@ -797,7 +781,7 @@ export interface Rectangle {
   zIndex: number  // NEW
 }
 
-// Helper to get next zIndex
+// Helper to get next zIndex (with gaps)
 const getNextZIndex = async (): Promise<number> => {
   const rectanglesRef = dbRef(DB_PATHS.RECTANGLES)
   const snapshot = await dbGet(rectanglesRef)
@@ -812,7 +796,26 @@ const getNextZIndex = async (): Promise<number> => {
     })
   }
   
-  return maxZIndex + 1
+  // Increment by 1000 (not 1) to maintain gaps
+  return maxZIndex + 1000
+}
+
+// Helper to get min zIndex
+const getMinZIndex = async (): Promise<number> => {
+  const rectanglesRef = dbRef(DB_PATHS.RECTANGLES)
+  const snapshot = await dbGet(rectanglesRef)
+  
+  let minZIndex = Infinity
+  if (snapshot.exists()) {
+    snapshot.forEach((child) => {
+      const rect = child.val()
+      if (rect.zIndex < minZIndex) {
+        minZIndex = rect.zIndex
+      }
+    })
+  }
+  
+  return minZIndex === Infinity ? 0 : minZIndex
 }
 
 // UPDATE: createRectangle to include zIndex
@@ -831,85 +834,20 @@ export const createRectangle = async (input: RectangleInput): Promise<Rectangle 
   return rectangle
 }
 
-// NEW: Bring to front (set zIndex to max + 1)
+// NEW: Bring to front (set zIndex to max + 1000)
+// O(1) operation - only updates ONE rectangle
 export const bringToFront = async (rectangleId: string): Promise<void> => {
   const maxZIndex = await getMaxZIndex()
   const rectangleRef = dbRef(`${DB_PATHS.RECTANGLES}/${rectangleId}`)
-  await dbUpdate(rectangleRef, { zIndex: maxZIndex + 1 })
+  await dbUpdate(rectangleRef, { zIndex: maxZIndex + 1000 })
 }
 
-// NEW: Send to back (set zIndex to 0, increment all others)
+// NEW: Send to back (set zIndex to min - 1000)
+// O(1) operation - only updates ONE rectangle
 export const sendToBack = async (rectangleId: string): Promise<void> => {
-  const rectanglesRef = dbRef(DB_PATHS.RECTANGLES)
-  const snapshot = await dbGet(rectanglesRef)
-  
-  if (!snapshot.exists()) return
-  
-  const updates: Record<string, number> = {}
-  snapshot.forEach((child) => {
-    const rect = child.val()
-    if (child.key === rectangleId) {
-      updates[`${child.key}/zIndex`] = 0
-    } else {
-      updates[`${child.key}/zIndex`] = (rect.zIndex || 0) + 1
-    }
-  })
-  
-  await dbUpdate(rectanglesRef, updates)
-}
-
-// NEW: Bring forward (swap with next higher)
-export const bringForward = async (rectangleId: string): Promise<void> => {
-  const rectanglesRef = dbRef(DB_PATHS.RECTANGLES)
-  const snapshot = await dbGet(rectanglesRef)
-  
-  if (!snapshot.exists()) return
-  
-  const rectangles: Rectangle[] = []
-  snapshot.forEach((child) => rectangles.push(child.val()))
-  
-  const current = rectangles.find(r => r.id === rectangleId)
-  if (!current) return
-  
-  // Find next higher zIndex
-  const nextHigher = rectangles
-    .filter(r => r.zIndex > current.zIndex)
-    .sort((a, b) => a.zIndex - b.zIndex)[0]
-  
-  if (!nextHigher) return // Already at top
-  
-  // Swap
-  await dbUpdate(rectanglesRef, {
-    [`${current.id}/zIndex`]: nextHigher.zIndex,
-    [`${nextHigher.id}/zIndex`]: current.zIndex
-  })
-}
-
-// NEW: Send backward (swap with next lower)
-export const sendBackward = async (rectangleId: string): Promise<void> => {
-  const rectanglesRef = dbRef(DB_PATHS.RECTANGLES)
-  const snapshot = await dbGet(rectanglesRef)
-  
-  if (!snapshot.exists()) return
-  
-  const rectangles: Rectangle[] = []
-  snapshot.forEach((child) => rectangles.push(child.val()))
-  
-  const current = rectangles.find(r => r.id === rectangleId)
-  if (!current) return
-  
-  // Find next lower zIndex
-  const nextLower = rectangles
-    .filter(r => r.zIndex < current.zIndex)
-    .sort((a, b) => b.zIndex - a.zIndex)[0]
-  
-  if (!nextLower) return // Already at bottom
-  
-  // Swap
-  await dbUpdate(rectanglesRef, {
-    [`${current.id}/zIndex`]: nextLower.zIndex,
-    [`${nextLower.id}/zIndex`]: current.zIndex
-  })
+  const minZIndex = await getMinZIndex()
+  const rectangleRef = dbRef(`${DB_PATHS.RECTANGLES}/${rectangleId}`)
+  await dbUpdate(rectangleRef, { zIndex: minZIndex - 1000 })
 }
 ```
 
@@ -921,8 +859,6 @@ interface CanvasContextType {
   // ... existing
   bringToFront: (rectangleId: string) => Promise<void>
   sendToBack: (rectangleId: string) => Promise<void>
-  bringForward: (rectangleId: string) => Promise<void>
-  sendBackward: (rectangleId: string) => Promise<void>
 }
 
 const bringToFront = useCallback(async (rectangleId: string) => {
@@ -942,22 +878,6 @@ const sendToBack = useCallback(async (rectangleId: string) => {
     setError('Failed to send to back')
   }
 }, [showToast])
-
-const bringForward = useCallback(async (rectangleId: string) => {
-  try {
-    await canvasService.bringForward(rectangleId)
-  } catch (err) {
-    setError('Failed to bring forward')
-  }
-}, [])
-
-const sendBackward = useCallback(async (rectangleId: string) => {
-  try {
-    await canvasService.sendBackward(rectangleId)
-  } catch (err) {
-    setError('Failed to send backward')
-  }
-}, [])
 ```
 
 #### `/src/components/canvas/Canvas.tsx`
@@ -973,26 +893,8 @@ const sortedRectangles = useMemo(() => {
 const handleKeyDown = useCallback((e: KeyboardEvent) => {
   // ... existing shortcuts
   
-  // Bring Forward: Cmd+]
-  if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === ']') {
-    e.preventDefault()
-    if (selectedRectangleId) {
-      bringForward(selectedRectangleId)
-    }
-    return
-  }
-  
-  // Send Backward: Cmd+[
-  if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === '[') {
-    e.preventDefault()
-    if (selectedRectangleId) {
-      sendBackward(selectedRectangleId)
-    }
-    return
-  }
-  
-  // Bring to Front: Cmd+Shift+]
-  if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === ']') {
+  // Bring to Front: Cmd+]
+  if ((e.metaKey || e.ctrlKey) && e.key === ']') {
     e.preventDefault()
     if (selectedRectangleId) {
       bringToFront(selectedRectangleId)
@@ -1000,15 +902,15 @@ const handleKeyDown = useCallback((e: KeyboardEvent) => {
     return
   }
   
-  // Send to Back: Cmd+Shift+[
-  if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === '[') {
+  // Send to Back: Cmd+[
+  if ((e.metaKey || e.ctrlKey) && e.key === '[') {
     e.preventDefault()
     if (selectedRectangleId) {
       sendToBack(selectedRectangleId)
     }
     return
   }
-}, [selectedRectangleId, bringForward, sendBackward, bringToFront, sendToBack])
+}, [selectedRectangleId, bringToFront, sendToBack])
 
 // Render sorted rectangles
 <Layer>
@@ -1077,18 +979,16 @@ case 'sendToBack':
 ### Testing Checklist
 
 **Manual Testing:**
-- [ ] New rectangles appear on top of existing ones
-- [ ] Bring Forward (`Cmd+]`) moves rectangle up one layer
-- [ ] Send Backward (`Cmd+[`) moves rectangle down one layer
-- [ ] Bring to Front (`Cmd+Shift+]`) moves to top
-- [ ] Send to Back (`Cmd+Shift+[`) moves to bottom
+- [ ] New rectangles appear on top of existing ones (zIndex increments by 1000)
+- [ ] Bring to Front (`Cmd+]`) moves rectangle to top
+- [ ] Send to Back (`Cmd+[`) moves rectangle to bottom
 - [ ] Layer operations work when rectangles overlap
-- [ ] At top: bring forward does nothing gracefully
-- [ ] At bottom: send backward does nothing gracefully
+- [ ] Can repeatedly bring to front / send to back (z-index gaps allow this)
 - [ ] Keyboard shortcuts prevented when no selection
 - [ ] Keyboard shortcuts prevented during AI processing
-- [ ] Layer changes sync to all users in real-time
+- [ ] Layer changes sync to all users in real-time (only 1 rectangle updated, not all)
 - [ ] Visual rendering respects zIndex order
+- [ ] Performance is instant even with 100+ rectangles
 - [ ] No console errors
 
 **AI Testing:**
@@ -1098,13 +998,14 @@ case 'sendToBack':
 - [ ] AI layer operations sync to all users
 
 ### Success Criteria
-- ✅ All 4 layer operations work correctly
-- ✅ zIndex properly assigned to all rectangles
+- ✅ Both layer operations work correctly (front/back)
+- ✅ zIndex properly assigned with gaps (1000, 2000, 3000...)
+- ✅ Layer operations are O(1) - only update 1 rectangle
 - ✅ Keyboard shortcuts implemented and work smoothly
 - ✅ AI agent supports layer commands
 - ✅ Real-time sync verified
 - ✅ Visual stacking order is correct
-- ✅ Performance acceptable with 50+ overlapping rectangles
+- ✅ Performance excellent with 100+ overlapping rectangles
 - ✅ No console errors
 
 ---
