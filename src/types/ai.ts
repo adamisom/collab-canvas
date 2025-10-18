@@ -47,9 +47,54 @@ export interface ProcessAICommandResponse {
   message?: string; // Optional AI explanation or error message
 }
 
+// Tool parameter types
+export type CreateRectangleParams = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  color: string;
+};
+
+export type ChangeColorParams = {
+  shapeId?: string;
+  color: string;
+};
+
+export type MoveRectangleParams = {
+  shapeId?: string;
+  x: number;
+  y: number;
+};
+
+export type ResizeRectangleParams = {
+  shapeId?: string;
+  width: number;
+  height: number;
+};
+
+export type DeleteRectangleParams = {
+  shapeId?: string;
+};
+
+export type CreateMultipleRectanglesParams = {
+  count: number;
+  color: string;
+  layout?: 'row' | 'column' | 'grid';
+  offsetPixels?: number;
+};
+
+export type AICommandParameters =
+  | CreateRectangleParams
+  | ChangeColorParams
+  | MoveRectangleParams
+  | ResizeRectangleParams
+  | DeleteRectangleParams
+  | CreateMultipleRectanglesParams;
+
 export interface AICommand {
   tool: string;
-  parameters: Record<string, any>;
+  parameters: AICommandParameters;
 }
 
 // Command snapshot captured at submission time (immutable)

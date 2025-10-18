@@ -3,7 +3,6 @@
  * Run with: node test-function.js
  */
 
-// eslint-disable-next-line
 // This script can only run locally-with fake process.env values-so it's okay
 import admin from 'firebase-admin';
 

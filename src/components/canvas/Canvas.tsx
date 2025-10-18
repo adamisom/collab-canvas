@@ -1,5 +1,7 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react'
 import { Stage, Layer } from 'react-konva'
+import type Konva from 'konva'
+import type { KonvaEventObject } from 'konva/lib/Node'
 import { useCanvas } from '../../contexts/CanvasContext'
 import { useCursors } from '../../hooks/useCursors'
 import { VIEWPORT_WIDTH, VIEWPORT_HEIGHT } from '../../utils/constants'
@@ -24,7 +26,7 @@ const Canvas: React.FC<CanvasProps> = ({
   width = VIEWPORT_WIDTH, 
   height = VIEWPORT_HEIGHT 
 }) => {
-  const stageRef = useRef<any>(null)
+  const stageRef = useRef<Konva.Stage | null>(null)
   
   // Canvas viewport state
   const [isDragging, setIsDragging] = useState(false)
@@ -92,7 +94,7 @@ const Canvas: React.FC<CanvasProps> = ({
   }, [width, height, updateViewportInfo])
 
   // Handle mouse move for cursor broadcasting
-  const handleMouseMove = useCallback((e: any) => {
+  const handleMouseMove = useCallback((e: KonvaEventObject<MouseEvent>) => {
     if (isDragging || isRectangleDragging || isRectangleResizing) return // Don't broadcast while panning, dragging, or resizing
 
     const stage = e.target.getStage()
@@ -114,7 +116,7 @@ const Canvas: React.FC<CanvasProps> = ({
   }, [updateCursor, getCurrentStagePosition, getCurrentStageScale, isDragging, isRectangleDragging, isRectangleResizing])
 
   // Handle wheel zoom
-  const handleWheel = useCallback((e: any) => {
+  const handleWheel = useCallback((e: KonvaEventObject<WheelEvent>) => {
     e.evt.preventDefault()
     
     if (!stageRef.current) return
@@ -152,7 +154,7 @@ const Canvas: React.FC<CanvasProps> = ({
   }, [sendViewportInfo])
 
   // Handle drag start
-  const handleDragStart = useCallback((e: any) => {
+  const handleDragStart = useCallback((e: KonvaEventObject<MouseEvent>) => {
     // Don't allow stage dragging if we're interacting with rectangles
     if (isRectangleDragging || isRectangleResizing) {
       stopEventPropagation(e)
@@ -171,7 +173,7 @@ const Canvas: React.FC<CanvasProps> = ({
   }, [sendViewportInfo])
 
   // Handle stage click (for rectangle creation and deselection)
-  const handleStageClick = useCallback(async (e: any) => {
+  const handleStageClick = useCallback(async (e: KonvaEventObject<MouseEvent>) => {
     // Only handle clicks on the stage background (not on shapes)
     if (e.target === e.target.getStage()) {
       // Deselect any selected rectangle

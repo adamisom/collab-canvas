@@ -99,7 +99,7 @@ export const processAICommand = functions.https.onCall(
       
       // Return structured commands and optional message
       const response: ProcessAICommandResponse = {
-        commands: toolCalls.map((call: any) => ({
+        commands: toolCalls.map((call) => ({
           tool: call.toolName,
           parameters: call.args,
         })),
@@ -107,9 +107,12 @@ export const processAICommand = functions.https.onCall(
       };
 
       return response;
-    } catch (error: any) {
+    } catch (error: unknown) {
+      // Type guard for errors with message property
+      const errorMessage = error instanceof Error ? error.message : String(error);
+
       // Handle timeout
-      if (error.message === "AI request timeout") {
+      if (errorMessage === "AI request timeout") {
         throw new functions.https.HttpsError(
           "deadline-exceeded",
           "AI service temporarily unavailable. Please try again."
@@ -117,7 +120,7 @@ export const processAICommand = functions.https.onCall(
       }
 
       // Handle OpenAI API errors
-      if (error.message?.includes("API key")) {
+      if (errorMessage.includes("API key")) {
         throw new functions.https.HttpsError(
           "failed-precondition",
           "AI service configuration error"

@@ -10,7 +10,13 @@ import type {
   CanvasState, 
   ViewportInfo, 
   SelectedShape, 
-  AICommand 
+  AICommand,
+  CreateRectangleParams,
+  ChangeColorParams,
+  MoveRectangleParams,
+  ResizeRectangleParams,
+  DeleteRectangleParams,
+  CreateMultipleRectanglesParams
 } from '../types/ai'
 import { 
   DEFAULT_RECT, 
@@ -96,27 +102,27 @@ export class CanvasCommandExecutor {
 
     switch (tool) {
       case 'createRectangle':
-        await this.executeCreateRectangle(parameters)
+        await this.executeCreateRectangle(parameters as CreateRectangleParams)
         break
 
       case 'changeColor':
-        await this.executeChangeColor(parameters, createdRectangleId)
+        await this.executeChangeColor(parameters as ChangeColorParams, createdRectangleId)
         break
 
       case 'moveRectangle':
-        await this.executeMoveRectangle(parameters, createdRectangleId)
+        await this.executeMoveRectangle(parameters as MoveRectangleParams, createdRectangleId)
         break
 
       case 'resizeRectangle':
-        await this.executeResizeRectangle(parameters, createdRectangleId)
+        await this.executeResizeRectangle(parameters as ResizeRectangleParams, createdRectangleId)
         break
 
       case 'deleteRectangle':
-        await this.executeDeleteRectangle(parameters, createdRectangleId)
+        await this.executeDeleteRectangle(parameters as DeleteRectangleParams, createdRectangleId)
         break
 
       case 'createMultipleRectangles':
-        await this.executeCreateMultipleRectangles(parameters)
+        await this.executeCreateMultipleRectangles(parameters as CreateMultipleRectanglesParams)
         break
 
       default:
@@ -127,7 +133,7 @@ export class CanvasCommandExecutor {
   /**
    * Create a single rectangle
    */
-  private async executeCreateRectangle(params: any): Promise<Rectangle | null> {
+  private async executeCreateRectangle(params: CreateRectangleParams): Promise<Rectangle | null> {
     const x = this.clampNumber(params.x, CANVAS_BOUNDS.MIN_X, CANVAS_BOUNDS.MAX_X)
     const y = this.clampNumber(params.y, CANVAS_BOUNDS.MIN_Y, CANVAS_BOUNDS.MAX_Y)
     const width = this.clampNumber(
@@ -166,7 +172,7 @@ export class CanvasCommandExecutor {
   /**
    * Change color of existing rectangle
    */
-  private async executeChangeColor(params: any, createdRectangleId?: string): Promise<void> {
+  private async executeChangeColor(params: ChangeColorParams, createdRectangleId?: string): Promise<void> {
     const shapeId = createdRectangleId || params.shapeId
 
     // Validate rectangle exists
@@ -185,7 +191,7 @@ export class CanvasCommandExecutor {
   /**
    * Move rectangle to new position
    */
-  private async executeMoveRectangle(params: any, createdRectangleId?: string): Promise<void> {
+  private async executeMoveRectangle(params: MoveRectangleParams, createdRectangleId?: string): Promise<void> {
     const shapeId = createdRectangleId || params.shapeId
 
     // Validate rectangle exists
@@ -202,7 +208,7 @@ export class CanvasCommandExecutor {
   /**
    * Resize existing rectangle
    */
-  private async executeResizeRectangle(params: any, createdRectangleId?: string): Promise<void> {
+  private async executeResizeRectangle(params: ResizeRectangleParams, createdRectangleId?: string): Promise<void> {
     const shapeId = createdRectangleId || params.shapeId
 
     // Validate rectangle exists
@@ -227,7 +233,7 @@ export class CanvasCommandExecutor {
   /**
    * Delete existing rectangle
    */
-  private async executeDeleteRectangle(params: any, createdRectangleId?: string): Promise<void> {
+  private async executeDeleteRectangle(params: DeleteRectangleParams, createdRectangleId?: string): Promise<void> {
     const shapeId = createdRectangleId || params.shapeId
 
     // Validate rectangle exists
@@ -241,7 +247,7 @@ export class CanvasCommandExecutor {
   /**
    * Create multiple rectangles with automatic spacing
    */
-  private async executeCreateMultipleRectangles(params: any): Promise<void> {
+  private async executeCreateMultipleRectangles(params: CreateMultipleRectanglesParams): Promise<void> {
     const count = Math.min(params.count, AI_CONSTANTS.MAX_BATCH_COUNT)
     const layout = params.layout || 'row'
     const offsetPixels = this.clampNumber(
@@ -333,8 +339,8 @@ export class CanvasCommandExecutor {
   /**
    * Validate color is in allowed list
    */
-  private isValidColor(color: string): boolean {
-    return VALID_AI_COLORS.includes(color as any)
+  private isValidColor(color: string): color is typeof VALID_AI_COLORS[number] {
+    return VALID_AI_COLORS.includes(color as typeof VALID_AI_COLORS[number])
   }
 
   /**

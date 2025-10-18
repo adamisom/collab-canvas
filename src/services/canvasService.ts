@@ -281,7 +281,7 @@ export class CanvasService {
       }
       
       const rectangles = snapshot.val() as Record<string, Rectangle>
-      const updates: Record<string, any> = {}
+      const updates: Record<string, null | number | string> = {}
       
       // Find all rectangles selected by this user and prepare batch update
       Object.entries(rectangles).forEach(([rectangleId, rectangle]) => {

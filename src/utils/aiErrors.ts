@@ -7,15 +7,28 @@
 export interface AIError {
   message: string
   retryable: boolean
-  originalError?: any
+  originalError?: unknown
+}
+
+// Type guards for error objects
+function isErrorWithCode(error: unknown): error is { code: string; message?: string } {
+  return typeof error === 'object' && error !== null && 'code' in error;
+}
+
+function isErrorWithMessage(error: unknown): error is { message: string } {
+  return typeof error === 'object' && error !== null && 'message' in error && typeof (error as { message: unknown }).message === 'string';
+}
+
+function isErrorWithName(error: unknown): error is { name: string } {
+  return typeof error === 'object' && error !== null && 'name' in error;
 }
 
 /**
  * Map error to user-friendly message and classify as retryable
  */
-export function mapAIError(error: any): AIError {
+export function mapAIError(error: unknown): AIError {
   // Handle Firebase HttpsError (from Cloud Function)
-  if (error.code) {
+  if (isErrorWithCode(error)) {
     switch (error.code) {
       case 'unauthenticated':
         return {
@@ -84,7 +97,7 @@ export function mapAIError(error: any): AIError {
   }
 
   // Handle executor errors (thrown by canvasCommandExecutor)
-  if (error.message) {
+  if (isErrorWithMessage(error)) {
     const msg = error.message.toLowerCase()
 
     // Rectangle not found errors (non-retryable)
@@ -123,7 +136,7 @@ export function mapAIError(error: any): AIError {
   }
 
   // Network errors (retryable)
-  if (error.name === 'NetworkError' || error.message?.includes('network')) {
+  if (isErrorWithName(error) && error.name === 'NetworkError') {
     return {
       message: 'Network error. Please check your connection and try again.',
       retryable: true,

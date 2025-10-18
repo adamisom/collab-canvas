@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { Rect, Group } from 'react-konva'
+import type { KonvaEventObject } from 'konva/lib/Node'
 import type { Rectangle } from '../../services/canvasService'
 import { DEFAULT_RECT, SELECTION_COLORS, RESIZE_DIRECTIONS, getRectangleBorderColor } from '../../utils/constants'
 import { calculateResizeHandlePositions, calculateResizeUpdate } from '../../utils/canvasHelpers'
@@ -42,14 +43,14 @@ const RectangleComponent: React.FC<RectangleProps> = ({
   // Check if rectangle is selected by another user
   const isSelectedByOther = rectangle.selectedBy && rectangle.selectedBy !== user?.uid
 
-  const handleClick = (e: any) => {
+  const handleClick = (e: KonvaEventObject<MouseEvent>) => {
     stopEventPropagation(e)
     if (onClick && !isResizing) {
       onClick(rectangle)
     }
   }
 
-  const handleDragStart = (e: any) => {
+  const handleDragStart = (e: KonvaEventObject<MouseEvent>) => {
     if (isResizing) return // Don't drag while resizing
     
     stopEventPropagation(e)
@@ -60,7 +61,7 @@ const RectangleComponent: React.FC<RectangleProps> = ({
     }
   }
 
-  const handleDragEnd = (e: any) => {
+  const handleDragEnd = (e: KonvaEventObject<MouseEvent>) => {
     if (isResizing) return // Don't drag while resizing
     
     stopEventPropagation(e)
