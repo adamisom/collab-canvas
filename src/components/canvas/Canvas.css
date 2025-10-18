@@ -439,10 +439,11 @@
 }
 
 /* Keyboard Shortcuts Collapsible Section */
-.canvas-shortcuts {
+.keyboard-shortcuts {
   padding: 12px 16px;
   background: #f8fafc;
   border-top: 1px solid #e2e8f0;
+  margin-top: 16px;
 }
 
 .shortcuts-toggle {
@@ -489,7 +490,7 @@
 }
 
 @media (max-width: 768px) {
-  .canvas-shortcuts {
+  .keyboard-shortcuts {
     display: none;
   }
 }
