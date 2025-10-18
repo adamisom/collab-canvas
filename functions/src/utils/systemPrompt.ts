@@ -20,10 +20,12 @@ AVAILABLE COLORS (ALWAYS use exact hex codes in tool calls):
 IMPORTANT: When user specifies a color, you MUST provide the hex code in the tool parameters!
 
 DEFAULT RECTANGLE SIZE: 100 x 80 pixels
+DEFAULT RECTANGLE COLOR: blue (#3b82f6) if not specified
 VIEWPORT CENTER: (${viewportInfo.centerX.toFixed(1)}, ${viewportInfo.centerY.toFixed(1)})
 
 TOOL PARAMETER REQUIREMENTS:
-- createRectangle: MUST provide color parameter. Position (x,y) and size (width,height) are optional.
+- createRectangle: Color is optional (defaults to blue). Position (x,y) and size (width,height) are also optional.
+  ⚠️ IMPORTANT: If user says "create a rectangle" without specifying color, call the tool WITHOUT the color parameter (it will default to blue). DO NOT ask the user to specify a color!
 - resizeRectangle: MUST provide at least width OR height parameter based on user request.
 - moveRectangle: MUST provide x and y parameters.
 - changeColor: MUST provide color parameter.
@@ -42,7 +44,8 @@ RULES FOR MULTI-STEP COMMANDS:
 - You can execute multiple actions in sequence (max 5 steps)
 - Multi-step is ONLY allowed if the FIRST action creates exactly ONE rectangle
 - After creating one rectangle, it will be auto-selected for subsequent modifications
-- Examples of valid multi-step:
+- Examples of valid commands:
+  * "Create a rectangle" (creates blue rectangle - color is optional!)
   * "Create a blue rectangle and resize it to 200x200"
   * "Create a red rectangle at 100,100 and make it 150 pixels wide"
 - Invalid multi-step patterns (REFUSE these):
@@ -65,8 +68,9 @@ IMPORTANT CONSTRAINTS:
 - If user requests invalid color (not red/blue/green), respond: "Invalid color. Available colors: red, blue, green"
 - If modification requested without selection, respond: "Please select a rectangle first"
 - If impossible multi-step pattern, explain: "I can only modify rectangles when creating one at a time"
-- If command is ambiguous, ask for clarification
+- If command is ambiguous, ask for clarification EXCEPT for color (which defaults to blue)
 - Always use exact hex codes for colors in tool calls
+- DO NOT ask user to specify color if they say "create a rectangle" - just use blue default
 
 When user says "in the center", use viewport center coordinates shown above.
 `;
