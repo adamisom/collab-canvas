@@ -1428,7 +1428,7 @@ import AIChat from './components/ai/AIChat';
 - Verify real-time sync
 
 **Manual Testing Notes:**
-- Notes: Works. I did make the default position left of center though. For "Create a blue rectangle".
+- Notes: Works. I did make the default position left of and above center, though.
 - Bugs found & fixes applied: N/A
 
 ---
@@ -1441,133 +1441,12 @@ import AIChat from './components/ai/AIChat';
 - Verify real-time sync
 
 **Manual Testing Notes:**
-- Notes: 
-- Bugs found & fixes applied: 
+- Notes: Works
+- Bugs found & fixes applied: N/A
 
 ---
 
-#### Scenario 3: No Selection Error
-- User has no rectangle selected
-- User types "Make it bigger"
-- AI returns error "Please select a rectangle first"
-- Error message displays in UI
-
-**Manual Testing Notes:**
-- Notes: 
-- Bugs found & fixes applied: 
-
----
-
-#### Scenario 4: Invalid Color Error
-- User types "Create a yellow rectangle"
-- AI returns error "Invalid color. Available colors: red, blue, green"
-- Error message displays in UI
-- No rectangle created
-
-**Manual Testing Notes:**
-- Notes: 
-- Bugs found & fixes applied: 
-
----
-
-#### Scenario 5: Move Rectangle
-- User selects a rectangle
-- User types "Move it to 400, 300"
-- AI calls `moveRectangle` with coordinates
-- Rectangle moves for all users
-
-**Manual Testing Notes:**
-- Notes: 
-- Bugs found & fixes applied: 
-
----
-
-#### Scenario 6: Resize Rectangle
-- User selects a rectangle
-- User types "Make it 200 by 150"
-- AI calls `resizeRectangle` with dimensions
-- Rectangle resizes for all users
-
-**Manual Testing Notes:**
-- Notes: 
-- Bugs found & fixes applied: 
-
----
-
-#### Scenario 7: Delete Rectangle
-- User selects a rectangle
-- User types "Delete it"
-- AI calls `deleteRectangle`
-- Rectangle removed for all users
-
-**Manual Testing Notes:**
-- Notes: 
-- Bugs found & fixes applied: 
-
----
-
-#### Scenario 8: Batch Creation
-- User types "Create 5 green rectangles"
-- AI calls `createMultipleRectangles` with count=5, color=#22c55e
-- 5 rectangles appear with offsets at viewport center
-- None are auto-selected
-- All rectangles sync to other users
-
-**Manual Testing Notes:**
-- Notes: 
-- Bugs found & fixes applied: 
-
----
-
-#### Scenario 9: Rate Limit
-- User reaches 1000 commands
-- User tries another command
-- Cloud Function blocks request
-- Error message displays: "AI command limit reached"
-
-**Manual Testing Notes:**
-- Notes: 
-- Bugs found & fixes applied: 
-
----
-
-#### Scenario 10: Canvas Limit
-- Canvas has 1000+ rectangles
-- User tries AI command
-- Cloud Function blocks request
-- Error message displays: "Canvas has too many rectangles"
-
-**Manual Testing Notes:**
-- Notes: 
-- Bugs found & fixes applied: 
-
----
-
-#### Scenario 11: Multi-User Concurrent Commands
-- User A types "Create a red rectangle"
-- User B types "Create a blue rectangle" (simultaneously)
-- Both rectangles created
-- Both sync to all users
-
-**Manual Testing Notes:**
-- Notes: 
-- Bugs found & fixes applied: 
-
----
-
-#### Scenario 12: Viewport Center Accuracy
-- User pans canvas to position (1000, 1000)
-- User zooms to 2x
-- User types "Create a rectangle"
-- Rectangle appears at visible viewport center (not 0,0)
-
-**Manual Testing Notes:**
-- Notes: 
-- Bugs found & fixes applied: 
-
----
-
-#### Scenario 13: Auto-Selection (Single Rectangle)
+#### Scenario 3: Auto-Selection (Single Rectangle)
 - User types "Create a blue rectangle"
 - AI creates rectangle
 - Rectangle is automatically selected (red border)
@@ -1575,12 +1454,109 @@ import AIChat from './components/ai/AIChat';
 - Rectangle resizes successfully
 
 **Manual Testing Notes:**
-- Notes: 
+- Notes: Works
+- Bugs found & fixes applied: N/A
+
+---
+
+#### Scenario 4: No Selection Error
+- User has no rectangle selected
+- User types "Make it bigger"
+- AI returns error "Please select a rectangle first"
+- Error message displays in UI
+
+**Manual Testing Notes:**
+- Notes: Works
+- Bugs found & fixes applied: N/A
+
+---
+
+#### Scenario 5: Invalid Color Error
+- User types "Create a yellow rectangle"
+- AI returns error "Invalid color. Available colors: red, blue, green"
+- Error message displays in UI
+- No rectangle created
+
+**Manual Testing Notes:**
+- Notes: Works
+- Bugs found & fixes applied: N/A
+
+---
+
+#### Scenario 6: Move Rectangle
+- User selects a rectangle
+- User types "Move it to 400, 300"
+- AI calls `moveRectangle` with coordinates
+- Rectangle moves for all users
+
+**Manual Testing Notes:**
+- Notes: Works, note that it's coordinates so 0,0 is top left. Also tested (works): "Move it slightly left", "Move it way up"
+- Bugs found & fixes applied: N/A
+
+---
+
+#### Scenario 7: Resize Rectangle
+- User selects a rectangle
+- User types "Make it 200 by 150"
+- AI calls `resizeRectangle` with dimensions
+- Rectangle resizes for all users
+
+**Manual Testing Notes:**
+- Notes: Works
+- Bugs found & fixes applied: N/A
+
+---
+
+#### Scenario 8: Delete Rectangle
+- User selects a rectangle
+- User types "Delete it"
+- AI calls `deleteRectangle`
+- Rectangle removed for all users
+
+**Manual Testing Notes:**
+- Notes: Works
+- Bugs found & fixes applied: N/A
+
+---
+
+#### Scenario 9: Batch Creation
+- User types "Create 5 green rectangles"
+- AI calls `createMultipleRectangles` with count=5, color=#22c55e
+- 5 rectangles appear with offsets at viewport center
+- None are auto-selected
+- All rectangles sync to other users
+
+**Manual Testing Notes:**
+- Notes: Works. "Create 5 green rectangles" makes them in a horizontal line going right.
+- Bugs found & fixes applied: N/A
+
+---
+
+#### Scenario 10: Multi-User Concurrent Commands
+- User A types "Create a red rectangle"
+- User B types "Create a blue rectangle" (simultaneously)
+- Both rectangles created
+- Both sync to all users
+
+**Manual Testing Notes:**
+- Notes: (todo next) (also—important!—I didn't verify sync for #s 1-9)
 - Bugs found & fixes applied: 
 
 ---
 
-#### Scenario 14: No Auto-Selection (Multiple Rectangles)
+#### Scenario 11: Viewport Center Accuracy
+- User pans canvas to position (1000, 1000)
+- User zooms to 2x
+- User types "Create a rectangle"
+- Rectangle appears at visible viewport center (not 0,0)
+
+**Manual Testing Notes:**
+- Notes: (todo next)
+- Bugs found & fixes applied: 
+
+---
+
+#### Scenario 12: No Auto-Selection (Multiple Rectangles)
 - User types "Create 3 red rectangles"
 - AI creates 3 rectangles
 - None are selected
@@ -1593,7 +1569,7 @@ import AIChat from './components/ai/AIChat';
 
 ---
 
-#### Scenario 15: Multi-Step Command (Create + Modify)
+#### Scenario 13: Multi-Step Command (Create + Modify)
 - User types "Create a blue rectangle and resize it to 200x200"
 - AI returns 2 commands: [createRectangle, resizeRectangle]
 - Executor: Creates rectangle → Auto-selects → Resizes
@@ -1601,12 +1577,12 @@ import AIChat from './components/ai/AIChat';
 - Syncs to all users
 
 **Manual Testing Notes:**
-- Notes: 
-- Bugs found & fixes applied: 
+- Notes: Sorta, length/width not exact nor always changing from default.
+- Bugs found & fixes applied: todo
 
 ---
 
-#### Scenario 16: Multi-Step Command (Create + Multiple Modifications)
+#### Scenario 14: Multi-Step Command (Create + Multiple Modifications)
 - User types "Create a red rectangle, move it to 500,500, and make it 150 pixels wide"
 - AI returns 3 commands: [createRectangle, moveRectangle, resizeRectangle]
 - Executor: Creates → Auto-selects → Moves → Resizes
@@ -1614,16 +1590,42 @@ import AIChat from './components/ai/AIChat';
 - Syncs to all users
 
 **Manual Testing Notes:**
+- Notes: Sorta, length/width not exact nor always changing from default—and position didn't move.
+- Bugs found & fixes applied: todo
+
+---
+
+#### Scenario 15: Multi-Step Impossible Pattern
+- User types "Create 5 rectangles and make them all green"
+- AI detects impossible pattern (can't modify multiple)
+- AI returns message: "I can only modify rectangles when creating one at a time"
+- No commands executed
+
+**Manual Testing Notes:**
 - Notes: 
 - Bugs found & fixes applied: 
 
 ---
 
-#### Scenario 17: Multi-Step Impossible Pattern
-- User types "Create 5 rectangles and make them all green"
-- AI detects impossible pattern (can't modify multiple)
-- AI returns message: "I can only modify rectangles when creating one at a time"
-- No commands executed
+*These last five are hard to test.*
+
+#### Scenario 16: Rate Limit
+- User reaches 1000 commands
+- User tries another command
+- Cloud Function blocks request
+- Error message displays: "AI command limit reached"
+
+**Manual Testing Notes:**
+- Notes: 
+- Bugs found & fixes applied: 
+
+---
+
+#### Scenario 17: Canvas Limit
+- Canvas has 1000+ rectangles
+- User tries AI command
+- Cloud Function blocks request
+- Error message displays: "Canvas has too many rectangles"
 
 **Manual Testing Notes:**
 - Notes: 
