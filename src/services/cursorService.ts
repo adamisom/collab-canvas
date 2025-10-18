@@ -26,18 +26,19 @@ export interface CursorData {
 export class CursorService {
   private cursorsRef: DatabaseReference
   private throttledUpdateCursor: (userId: string, position: Omit<CursorPosition, 'userId'>) => void
-  private static readonly CURSOR_STALE_THRESHOLD_MS = 30000 // 30 seconds
+  private static readonly CURSOR_STALE_THRESHOLD_MS = 5000 // 5 seconds
 
   constructor() {
     this.cursorsRef = dbRef(firebaseDatabase, DB_PATHS.CURSORS)
     
     // Throttle cursor updates to avoid overwhelming Firebase
+    // Type assertion needed because throttle's generic constraint is too strict
     this.throttledUpdateCursor = throttle(
-      (userId: string, position: Omit<CursorPosition, 'userId'>) => {
+      ((userId: string, position: Omit<CursorPosition, 'userId'>) => {
         this.updateCursorImmediate(userId, position)
-      },
+      }) as (...args: unknown[]) => void,
       CURSOR_THROTTLE_MS
-    )
+    ) as (userId: string, position: Omit<CursorPosition, 'userId'>) => void
   }
 
   // Filter out stale cursors (older than threshold)

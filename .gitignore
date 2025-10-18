@@ -24,3 +24,7 @@ coverage/
 .firebase/
 firebase-debug.log
 firebase-debug.*.log
+
+# Functions
+functions/lib/
+functions/.runtimeconfig.json

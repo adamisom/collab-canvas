@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback, use
 import { canvasService } from '../services/canvasService'
 import type { Rectangle, RectangleInput } from '../services/canvasService'
 import { useAuth } from './AuthContext'
+import type { ViewportInfo } from '../shared/types'
 
 interface CanvasContextType {
   rectangles: Rectangle[]
@@ -9,6 +10,7 @@ interface CanvasContextType {
   loading: boolean
   error: string | null
   toastMessage: string | null
+  selectionLocked: boolean
   
   // Rectangle operations
   createRectangle: (x: number, y: number) => Promise<Rectangle | null>
@@ -19,6 +21,11 @@ interface CanvasContextType {
   
   // Selection operations
   selectRectangle: (rectangleId: string | null) => Promise<void>
+  setSelectionLocked: (locked: boolean) => void
+  
+  // Viewport operations (for AI agent)
+  getViewportInfo: () => ViewportInfo | null
+  updateViewportInfo: (info: ViewportInfo) => void
   
   // Utility operations
   clearError: () => void
@@ -28,6 +35,8 @@ interface CanvasContextType {
 
 const CanvasContext = createContext<CanvasContextType | null>(null)
 
+// Standard React context pattern: exporting hook with provider
+// eslint-disable-next-line react-refresh/only-export-components
 export const useCanvas = () => {
   const context = useContext(CanvasContext)
   if (!context) {
@@ -46,12 +55,16 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
+  const [selectionLocked, setSelectionLocked] = useState(false)
   
   // Use ref to access current selectedRectangleId in Firebase callback
   const selectedRectangleIdRef = useRef<string | null>(null)
   
   // Use ref to track previous user ID for cleanup
   const prevUserIdRef = useRef<string | null>(null)
+  
+  // Use ref to store viewport info (doesn't cause re-renders when updated)
+  const viewportInfoRef = useRef<ViewportInfo | null>(null)
   
   // Keep ref in sync with state
   useEffect(() => {
@@ -174,9 +187,25 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     }
   }, [selectedRectangleId])
 
+  // Get current viewport info (for AI agent)
+  const getViewportInfo = useCallback((): ViewportInfo | null => {
+    return viewportInfoRef.current
+  }, [])
+
+  // Update viewport info (called by Canvas component on pan/zoom/resize)
+  const updateViewportInfo = useCallback((info: ViewportInfo): void => {
+    viewportInfoRef.current = info
+  }, [])
+
   // Select or deselect a rectangle (with exclusive selection logic)
   const selectRectangle = useCallback(async (rectangleId: string | null) => {
     if (!user || !username) return
+    
+    // Don't allow selection changes when locked (during AI processing)
+    if (selectionLocked) {
+      console.log('Selection locked, ignoring selection change')
+      return
+    }
 
     // Deselect current rectangle first
     if (selectedRectangleId) {
@@ -215,7 +244,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     } else {
       setSelectedRectangleId(null)
     }
-  }, [user, username, selectedRectangleId, rectangles])
+  }, [user, username, selectedRectangleId, rectangles, selectionLocked])
 
   // Clear any error messages
   const clearError = useCallback(() => {
@@ -259,12 +288,16 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     loading,
     error,
     toastMessage,
+    selectionLocked,
     createRectangle,
     updateRectangle,
     resizeRectangle,
     deleteRectangle,
     changeRectangleColor,
     selectRectangle,
+    setSelectionLocked,
+    getViewportInfo,
+    updateViewportInfo,
     clearError,
     clearToast,
     refreshRectangles

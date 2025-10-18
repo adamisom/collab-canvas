@@ -1,0 +1,18 @@
+# Compiled JavaScript files
+lib/**/*.js
+lib/**/*.js.map
+
+# TypeScript v1 declaration files
+typings/
+
+# Node.js dependency directories
+node_modules/
+
+# Local development
+*.local
+.runtimeconfig.json
+
+# Environment variables in files that could contain secrets if the files exist
+.env
+.env.*
+!.env.example

@@ -1,3 +1,5 @@
+import { VALID_RECTANGLE_COLORS } from '../shared/types'
+
 // Canvas dimensions
 export const CANVAS_WIDTH = 3000
 export const CANVAS_HEIGHT = 3000
@@ -93,3 +95,16 @@ export const CANVAS_BOUNDS = {
   MAX_X: CANVAS_WIDTH,
   MAX_Y: CANVAS_HEIGHT
 } as const
+
+// AI Agent constants
+export const AI_CONSTANTS = {
+  MAX_CANVAS_RECTANGLES: 1000,
+  MAX_USER_COMMANDS: 1000,
+  DEFAULT_BATCH_OFFSET: 25,
+  MIN_BATCH_OFFSET: 10,
+  MAX_BATCH_OFFSET: 100,
+  MAX_BATCH_COUNT: 50
+} as const
+
+// Valid colors for AI commands (imported from shared types to ensure consistency with Cloud Function)
+export const VALID_AI_COLORS = VALID_RECTANGLE_COLORS

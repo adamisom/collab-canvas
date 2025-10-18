@@ -35,6 +35,11 @@ export interface RectangleInput {
   createdBy: string
 }
 
+/**
+ * Canvas Service
+ * Handles all Firebase Realtime Database operations for rectangles
+ * Provides CRUD operations and real-time synchronization
+ */
 export class CanvasService {
   private rectanglesRef: DatabaseReference
 
@@ -42,14 +47,16 @@ export class CanvasService {
     this.rectanglesRef = dbRef(firebaseDatabase, DB_PATHS.RECTANGLES)
   }
 
-  // Validate that a rectangle exists and return its data
+  /**
+   * Validate that a rectangle exists and return its data
+   * @private
+   */
   private async validateRectangleExists(rectangleId: string): Promise<Rectangle | null> {
     try {
       const rectangleRef = dbRef(firebaseDatabase, `${DB_PATHS.RECTANGLES}/${rectangleId}`)
       const snapshot = await dbGet(rectangleRef)
       
       if (!snapshot.exists()) {
-        console.log(`Rectangle ${rectangleId} no longer exists`)
         return null
       }
       
@@ -60,7 +67,11 @@ export class CanvasService {
     }
   }
 
-  // Create a new rectangle
+  /**
+   * Create a new rectangle in the database
+   * @param rectangleData - Rectangle properties (x, y, width, height, color, createdBy)
+   * @returns The created rectangle with generated ID
+   */
   async createRectangle(rectangleData: RectangleInput): Promise<Rectangle> {
     try {
       const now = Date.now()
@@ -86,13 +97,16 @@ export class CanvasService {
     }
   }
 
-  // Update an existing rectangle
+  /**
+   * Update an existing rectangle's properties
+   * @param rectangleId - ID of the rectangle to update
+   * @param updates - Partial rectangle updates (position, size, color, selection)
+   */
   async updateRectangle(rectangleId: string, updates: Partial<Omit<Rectangle, 'id' | 'createdBy' | 'createdAt'>>): Promise<void> {
     try {
       // Validate rectangle exists (handles race conditions)
       const existingRectangle = await this.validateRectangleExists(rectangleId)
       if (!existingRectangle) {
-        console.log(`Skipping update for non-existent rectangle ${rectangleId}`)
         return
       }
       
@@ -109,7 +123,15 @@ export class CanvasService {
     }
   }
 
-  // Resize an existing rectangle with validation
+  /**
+   * Resize a rectangle with optional position adjustment
+   * Validates dimensions against constraints (20-3000px)
+   * @param rectangleId - ID of the rectangle to resize
+   * @param newWidth - New width in pixels
+   * @param newHeight - New height in pixels
+   * @param newX - Optional new X position (for corner resizing)
+   * @param newY - Optional new Y position (for corner resizing)
+   */
   async resizeRectangle(
     rectangleId: string, 
     newWidth: number, 
@@ -121,7 +143,6 @@ export class CanvasService {
       // Validate rectangle exists (handles race conditions)
       const existingRectangle = await this.validateRectangleExists(rectangleId)
       if (!existingRectangle) {
-        console.log(`Skipping resize for non-existent rectangle ${rectangleId}`)
         return
       }
       
@@ -152,7 +173,10 @@ export class CanvasService {
     }
   }
 
-  // Delete a rectangle
+  /**
+   * Delete a rectangle from the database
+   * @param rectangleId - ID of the rectangle to delete
+   */
   async deleteRectangle(rectangleId: string): Promise<void> {
     try {
       const rectangleRef = dbRef(firebaseDatabase, `${DB_PATHS.RECTANGLES}/${rectangleId}`)
@@ -163,7 +187,10 @@ export class CanvasService {
     }
   }
 
-  // Get all rectangles (one-time read)
+  /**
+   * Get all rectangles from the database (one-time fetch)
+   * @returns Array of all rectangles
+   */
   async getAllRectangles(): Promise<Rectangle[]> {
     try {
       const snapshot = await dbGet(this.rectanglesRef)
@@ -180,7 +207,11 @@ export class CanvasService {
     }
   }
 
-  // Listen to rectangle changes (real-time)
+  /**
+   * Subscribe to real-time rectangle changes
+   * @param callback - Function called whenever rectangles change
+   * @returns Unsubscribe function
+   */
   onRectanglesChange(callback: (rectangles: Rectangle[]) => void): () => void {
     const handleChange = (snapshot: DataSnapshot) => {
       if (snapshot.exists()) {
@@ -200,7 +231,11 @@ export class CanvasService {
     }
   }
 
-  // Get a specific rectangle
+  /**
+   * Get a single rectangle by ID (one-time fetch)
+   * @param rectangleId - ID of the rectangle to fetch
+   * @returns Rectangle data or null if not found
+   */
   async getRectangle(rectangleId: string): Promise<Rectangle | null> {
     try {
       const rectangleRef = dbRef(firebaseDatabase, `${DB_PATHS.RECTANGLES}/${rectangleId}`)
@@ -217,7 +252,13 @@ export class CanvasService {
     }
   }
 
-  // Select a rectangle (exclusive selection)
+  /**
+   * Mark a rectangle as selected by a user (exclusive selection)
+   * @param rectangleId - ID of the rectangle to select
+   * @param userId - ID of the user selecting the rectangle
+   * @param username - Username of the user (for display)
+   * @returns true if selection was successful, false if already selected by another user
+   */
   async selectRectangle(rectangleId: string, userId: string, username: string): Promise<boolean> {
     try {
       // Validate rectangle exists
@@ -246,7 +287,11 @@ export class CanvasService {
     }
   }
 
-  // Deselect a rectangle
+  /**
+   * Deselect a rectangle (remove user's selection)
+   * @param rectangleId - ID of the rectangle to deselect
+   * @param userId - ID of the user deselecting (must match current selectedBy)
+   */
   async deselectRectangle(rectangleId: string, userId: string): Promise<void> {
     try {
       // Validate rectangle exists
@@ -270,7 +315,11 @@ export class CanvasService {
     }
   }
 
-  // Clear all selections by a specific user (for cleanup when user signs out)
+  /**
+   * Clear all selections for a specific user (used on sign out)
+   * Batch operation to remove user's selections from all rectangles
+   * @param userId - ID of the user whose selections should be cleared
+   */
   async clearUserSelections(userId: string): Promise<void> {
     try {
       const rectanglesRef = dbRef(firebaseDatabase, DB_PATHS.RECTANGLES)
@@ -281,7 +330,7 @@ export class CanvasService {
       }
       
       const rectangles = snapshot.val() as Record<string, Rectangle>
-      const updates: Record<string, any> = {}
+      const updates: Record<string, null | number | string> = {}
       
       // Find all rectangles selected by this user and prepare batch update
       Object.entries(rectangles).forEach(([rectangleId, rectangle]) => {
@@ -295,7 +344,6 @@ export class CanvasService {
       // Perform batch update if there are any selections to clear
       if (Object.keys(updates).length > 0) {
         await dbUpdate(rectanglesRef, updates)
-        console.log(`Cleared ${Object.keys(updates).length / 3} rectangle selections for user ${userId}`)
       }
     } catch (error) {
       console.error('Error clearing user selections:', error)

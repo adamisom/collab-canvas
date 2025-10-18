@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { CursorService } from '../../src/services/cursorService'
 import type { CursorPosition } from '../../src/services/cursorService'
+import type { DataSnapshot, DatabaseReference } from 'firebase/database'
 
 // Mock Firebase
 vi.mock('../../src/services/firebaseService', () => ({
@@ -63,7 +64,7 @@ describe('CursorService', () => {
       const { dbGet } = await import('../../src/services/firebaseService')
       vi.mocked(dbGet).mockResolvedValue({ 
         exists: () => false 
-      } as any)
+      } as Partial<DataSnapshot>)
 
       const result = await cursorService.getAllCursors()
 
@@ -94,7 +95,7 @@ describe('CursorService', () => {
       vi.mocked(dbGet).mockResolvedValue({ 
         exists: () => true,
         val: () => mockData
-      } as any)
+      } as Partial<DataSnapshot>)
 
       const result = await cursorService.getAllCursors()
 
@@ -125,7 +126,7 @@ describe('CursorService', () => {
           exists: () => true,
           val: () => mockData
         }
-        callback(mockSnapshot as any)
+        callback(mockSnapshot as Partial<DataSnapshot> as DataSnapshot)
         return vi.fn() // Return unsubscribe function
       })
 
@@ -143,7 +144,7 @@ describe('CursorService', () => {
         const mockSnapshot = {
           exists: () => false
         }
-        callback(mockSnapshot as any)
+        callback(mockSnapshot as Partial<DataSnapshot> as DataSnapshot)
         return vi.fn() // Return unsubscribe function
       })
 
@@ -180,7 +181,7 @@ describe('CursorService', () => {
           exists: () => true,
           val: () => mockData
         }
-        callback(mockSnapshot as any)
+        callback(mockSnapshot as Partial<DataSnapshot> as DataSnapshot)
         return vi.fn() // Return unsubscribe function
       })
 
@@ -194,7 +195,7 @@ describe('CursorService', () => {
 
   describe('cleanupStaleCursors', () => {
     it('should remove cursors older than 30 seconds', async () => {
-      const { dbGet, dbRemove, dbRef } = await import('../../src/services/firebaseService')
+      const { dbRemove, dbRef } = await import('../../src/services/firebaseService')
       const now = Date.now()
       
       const mockData = {
@@ -219,7 +220,7 @@ describe('CursorService', () => {
       vi.spyOn(cursorService, 'getAllCursors').mockResolvedValue(mockData)
       
       // Mock dbRef to return a reference for each cursor
-      vi.mocked(dbRef).mockReturnValue({ key: 'mock-ref' } as any)
+      vi.mocked(dbRef).mockReturnValue({ key: 'mock-ref' } as Partial<DatabaseReference> as DatabaseReference)
 
       await cursorService.cleanupStaleCursors()
 

@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { Rect } from 'react-konva'
+import type { KonvaEventObject } from 'konva/lib/Node'
 import { RESIZE_HANDLE, RESIZE_DIRECTIONS } from '../../utils/constants'
 import { stopEventPropagation, setStageCursor, resetStageCursor } from '../../utils/eventHelpers'
 
@@ -43,23 +44,28 @@ const ResizeHandle: React.FC<ResizeHandleProps> = ({
     }
   }
 
-  const handleMouseEnter = (e: any) => {
+  const handleMouseEnter = (e: KonvaEventObject<MouseEvent>) => {
     setIsHover(true)
     setStageCursor(e, getCursor(direction))
   }
 
-  const handleMouseLeave = (e: any) => {
+  const handleMouseLeave = (e: KonvaEventObject<MouseEvent>) => {
     if (!isDragging) {
       setIsHover(false)
       resetStageCursor(e)
     }
   }
 
-  const handleDragStart = (e: any) => {
+  const handleDragStart = (e: KonvaEventObject<MouseEvent>) => {
     stopEventPropagation(e)
     
     setIsDragging(true)
-    const pos = e.target.getStage().getPointerPosition()
+    const stage = e.target.getStage()
+    if (!stage) return
+    
+    const pos = stage.getPointerPosition()
+    if (!pos) return
+    
     // Store the initial drag position
     setInitialDragStart({ x: pos.x, y: pos.y })
     
@@ -68,12 +74,17 @@ const ResizeHandle: React.FC<ResizeHandleProps> = ({
     }
   }
 
-  const handleDragMove = (e: any) => {
+  const handleDragMove = (e: KonvaEventObject<MouseEvent>) => {
     if (!isDragging) return
     
     stopEventPropagation(e)
     
-    const pos = e.target.getStage().getPointerPosition()
+    const stage = e.target.getStage()
+    if (!stage) return
+    
+    const pos = stage.getPointerPosition()
+    if (!pos) return
+    
     // Calculate delta from the INITIAL drag start position, not the previous position
     const deltaX = pos.x - initialDragStart.x
     const deltaY = pos.y - initialDragStart.y
@@ -83,7 +94,7 @@ const ResizeHandle: React.FC<ResizeHandleProps> = ({
     }
   }
 
-  const handleDragEnd = (e: any) => {
+  const handleDragEnd = (e: KonvaEventObject<MouseEvent>) => {
     stopEventPropagation(e)
     
     setIsDragging(false)
@@ -113,8 +124,6 @@ const ResizeHandle: React.FC<ResizeHandleProps> = ({
       onDragStart={handleDragStart}
       onDragMove={handleDragMove}
       onDragEnd={handleDragEnd}
-      // Make handles appear above rectangles
-      zIndex={10}
     />
   )
 }

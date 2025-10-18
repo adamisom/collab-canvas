@@ -1,5 +1,7 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react'
 import { Stage, Layer } from 'react-konva'
+import type Konva from 'konva'
+import type { KonvaEventObject } from 'konva/lib/Node'
 import { useCanvas } from '../../contexts/CanvasContext'
 import { useCursors } from '../../hooks/useCursors'
 import { VIEWPORT_WIDTH, VIEWPORT_HEIGHT } from '../../utils/constants'
@@ -24,12 +26,15 @@ const Canvas: React.FC<CanvasProps> = ({
   width = VIEWPORT_WIDTH, 
   height = VIEWPORT_HEIGHT 
 }) => {
-  const stageRef = useRef<any>(null)
+  const stageRef = useRef<Konva.Stage | null>(null)
   
   // Canvas viewport state
   const [isDragging, setIsDragging] = useState(false)
   const [isRectangleDragging, setIsRectangleDragging] = useState(false)
   const [isRectangleResizing, setIsRectangleResizing] = useState(false)
+  
+  // Track if user just used AI command (to prevent accidental deselect on first click)
+  const justUsedAICommandRef = useRef(false)
   
   // Get canvas context
   const { 
@@ -42,7 +47,8 @@ const Canvas: React.FC<CanvasProps> = ({
     selectRectangle,
     changeRectangleColor,
     toastMessage,
-    clearToast
+    clearToast,
+    updateViewportInfo
   } = useCanvas()
   
   // Get cursors context
@@ -64,11 +70,39 @@ const Canvas: React.FC<CanvasProps> = ({
     return stageRef.current.scaleX()
   }, [])
 
+  // Calculate and update viewport info (for AI agent)
+  const sendViewportInfo = useCallback(() => {
+    if (!stageRef.current) return
+
+    const stage = stageRef.current
+    const scale = stage.scaleX()
+    const stagePos = { x: stage.x(), y: stage.y() }
+
+    // Calculate viewport center in canvas coordinates
+    const centerX = (width / 2 - stagePos.x) / scale
+    const centerY = (height / 2 - stagePos.y) / scale
+
+    // Calculate visible bounds in canvas coordinates
+    const left = (-stagePos.x) / scale
+    const top = (-stagePos.y) / scale
+    const right = (width - stagePos.x) / scale
+    const bottom = (height - stagePos.y) / scale
+
+    updateViewportInfo({
+      centerX,
+      centerY,
+      zoom: scale,
+      visibleBounds: { left, top, right, bottom }
+    })
+  }, [width, height, updateViewportInfo])
+
   // Handle mouse move for cursor broadcasting
-  const handleMouseMove = useCallback((e: any) => {
+  const handleMouseMove = useCallback((e: KonvaEventObject<MouseEvent>) => {
     if (isDragging || isRectangleDragging || isRectangleResizing) return // Don't broadcast while panning, dragging, or resizing
 
     const stage = e.target.getStage()
+    if (!stage) return
+    
     const pointer = stage.getPointerPosition()
     
     if (pointer) {
@@ -87,7 +121,7 @@ const Canvas: React.FC<CanvasProps> = ({
   }, [updateCursor, getCurrentStagePosition, getCurrentStageScale, isDragging, isRectangleDragging, isRectangleResizing])
 
   // Handle wheel zoom
-  const handleWheel = useCallback((e: any) => {
+  const handleWheel = useCallback((e: KonvaEventObject<WheelEvent>) => {
     e.evt.preventDefault()
     
     if (!stageRef.current) return
@@ -119,10 +153,13 @@ const Canvas: React.FC<CanvasProps> = ({
     stage.scaleY(newScale)
     stage.x(newPos.x)
     stage.y(newPos.y)
-  }, [])
+    
+    // Update viewport info for AI agent
+    sendViewportInfo()
+  }, [sendViewportInfo])
 
   // Handle drag start
-  const handleDragStart = useCallback((e: any) => {
+  const handleDragStart = useCallback((e: KonvaEventObject<MouseEvent>) => {
     // Don't allow stage dragging if we're interacting with rectangles
     if (isRectangleDragging || isRectangleResizing) {
       stopEventPropagation(e)
@@ -132,13 +169,16 @@ const Canvas: React.FC<CanvasProps> = ({
   }, [isRectangleDragging, isRectangleResizing])
 
   // Handle drag end  
-  const handleDragEnd = useCallback((_e: any) => {
+  const handleDragEnd = useCallback(() => {
     // Reset dragging state
     setIsDragging(false)
-  }, [])
+    
+    // Update viewport info for AI agent
+    sendViewportInfo()
+  }, [sendViewportInfo])
 
   // Handle stage click (for rectangle creation and deselection)
-  const handleStageClick = useCallback(async (e: any) => {
+  const handleStageClick = useCallback(async (e: KonvaEventObject<MouseEvent>) => {
     // Only handle clicks on the stage background (not on shapes)
     if (e.target === e.target.getStage()) {
       // Deselect any selected rectangle
@@ -157,12 +197,7 @@ const Canvas: React.FC<CanvasProps> = ({
           const canvasX = (pointer.x - stagePos.x) / currentScale
           const canvasY = (pointer.y - stagePos.y) / currentScale
           
-          console.log('Creating rectangle at:', canvasX, canvasY)
-          const newRectangle = await createRectangle(canvasX, canvasY)
-          
-          if (newRectangle) {
-            console.log('Rectangle created:', newRectangle)
-          }
+          await createRectangle(canvasX, canvasY)
         }
       }
     }
@@ -170,8 +205,19 @@ const Canvas: React.FC<CanvasProps> = ({
 
   // Handle rectangle click (selection/deselection)
   const handleRectangleClick = useCallback(async (rectangle: RectangleType) => {
-    // If the rectangle is already selected, deselect it
+    // Remove focus from any input field (e.g., AI chat input) so keyboard shortcuts work
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur()
+    }
+    
+    // If the rectangle is already selected
     if (selectedRectangleId === rectangle.id) {
+      // Don't deselect if user just used AI command (first click after AI action)
+      if (justUsedAICommandRef.current) {
+        justUsedAICommandRef.current = false
+        return
+      }
+      // Otherwise, deselect it (toggle behavior)
       await selectRectangle(null)
     } else {
       // Otherwise, select it
@@ -236,8 +282,16 @@ const Canvas: React.FC<CanvasProps> = ({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!stageRef.current) return
       
+      // Don't handle keyboard shortcuts if user is typing in an input/textarea
+      const activeElement = document.activeElement
+      const isTyping = activeElement instanceof HTMLInputElement || 
+                       activeElement instanceof HTMLTextAreaElement
+      
       // Handle rectangle deletion
       if ((e.key === 'Delete' || e.key === 'Backspace') && selectedRectangleId) {
+        // Don't delete if user is typing in an input field
+        if (isTyping) return
+        
         // Prevent deletion during active operations
         if (!isRectangleDragging && !isRectangleResizing) {
           e.preventDefault()
@@ -251,6 +305,9 @@ const Canvas: React.FC<CanvasProps> = ({
       
       // Check if we're resizing a selected rectangle
       if (selectedRectangleId && (e.shiftKey || e.ctrlKey)) {
+        // Don't resize if user is typing in an input field
+        if (isTyping) return
+        
         const selectedRect = rectangles.find(r => r.id === selectedRectangleId)
         if (selectedRect) {
           e.preventDefault() // Prevent default browser behavior
@@ -283,8 +340,13 @@ const Canvas: React.FC<CanvasProps> = ({
       
       // Canvas navigation (when not resizing)
       if (stageRef.current) {
+        // Don't navigate if user is typing in an input field
+        if (isTyping) return
+        
         const currentPos = getCurrentStagePosition()
-        let newPosition = { ...currentPos }
+        if (!currentPos || currentPos.x === undefined || currentPos.y === undefined) return
+        
+        const newPosition = { x: currentPos.x, y: currentPos.y }
         
         switch (e.key) {
           case 'ArrowUp':
@@ -319,7 +381,41 @@ const Canvas: React.FC<CanvasProps> = ({
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [selectedRectangleId, rectangles, handleRectangleResize, deleteRectangle, isRectangleDragging, isRectangleResizing])
+  }, [selectedRectangleId, rectangles, handleRectangleResize, deleteRectangle, isRectangleDragging, isRectangleResizing, getCurrentStagePosition])
+
+  // Detect when rectangle is selected after AI command (input was focused)
+  useEffect(() => {
+    if (selectedRectangleId) {
+      // If an input/textarea is currently focused, user likely just used AI command
+      const activeElement = document.activeElement
+      if (activeElement instanceof HTMLInputElement || activeElement instanceof HTMLTextAreaElement) {
+        justUsedAICommandRef.current = true
+        
+        // Clear the flag after 3 seconds as a safety measure
+        const timeout = setTimeout(() => {
+          justUsedAICommandRef.current = false
+        }, 3000)
+        
+        return () => clearTimeout(timeout)
+      }
+    }
+  }, [selectedRectangleId])
+
+  // Update viewport info on mount and window resize
+  useEffect(() => {
+    // Initial viewport info
+    sendViewportInfo()
+
+    // Update on window resize
+    const handleResize = () => {
+      sendViewportInfo()
+    }
+
+    window.addEventListener('resize', handleResize)
+    return () => {
+      window.removeEventListener('resize', handleResize)
+    }
+  }, [sendViewportInfo])
 
   return (
     <div className="canvas-container">
