@@ -53,14 +53,18 @@ All work with single selection. Multi-select support comes automatically in PR #
 - Store in CanvasContext state (not localStorage or Browser Clipboard API)
 - **Rationale:** Simple, works in all contexts, no permissions needed. Losing clipboard on refresh is standard web behavior.
 - Store full rectangle data (x, y, width, height, color)
-- Clear on sign out
+- Clear on sign out (useEffect watching user state)
 
 **Paste Behavior:**
-- Offset by **fixed +20px x and y** from original
+- Offset by **fixed +20px x and y** from original (defined as local constants)
 - **Rationale:** Simple, predictable, matches Figma/Sketch behavior
 - Clamp to canvas bounds if would go outside
 - Auto-select the pasted rectangle
 - Can paste same rectangle multiple times (clipboard persists until next copy)
+
+**Keyboard Shortcuts:**
+- Add checks for `selectionLocked` state (prevents shortcuts during AI operations)
+- Use **refs pattern** to avoid large dependency arrays in useEffect (see implementation notes)
 
 **AI Integration:**
 - Add `duplicateRectangle` tool to Cloud Function
@@ -85,6 +89,13 @@ interface CanvasContextType {
 
 // Implementation
 const [clipboardRectangle, setClipboardRectangle] = useState<Rectangle | null>(null)
+
+// Clear clipboard on sign out
+useEffect(() => {
+  if (!user) {
+    setClipboardRectangle(null)
+  }
+}, [user])
 
 // COPY: Store rectangle to clipboard
 const copyRectangle = useCallback((rectangleId: string) => {
@@ -127,8 +138,7 @@ const pasteRectangle = useCallback(async (): Promise<Rectangle | null> => {
       width: clipboardRectangle.width,
       height: clipboardRectangle.height,
       color: clipboardRectangle.color,
-      createdBy: user.uid,
-      createdAt: Date.now()
+      createdBy: user.uid
     }
     
     const pasted = await canvasService.createRectangle(input)
@@ -176,8 +186,7 @@ const duplicateRectangle = useCallback(async (rectangleId: string): Promise<Rect
       width: rectangle.width,
       height: rectangle.height,
       color: rectangle.color,
-      createdBy: user.uid,
-      createdAt: Date.now()
+      createdBy: user.uid
     }
     
     const duplicated = await canvasService.createRectangle(input)
@@ -222,7 +231,7 @@ return (
 ```
 
 #### `/src/components/canvas/Canvas.tsx`
-Add keyboard shortcuts:
+Add keyboard shortcuts using refs pattern to avoid dependency issues:
 
 ```typescript
 const {
@@ -230,18 +239,34 @@ const {
   copyRectangle,
   pasteRectangle,
   duplicateRectangle,
+  selectionLocked,
 } = useCanvas()
 
-const handleKeyDown = useCallback((e: KeyboardEvent) => {
-  if (selectionLocked) return
+// Create refs to avoid adding functions to dependency array
+const copyRectangleRef = useRef(copyRectangle)
+const pasteRectangleRef = useRef(pasteRectangle)
+const duplicateRectangleRef = useRef(duplicateRectangle)
+
+// Keep refs updated with latest functions
+useEffect(() => {
+  copyRectangleRef.current = copyRectangle
+  pasteRectangleRef.current = pasteRectangle
+  duplicateRectangleRef.current = duplicateRectangle
+}, [copyRectangle, pasteRectangle, duplicateRectangle])
+
+// Update existing keyboard handler (in the existing useEffect)
+// Add these cases to the handleKeyDown function:
+const handleKeyDown = (e: KeyboardEvent) => {
+  // ... existing checks (isTyping, etc.)
   
-  // ... existing shortcuts
+  // Don't handle shortcuts during AI operations
+  if (selectionLocked) return
   
   // Copy: Cmd+C (Mac) or Ctrl+C (Windows/Linux)
   if ((e.metaKey || e.ctrlKey) && e.key === 'c') {
     e.preventDefault()
     if (selectedRectangleId) {
-      copyRectangle(selectedRectangleId)
+      copyRectangleRef.current(selectedRectangleId)
     }
     return
   }
@@ -249,7 +274,7 @@ const handleKeyDown = useCallback((e: KeyboardEvent) => {
   // Paste: Cmd+V (Mac) or Ctrl+V (Windows/Linux)
   if ((e.metaKey || e.ctrlKey) && e.key === 'v') {
     e.preventDefault()
-    pasteRectangle()
+    pasteRectangleRef.current()
     return
   }
   
@@ -257,28 +282,19 @@ const handleKeyDown = useCallback((e: KeyboardEvent) => {
   if ((e.metaKey || e.ctrlKey) && e.key === 'd') {
     e.preventDefault() // Prevent browser bookmark shortcut
     if (selectedRectangleId) {
-      duplicateRectangle(selectedRectangleId)
+      duplicateRectangleRef.current(selectedRectangleId)
     }
     return
   }
-}, [
-  selectedRectangleId,
-  copyRectangle,
-  pasteRectangle,
-  duplicateRectangle,
-  selectionLocked
-])
+  
+  // ... rest of existing keyboard handling (delete, arrows, etc.)
+}
+
+// Note: The existing useEffect dependency array stays the same - 
+// we only add selectionLocked to the dependencies, not the function refs
 ```
 
-#### `/src/utils/constants.ts`
-Add clipboard constants:
-
-```typescript
-export const CLIPBOARD = {
-  PASTE_OFFSET: 20,     // pixels to offset pasted items
-  DUPLICATE_OFFSET: 20  // pixels to offset duplicates
-} as const
-```
+**Note:** `PASTE_OFFSET` and `DUPLICATE_OFFSET` constants are defined locally in CanvasContext.tsx (20px each). No need to add to constants.ts since they're only used in one place.
 
 #### `/functions/src/tools.ts` (AI Support)
 Add duplicate tool:
@@ -390,10 +406,11 @@ case 'duplicateRectangle':
 3. Quick color presets
 4. Live preview while typing
 
-**Keyboard Shortcuts:**
-1. Help overlay (`?` key)
-2. Organized by category
-3. Searchable shortcuts list
+**Keyboard Shortcuts Reference:**
+1. Collapsible section in canvas-info
+2. Always-visible toggle button
+3. Organized by category
+4. Persists expanded/collapsed state
 
 ### Implementation Strategy
 
@@ -405,11 +422,12 @@ case 'duplicateRectangle':
 - Show history in expandable section
 - Store as `collabcanvas_colorHistory` key
 
-**Shortcuts Modal:**
-- Press `?` to show modal overlay
-- Group shortcuts by category (Canvas, Clipboard, Edit, Layers, Help)
-- Search filter
-- Close with X or click outside
+**Shortcuts Collapsible Section:**
+- Add toggle button to canvas-info: "▶/▼ Keyboard Shortcuts"
+- Expand/collapse to show full shortcuts list
+- Group shortcuts by category (Canvas, Clipboard, Edit, Layers)
+- Save expanded/collapsed state to localStorage (default: expanded for new users)
+- **Rationale:** More discoverable than hidden `?` key, simpler than modal, doesn't take space when collapsed
 
 ### Files to Create
 
@@ -542,150 +560,140 @@ const EnhancedColorPicker: React.FC<EnhancedColorPickerProps> = ({
 export default EnhancedColorPicker
 ```
 
-#### `/src/components/ui/KeyboardShortcutsModal.tsx`
-```typescript
-import React, { useState } from 'react'
-import './KeyboardShortcutsModal.css'
-
-interface Shortcut {
-  keys: string
-  description: string
-  category: string
-}
-
-const SHORTCUTS: Shortcut[] = [
-  // Canvas
-  { keys: 'Double-click', description: 'Create rectangle', category: 'Canvas' },
-  { keys: 'Click', description: 'Select rectangle', category: 'Canvas' },
-  { keys: 'Drag canvas', description: 'Pan view', category: 'Canvas' },
-  { keys: 'Scroll', description: 'Zoom in/out', category: 'Canvas' },
-  { keys: '0', description: 'Reset zoom & center', category: 'Canvas' },
-  
-  // Clipboard
-  { keys: 'Cmd/Ctrl+C', description: 'Copy selected', category: 'Clipboard' },
-  { keys: 'Cmd/Ctrl+V', description: 'Paste', category: 'Clipboard' },
-  { keys: 'Cmd/Ctrl+D', description: 'Duplicate selected', category: 'Clipboard' },
-  
-  // Edit
-  { keys: 'Delete/Backspace', description: 'Delete selected', category: 'Edit' },
-  { keys: 'Arrow keys', description: 'Resize selected / Pan canvas', category: 'Edit' },
-  
-  // Layers (PR #3)
-  { keys: 'Cmd/Ctrl+]', description: 'Bring to front', category: 'Layers' },
-  { keys: 'Cmd/Ctrl+[', description: 'Send to back', category: 'Layers' },
-  
-  // Help
-  { keys: '?', description: 'Show keyboard shortcuts', category: 'Help' },
-]
-
-interface KeyboardShortcutsModalProps {
-  onClose: () => void
-}
-
-const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({ onClose }) => {
-  const [search, setSearch] = useState('')
-
-  const filtered = SHORTCUTS.filter(s =>
-    s.description.toLowerCase().includes(search.toLowerCase()) ||
-    s.keys.toLowerCase().includes(search.toLowerCase())
-  )
-
-  const byCategory = filtered.reduce((acc, shortcut) => {
-    if (!acc[shortcut.category]) {
-      acc[shortcut.category] = []
-    }
-    acc[shortcut.category].push(shortcut)
-    return acc
-  }, {} as Record<string, Shortcut[]>)
-
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content shortcuts-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <h2>Keyboard Shortcuts</h2>
-          <button className="close-button" onClick={onClose}>×</button>
-        </div>
-
-        <input
-          type="text"
-          placeholder="Search shortcuts..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="shortcut-search"
-          autoFocus
-        />
-
-        <div className="shortcuts-list">
-          {Object.entries(byCategory).map(([category, shortcuts]) => (
-            <div key={category} className="shortcut-category">
-              <h3>{category}</h3>
-              {shortcuts.map((shortcut, idx) => (
-                <div key={idx} className="shortcut-row">
-                  <kbd>{shortcut.keys}</kbd>
-                  <span>{shortcut.description}</span>
-                </div>
-              ))}
-            </div>
-          ))}
-        </div>
-
-        {filtered.length === 0 && (
-          <div className="no-results">
-            No shortcuts found for "{search}"
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-export default KeyboardShortcutsModal
-```
+**Note:** No separate component needed - shortcuts section is integrated directly into Canvas.tsx (see below).
 
 ### Files to Update
 
 #### `/src/components/canvas/Canvas.tsx`
-Add `?` shortcut to show modal:
+Add collapsible shortcuts section and replace ColorPicker:
 
 ```typescript
-import KeyboardShortcutsModal from '../ui/KeyboardShortcutsModal'
+import EnhancedColorPicker from './EnhancedColorPicker'
 
-const [showShortcuts, setShowShortcuts] = useState(false)
+// State for collapsible shortcuts
+const [showShortcuts, setShowShortcuts] = useState(() => {
+  return localStorage.getItem('collabcanvas_showShortcuts') !== 'false'
+})
 
-const handleKeyDown = useCallback((e: KeyboardEvent) => {
-  // ... existing shortcuts
-  
-  // Show keyboard shortcuts: ?
-  if (e.key === '?' && !e.shiftKey) {
-    e.preventDefault()
-    setShowShortcuts(true)
-    return
-  }
-}, [/* deps */])
+// Save expanded/collapsed state
+useEffect(() => {
+  localStorage.setItem('collabcanvas_showShortcuts', String(showShortcuts))
+}, [showShortcuts])
 
-// In render
-return (
-  <>
-    {/* Canvas */}
+// In canvas-info section, after canvas-controls:
+<div className="canvas-info">
+  <div className="canvas-stats">
+    <span>Zoom: ...</span>
+    <span>Position: ...</span>
+    <span>Rectangles: {rectangles.length}</span>
+    <span>Friends: {Object.keys(cursors).length}</span>
     
-    {showShortcuts && (
-      <KeyboardShortcutsModal onClose={() => setShowShortcuts(false)} />
-    )}
-  </>
-)
+    {/* REPLACE ColorPicker with EnhancedColorPicker */}
+    <div className="header-color-picker">
+      {selectedRectangle ? (
+        <>
+          <span className="color-label">Color:</span>
+          <EnhancedColorPicker
+            selectedRectangleId={selectedRectangleId}
+          />
+        </>
+      ) : (
+        <div className="color-picker-placeholder">
+          {/* Same placeholder structure as before */}
+        </div>
+      )}
+    </div>
+  </div>
+  
+  <div className="canvas-controls">
+    <span>🖱️ Double-click: create | Drag: pan | Scroll: zoom | 0: reset</span>
+  </div>
+  
+  {/* NEW: Collapsible shortcuts section */}
+  <button 
+    className="shortcuts-toggle"
+    onClick={() => setShowShortcuts(!showShortcuts)}
+    aria-expanded={showShortcuts}
+  >
+    {showShortcuts ? '▼' : '▶'} Keyboard Shortcuts
+  </button>
+  
+  {showShortcuts && (
+    <div className="shortcuts-expanded">
+      <div className="shortcuts-category">
+        <strong>Canvas:</strong> Double-click: create | Drag: pan | Scroll: zoom | 0: reset
+      </div>
+      <div className="shortcuts-category">
+        <strong>Clipboard:</strong> ⌘C: copy | ⌘V: paste | ⌘D: duplicate
+      </div>
+      <div className="shortcuts-category">
+        <strong>Edit:</strong> Delete: remove | Arrows: resize (Shift/Ctrl) or navigate
+      </div>
+      <div className="shortcuts-category">
+        <strong>Layers:</strong> ⌘]: bring to front | ⌘[: send to back
+      </div>
+    </div>
+  )}
+</div>
 ```
 
-#### `/src/components/layout/Header.tsx`
-Replace simple ColorPicker with EnhancedColorPicker:
+**CSS to add** (in Canvas.css):
 
-```typescript
-import EnhancedColorPicker from '../canvas/EnhancedColorPicker'
+```css
+/* Shortcuts Toggle Button */
+.shortcuts-toggle {
+  padding: 8px 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
 
-// Replace:
-// <ColorPicker />
+.shortcuts-toggle:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
 
-// With:
-<EnhancedColorPicker selectedRectangleId={selectedRectangleId} />
+/* Shortcuts Expanded Section */
+.shortcuts-expanded {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 12px;
+  animation: slideDown 0.2s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.shortcuts-category {
+  color: #4a5568;
+  line-height: 1.6;
+}
+
+.shortcuts-category strong {
+  color: #1a202c;
+  margin-right: 8px;
+}
 ```
 
 #### No database changes needed
@@ -703,16 +711,16 @@ Color history uses localStorage, so no Firebase rules or schema updates needed.
 - [ ] Color history only shows when user has history
 - [ ] Quick color buttons still work
 - [ ] All disabled when no rectangle selected
-- [ ] `?` key shows keyboard shortcuts modal
-- [ ] Modal is searchable
-- [ ] Modal shows all shortcuts organized by category
-- [ ] Modal closes with X or clicking outside
-- [ ] Modal search filters results correctly
+- [ ] Shortcuts toggle button is visible
+- [ ] Clicking toggle expands/collapses shortcuts section
+- [ ] Shortcuts section shows all shortcuts organized by category
+- [ ] Expanded/collapsed state persists across page refreshes
+- [ ] Default state is expanded for new users
 - [ ] No console errors
 
 ### Success Criteria
 - ✅ Enhanced color picker works with hex input and history
-- ✅ Keyboard shortcuts modal is helpful and complete
+- ✅ Keyboard shortcuts collapsible section is discoverable and helpful
 - ✅ Color history persists in localStorage (instant, no Firebase overhead)
 - ✅ Real-time color changes sync to all users
 - ✅ No breaking changes
@@ -767,6 +775,7 @@ Plus AI support for "bring it to front", "send it to the back", etc.
 Add zIndex field and layer operations:
 
 ```typescript
+// UPDATE: Rectangle interface to include zIndex
 export interface Rectangle {
   id: string
   x: number
@@ -776,40 +785,46 @@ export interface Rectangle {
   color: string
   createdBy: string
   createdAt: number
-  selectedBy: string | null
-  selectedAt: number | null
+  updatedAt: number
+  selectedBy?: string | null
+  selectedByUsername?: string | null
   zIndex: number  // NEW
 }
 
-// Helper to get next zIndex (with gaps)
-const getNextZIndex = async (): Promise<number> => {
-  const rectanglesRef = dbRef(DB_PATHS.RECTANGLES)
-  const snapshot = await dbGet(rectanglesRef)
+// Inside CanvasService class:
+
+/**
+ * Get the current maximum zIndex from all rectangles
+ * @private
+ */
+private async getMaxZIndex(): Promise<number> {
+  const snapshot = await dbGet(this.rectanglesRef)
   
   let maxZIndex = 0
   if (snapshot.exists()) {
     snapshot.forEach((child) => {
       const rect = child.val()
-      if (rect.zIndex > maxZIndex) {
+      if (rect.zIndex && rect.zIndex > maxZIndex) {
         maxZIndex = rect.zIndex
       }
     })
   }
   
-  // Increment by 1000 (not 1) to maintain gaps
-  return maxZIndex + 1000
+  return maxZIndex
 }
 
-// Helper to get min zIndex
-const getMinZIndex = async (): Promise<number> => {
-  const rectanglesRef = dbRef(DB_PATHS.RECTANGLES)
-  const snapshot = await dbGet(rectanglesRef)
+/**
+ * Get the current minimum zIndex from all rectangles
+ * @private
+ */
+private async getMinZIndex(): Promise<number> {
+  const snapshot = await dbGet(this.rectanglesRef)
   
   let minZIndex = Infinity
   if (snapshot.exists()) {
     snapshot.forEach((child) => {
       const rect = child.val()
-      if (rect.zIndex < minZIndex) {
+      if (rect.zIndex !== undefined && rect.zIndex < minZIndex) {
         minZIndex = rect.zIndex
       }
     })
@@ -818,38 +833,76 @@ const getMinZIndex = async (): Promise<number> => {
   return minZIndex === Infinity ? 0 : minZIndex
 }
 
-// UPDATE: createRectangle to include zIndex
-export const createRectangle = async (input: RectangleInput): Promise<Rectangle | null> => {
-  const zIndex = await getNextZIndex()
-  
-  const rectangle: Rectangle = {
-    ...input,
-    id: newRectRef.key!,
-    zIndex,  // NEW
-    selectedBy: null,
-    selectedAt: null
+// UPDATE: createRectangle method to include zIndex
+async createRectangle(rectangleData: RectangleInput): Promise<Rectangle> {
+  try {
+    const now = Date.now()
+    const newRectangleRef = dbPush(this.rectanglesRef)
+    
+    if (!newRectangleRef.key) {
+      throw new Error('Failed to generate rectangle ID')
+    }
+
+    // Get next zIndex (max + 1000 for gaps)
+    const maxZIndex = await this.getMaxZIndex()
+    const zIndex = maxZIndex + 1000
+
+    const rectangle: Rectangle = {
+      id: newRectangleRef.key,
+      ...rectangleData,
+      color: rectangleData.color || RECTANGLE_COLORS.BLUE,
+      createdAt: now,
+      updatedAt: now,
+      zIndex  // NEW
+    }
+
+    await dbSet(newRectangleRef, rectangle)
+    return rectangle
+  } catch (error) {
+    console.error('Error creating rectangle:', error)
+    throw error
   }
-  
-  await dbSet(newRectRef, rectangle)
-  return rectangle
 }
 
-// NEW: Bring to front (set zIndex to max + 1000)
-// O(1) operation - only updates ONE rectangle
-export const bringToFront = async (rectangleId: string): Promise<void> => {
-  const maxZIndex = await getMaxZIndex()
-  const rectangleRef = dbRef(`${DB_PATHS.RECTANGLES}/${rectangleId}`)
-  await dbUpdate(rectangleRef, { zIndex: maxZIndex + 1000 })
+/**
+ * NEW: Bring rectangle to front (highest zIndex)
+ * O(1) operation - only updates ONE rectangle
+ */
+async bringToFront(rectangleId: string): Promise<void> {
+  try {
+    const maxZIndex = await this.getMaxZIndex()
+    const rectangleRef = dbRef(firebaseDatabase, `${DB_PATHS.RECTANGLES}/${rectangleId}`)
+    await dbUpdate(rectangleRef, { 
+      zIndex: maxZIndex + 1000,
+      updatedAt: Date.now()
+    })
+  } catch (error) {
+    console.error('Error bringing rectangle to front:', error)
+    throw error
+  }
 }
 
-// NEW: Send to back (set zIndex to min - 1000)
-// O(1) operation - only updates ONE rectangle
-export const sendToBack = async (rectangleId: string): Promise<void> => {
-  const minZIndex = await getMinZIndex()
-  const rectangleRef = dbRef(`${DB_PATHS.RECTANGLES}/${rectangleId}`)
-  await dbUpdate(rectangleRef, { zIndex: minZIndex - 1000 })
+/**
+ * NEW: Send rectangle to back (lowest zIndex)
+ * O(1) operation - only updates ONE rectangle
+ * Allows negative zIndex values
+ */
+async sendToBack(rectangleId: string): Promise<void> {
+  try {
+    const minZIndex = await this.getMinZIndex()
+    const rectangleRef = dbRef(firebaseDatabase, `${DB_PATHS.RECTANGLES}/${rectangleId}`)
+    await dbUpdate(rectangleRef, { 
+      zIndex: minZIndex - 1000,
+      updatedAt: Date.now()
+    })
+  } catch (error) {
+    console.error('Error sending rectangle to back:', error)
+    throw error
+  }
 }
 ```
+
+**Note:** No migration for existing rectangles. They will have `undefined` zIndex and be treated as 0 when sorting. This means old rectangles will appear below all new rectangles (which start at 1000), but this is acceptable given the small number of production rectangles.
 
 #### `/src/contexts/CanvasContext.tsx`
 Add layer methods:
@@ -881,23 +934,41 @@ const sendToBack = useCallback(async (rectangleId: string) => {
 ```
 
 #### `/src/components/canvas/Canvas.tsx`
-Sort by zIndex and add shortcuts:
+Sort by zIndex and add shortcuts using refs pattern:
 
 ```typescript
+const { 
+  bringToFront, 
+  sendToBack,
+  // ... other context values
+} = useCanvas()
+
 // Sort rectangles by zIndex before rendering
 const sortedRectangles = useMemo(() => {
   return [...rectangles].sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0))
 }, [rectangles])
 
-// Add keyboard shortcuts
-const handleKeyDown = useCallback((e: KeyboardEvent) => {
-  // ... existing shortcuts
+// Create refs for layer functions
+const bringToFrontRef = useRef(bringToFront)
+const sendToBackRef = useRef(sendToBack)
+
+// Keep refs updated
+useEffect(() => {
+  bringToFrontRef.current = bringToFront
+  sendToBackRef.current = sendToBack
+}, [bringToFront, sendToBack])
+
+// Add to existing keyboard handler:
+const handleKeyDown = (e: KeyboardEvent) => {
+  // ... existing checks
+  
+  if (selectionLocked) return
   
   // Bring to Front: Cmd+]
   if ((e.metaKey || e.ctrlKey) && e.key === ']') {
     e.preventDefault()
     if (selectedRectangleId) {
-      bringToFront(selectedRectangleId)
+      bringToFrontRef.current(selectedRectangleId)
     }
     return
   }
@@ -906,11 +977,13 @@ const handleKeyDown = useCallback((e: KeyboardEvent) => {
   if ((e.metaKey || e.ctrlKey) && e.key === '[') {
     e.preventDefault()
     if (selectedRectangleId) {
-      sendToBack(selectedRectangleId)
+      sendToBackRef.current(selectedRectangleId)
     }
     return
   }
-}, [selectedRectangleId, bringToFront, sendToBack])
+  
+  // ... rest of existing keyboard handling
+}
 
 // Render sorted rectangles
 <Layer>
@@ -1019,7 +1092,7 @@ Before moving to Phase 3B, verify:
 - [ ] Copy/paste/duplicate work perfectly
 - [ ] Enhanced color picker with hex input works
 - [ ] Color history persists across sessions
-- [ ] Keyboard shortcuts modal is complete
+- [ ] Keyboard shortcuts collapsible section is complete and discoverable
 - [ ] All layer operations work correctly
 - [ ] Real-time sync works for all new features
 
