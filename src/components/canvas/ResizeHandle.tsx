@@ -124,8 +124,6 @@ const ResizeHandle: React.FC<ResizeHandleProps> = ({
       onDragStart={handleDragStart}
       onDragMove={handleDragMove}
       onDragEnd={handleDragEnd}
-      // Make handles appear above rectangles
-      zIndex={10}
     />
   )
 }
