@@ -17,7 +17,7 @@ import type {
   ResizeRectangleParams,
   DeleteRectangleParams,
   CreateMultipleRectanglesParams
-} from '../types/ai'
+} from '../shared/types'
 import { 
   DEFAULT_RECT, 
   RECTANGLE_CONSTRAINTS, 

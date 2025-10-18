@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback, use
 import { canvasService } from '../services/canvasService'
 import type { Rectangle, RectangleInput } from '../services/canvasService'
 import { useAuth } from './AuthContext'
-import type { ViewportInfo } from '../types/ai'
+import type { ViewportInfo } from '../shared/types'
 
 interface CanvasContextType {
   rectangles: Rectangle[]

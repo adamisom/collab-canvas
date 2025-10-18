@@ -13,7 +13,8 @@ import {checkCommandQuota, incrementCommandCount} from "./utils/rateLimiter";
 import {
   ProcessAICommandRequest,
   ProcessAICommandResponse,
-} from "./types";
+  AICommandParameters,
+} from "@shared/types";
 
 // Initialize Firebase Admin
 initializeApp();
@@ -101,7 +102,7 @@ export const processAICommand = functions.https.onCall(
       const response: ProcessAICommandResponse = {
         commands: toolCalls.map((call) => ({
           tool: call.toolName,
-          parameters: call.args,
+          parameters: ('args' in call ? call.args : {}) as AICommandParameters,
         })),
         message: result.text || undefined,
       };

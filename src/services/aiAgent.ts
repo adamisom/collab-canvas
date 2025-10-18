@@ -21,7 +21,7 @@ import type {
   AICommand,
   CommandSnapshot,
   CreateRectangleParams
-} from '../types/ai'
+} from '../shared/types'
 import { CanvasCommandExecutor, type CanvasContextMethods } from './canvasCommandExecutor'
 import { mapAIError, formatPartialSuccessMessage, type AIError } from '../utils/aiErrors'
 

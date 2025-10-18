@@ -3,7 +3,7 @@
  * Provides context and rules for the AI to follow
  */
 
-import {CanvasState, ViewportInfo, SelectedShape} from "../types";
+import {CanvasState, ViewportInfo, SelectedShape} from "@shared/types";
 
 export const buildSystemPrompt = (
   canvasState: CanvasState,
