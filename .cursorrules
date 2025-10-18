@@ -5,3 +5,8 @@
 - Reason: `npm test` enters watch mode and hangs, requiring manual cancellation
 - For running tests with specific options, use `npx vitest run` with appropriate flags
 
+## Git History
+- NEVER rewrite git history (no force push, no rebase on shared branches, no --amend on pushed commits)
+- Keep commit history clean and intact for collaboration and debugging
+- Use `git revert` instead of rewriting history to undo changes
+
