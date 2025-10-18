@@ -87,7 +87,7 @@ export class CanvasService {
       try {
         const allRectangles = await this.getAllRectangles()
         maxZ = this.getMaxZIndex(allRectangles)
-      } catch (zIndexError) {
+      } catch {
         // If we can't fetch rectangles for zIndex, use default
         console.warn('Could not fetch rectangles for zIndex calculation, using default')
       }
