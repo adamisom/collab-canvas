@@ -96,6 +96,15 @@ export function mapAIError(error: unknown): AIError {
     }
   }
 
+  // Network errors (retryable) - check BEFORE generic error with message
+  if (isErrorWithName(error) && error.name === 'NetworkError') {
+    return {
+      message: 'Network error. Please check your connection and try again.',
+      retryable: true,
+      originalError: error
+    }
+  }
+
   // Handle executor errors (thrown by canvasCommandExecutor)
   if (isErrorWithMessage(error)) {
     const msg = error.message.toLowerCase()
@@ -131,15 +140,6 @@ export function mapAIError(error: unknown): AIError {
     return {
       message: error.message,
       retryable: false,
-      originalError: error
-    }
-  }
-
-  // Network errors (retryable)
-  if (isErrorWithName(error) && error.name === 'NetworkError') {
-    return {
-      message: 'Network error. Please check your connection and try again.',
-      retryable: true,
       originalError: error
     }
   }

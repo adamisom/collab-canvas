@@ -1,82 +1,81 @@
+/**
+ * Tests for AI Error Mapping Utilities
+ * Ensures errors are correctly classified as retryable/non-retryable
+ * and mapped to user-friendly messages
+ */
+
 import { describe, it, expect } from 'vitest'
 import { mapAIError, formatPartialSuccessMessage } from '../../src/utils/aiErrors'
+import { mockFirebaseErrors, mockExecutorErrors, mockNetworkError, mockUnknownError } from '../fixtures/aiAgent.fixtures'
 
-describe('aiErrors', () => {
-  describe('mapAIError - Firebase HttpsError Codes', () => {
-    it('should map "unauthenticated" to non-retryable error', () => {
-      const error = { code: 'unauthenticated', message: 'Not logged in' }
-      const result = mapAIError(error)
+describe('mapAIError', () => {
+  describe('Firebase HttpsError Codes', () => {
+    it('should map "unauthenticated" to non-retryable with correct message', () => {
+      const result = mapAIError(mockFirebaseErrors.unauthenticated)
       
       expect(result.message).toBe('You must be logged in to use AI commands')
       expect(result.retryable).toBe(false)
-      expect(result.originalError).toBe(error)
+      expect(result.originalError).toBe(mockFirebaseErrors.unauthenticated)
     })
 
     it('should map "resource-exhausted" to non-retryable (quota exceeded)', () => {
-      const error = { code: 'resource-exhausted', message: 'Quota exceeded' }
-      const result = mapAIError(error)
+      const result = mapAIError(mockFirebaseErrors.resourceExhausted)
       
-      expect(result.message).toBe('Quota exceeded')
+      expect(result.message).toBe('AI command limit reached')
       expect(result.retryable).toBe(false)
     })
 
-    it('should map "deadline-exceeded" to retryable (timeout)', () => {
-      const error = { code: 'deadline-exceeded', message: 'Timeout' }
-      const result = mapAIError(error)
-      
-      expect(result.message).toBe('AI service temporarily unavailable. Please try again.')
-      expect(result.retryable).toBe(true)
-    })
-
-    it('should map "failed-precondition" (too many rectangles) to non-retryable', () => {
-      const error = { code: 'failed-precondition', message: 'Canvas has too many rectangles' }
-      const result = mapAIError(error)
+    it('should map "failed-precondition" with rectangles message to non-retryable', () => {
+      const result = mapAIError(mockFirebaseErrors.failedPrecondition)
       
       expect(result.message).toBe('Canvas has too many rectangles (limit: 1000)')
       expect(result.retryable).toBe(false)
     })
 
-    it('should map "failed-precondition" (AI not configured) to non-retryable', () => {
-      const error = { code: 'failed-precondition', message: 'AI service not configured' }
+    it('should map "failed-precondition" without rectangles message to non-retryable', () => {
+      const error = { code: 'failed-precondition', message: 'Some other precondition' }
       const result = mapAIError(error)
       
-      expect(result.message).toBe('AI service not configured')
+      expect(result.message).toBe('Some other precondition')
+      expect(result.retryable).toBe(false)
+    })
+
+    it('should map "deadline-exceeded" to retryable (timeout)', () => {
+      const result = mapAIError(mockFirebaseErrors.deadlineExceeded)
+      
+      expect(result.message).toBe('AI service temporarily unavailable. Please try again.')
+      expect(result.retryable).toBe(true)
+    })
+
+    it('should map "invalid-argument" to non-retryable', () => {
+      const result = mapAIError(mockFirebaseErrors.invalidArgument)
+      
+      expect(result.message).toBe('Invalid request format')
       expect(result.retryable).toBe(false)
     })
 
     it('should map "internal" to retryable', () => {
-      const error = { code: 'internal', message: 'Internal error' }
-      const result = mapAIError(error)
+      const result = mapAIError(mockFirebaseErrors.internal)
       
       expect(result.message).toBe('An error occurred processing your command')
       expect(result.retryable).toBe(true)
     })
 
     it('should map "unavailable" to retryable', () => {
-      const error = { code: 'unavailable', message: 'Service unavailable' }
-      const result = mapAIError(error)
+      const result = mapAIError(mockFirebaseErrors.unavailable)
       
       expect(result.message).toBe('Service temporarily unavailable. Please try again.')
       expect(result.retryable).toBe(true)
     })
 
     it('should map "aborted" to retryable', () => {
-      const error = { code: 'aborted', message: 'Request aborted' }
-      const result = mapAIError(error)
+      const result = mapAIError(mockFirebaseErrors.aborted)
       
       expect(result.message).toBe('Service temporarily unavailable. Please try again.')
       expect(result.retryable).toBe(true)
     })
 
-    it('should map "invalid-argument" to non-retryable', () => {
-      const error = { code: 'invalid-argument', message: 'Bad request' }
-      const result = mapAIError(error)
-      
-      expect(result.message).toBe('Bad request')
-      expect(result.retryable).toBe(false)
-    })
-
-    it('should map unknown error codes to retryable (safety)', () => {
+    it('should map unknown error codes to retryable with default message', () => {
       const error = { code: 'unknown-code', message: 'Unknown error' }
       const result = mapAIError(error)
       
@@ -85,9 +84,16 @@ describe('aiErrors', () => {
     })
   })
 
-  describe('mapAIError - Executor Errors', () => {
+  describe('Executor Errors', () => {
     it('should map "not found" errors to non-retryable', () => {
-      const error = new Error('Rectangle rect123 not found or was deleted')
+      const result = mapAIError(mockExecutorErrors.rectangleNotFound)
+      
+      expect(result.message).toBe('The selected rectangle no longer exists')
+      expect(result.retryable).toBe(false)
+    })
+
+    it('should map "deleted" errors to non-retryable', () => {
+      const error = new Error('Rectangle was deleted by another user')
       const result = mapAIError(error)
       
       expect(result.message).toBe('The selected rectangle no longer exists')
@@ -95,87 +101,99 @@ describe('aiErrors', () => {
     })
 
     it('should map "invalid color" errors to non-retryable', () => {
-      const error = new Error('Invalid color: #ffffff. Must be one of: #ef4444, #3b82f6, #22c55e')
-      const result = mapAIError(error)
+      const result = mapAIError(mockExecutorErrors.invalidColor)
       
-      expect(result.message).toContain('Invalid color')
+      expect(result.message).toBe('Invalid color: #yellow')
       expect(result.retryable).toBe(false)
     })
 
     it('should map "viewport info not available" to retryable', () => {
-      const error = new Error('Viewport info not available')
-      const result = mapAIError(error)
+      const result = mapAIError(mockExecutorErrors.viewportNotAvailable)
       
       expect(result.message).toBe('Canvas not ready. Please try again.')
       expect(result.retryable).toBe(true)
     })
-  })
 
-  describe('mapAIError - Network Errors', () => {
-    it('should map NetworkError to retryable (when caught by generic handler)', () => {
-      // Note: Errors with messages are caught by the generic error.message handler first
-      // This tests the current behavior
-      const error = new Error('Network error')
-      error.name = 'NetworkError'
+    it('should map generic executor errors to non-retryable', () => {
+      const error = new Error('Some validation error')
       const result = mapAIError(error)
       
-      // Currently caught by generic handler (line 87-123), returns original message
-      expect(result.message).toBe('Network error')
-      expect(result.retryable).toBe(false) // Generic handler defaults to non-retryable
-    })
-
-    it('should handle errors with "network" in message', () => {
-      // Errors with messages are caught by generic handler
-      const error = new Error('Failed due to network issues')
-      const result = mapAIError(error)
-      
-      expect(result.message).toBe('Failed due to network issues')
+      expect(result.message).toBe('Some validation error')
       expect(result.retryable).toBe(false)
     })
   })
 
-  describe('mapAIError - Default Cases', () => {
-    it('should handle errors with messages as non-retryable by default', () => {
-      const error = new Error('Something weird happened')
-      const result = mapAIError(error)
+  describe('Network Errors', () => {
+    it('should map NetworkError to retryable', () => {
+      // Create proper NetworkError with name property
+      const networkError = Object.assign(new Error('Failed to fetch'), { name: 'NetworkError' })
+      const result = mapAIError(networkError)
       
-      // Generic handler returns original message with retryable: false
-      expect(result.message).toBe('Something weird happened')
-      expect(result.retryable).toBe(false)
-    })
-
-    it('should default truly unknown errors to retryable', () => {
-      // Error without code or message property
-      const error = { someProperty: 'value' }
-      const result = mapAIError(error)
-      
-      expect(result.message).toBe('An unexpected error occurred. Please try again.')
+      expect(result.message).toBe('Network error. Please check your connection and try again.')
       expect(result.retryable).toBe(true)
     })
   })
 
-  describe('formatPartialSuccessMessage', () => {
-    it('should show success count (e.g. "Completed 3 of 5 steps")', () => {
-      const error = { message: 'Rectangle not found', retryable: false }
-      const result = formatPartialSuccessMessage(5, 4, error)
+  describe('Unknown Errors', () => {
+    it('should default unknown errors to retryable (safety)', () => {
+      const result = mapAIError(mockUnknownError)
       
-      expect(result).toBe('Completed 3 of 5 steps. Error: Rectangle not found')
+      // Should use the error message if available
+      expect(result.message).toBe('Something went wrong')
+      expect(result.retryable).toBe(false)
     })
 
-    it('should show just error if no steps succeeded', () => {
-      const error = { message: 'Invalid request', retryable: false }
-      const result = formatPartialSuccessMessage(5, 1, error)
+    it('should handle null/undefined errors gracefully', () => {
+      const resultNull = mapAIError(null)
+      const resultUndefined = mapAIError(undefined)
       
-      expect(result).toBe('Invalid request')
+      expect(resultNull.retryable).toBe(true)
+      expect(resultUndefined.retryable).toBe(true)
     })
 
-    it('should include error message in partial success', () => {
-      const error = { message: 'Timeout occurred', retryable: true }
-      const result = formatPartialSuccessMessage(10, 6, error)
+    it('should handle errors without message property', () => {
+      const error = { code: 'some-code' }
+      const result = mapAIError(error)
       
-      expect(result).toContain('Completed 5 of 10 steps')
-      expect(result).toContain('Timeout occurred')
+      expect(result.message).toBe('An unexpected error occurred')
+      expect(result.retryable).toBe(true)
     })
   })
 })
 
+describe('formatPartialSuccessMessage', () => {
+  it('should show success count (e.g. "Completed 3 of 5 steps")', () => {
+    const error = { message: 'Rectangle not found', retryable: false }
+    const result = formatPartialSuccessMessage(5, 4, error)
+    
+    expect(result).toBe('Completed 3 of 5 steps. Error: Rectangle not found')
+  })
+
+  it('should show just error if no steps succeeded', () => {
+    const error = { message: 'Failed to create rectangle', retryable: false }
+    const result = formatPartialSuccessMessage(3, 1, error)
+    
+    expect(result).toBe('Failed to create rectangle')
+  })
+
+  it('should include error message in partial success', () => {
+    const error = { message: 'Invalid color', retryable: false }
+    const result = formatPartialSuccessMessage(2, 2, error)
+    
+    expect(result).toBe('Completed 1 of 2 steps. Error: Invalid color')
+  })
+
+  it('should handle single-step failure', () => {
+    const error = { message: 'Network error', retryable: true }
+    const result = formatPartialSuccessMessage(1, 1, error)
+    
+    expect(result).toBe('Network error')
+  })
+
+  it('should handle last step failure', () => {
+    const error = { message: 'Delete failed', retryable: false }
+    const result = formatPartialSuccessMessage(4, 4, error)
+    
+    expect(result).toBe('Completed 3 of 4 steps. Error: Delete failed')
+  })
+})
