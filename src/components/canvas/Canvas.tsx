@@ -33,6 +33,9 @@ const Canvas: React.FC<CanvasProps> = ({
   const [isRectangleDragging, setIsRectangleDragging] = useState(false)
   const [isRectangleResizing, setIsRectangleResizing] = useState(false)
   
+  // Track if user just used AI command (to prevent accidental deselect on first click)
+  const justUsedAICommandRef = useRef(false)
+  
   // Get canvas context
   const { 
     rectangles, 
@@ -202,8 +205,19 @@ const Canvas: React.FC<CanvasProps> = ({
 
   // Handle rectangle click (selection/deselection)
   const handleRectangleClick = useCallback(async (rectangle: RectangleType) => {
-    // If the rectangle is already selected, deselect it
+    // Remove focus from any input field (e.g., AI chat input) so keyboard shortcuts work
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur()
+    }
+    
+    // If the rectangle is already selected
     if (selectedRectangleId === rectangle.id) {
+      // Don't deselect if user just used AI command (first click after AI action)
+      if (justUsedAICommandRef.current) {
+        justUsedAICommandRef.current = false
+        return
+      }
+      // Otherwise, deselect it (toggle behavior)
       await selectRectangle(null)
     } else {
       // Otherwise, select it
@@ -368,6 +382,24 @@ const Canvas: React.FC<CanvasProps> = ({
       window.removeEventListener('keydown', handleKeyDown)
     }
   }, [selectedRectangleId, rectangles, handleRectangleResize, deleteRectangle, isRectangleDragging, isRectangleResizing, getCurrentStagePosition])
+
+  // Detect when rectangle is selected after AI command (input was focused)
+  useEffect(() => {
+    if (selectedRectangleId) {
+      // If an input/textarea is currently focused, user likely just used AI command
+      const activeElement = document.activeElement
+      if (activeElement instanceof HTMLInputElement || activeElement instanceof HTMLTextAreaElement) {
+        justUsedAICommandRef.current = true
+        
+        // Clear the flag after 3 seconds as a safety measure
+        const timeout = setTimeout(() => {
+          justUsedAICommandRef.current = false
+        }, 3000)
+        
+        return () => clearTimeout(timeout)
+      }
+    }
+  }, [selectedRectangleId])
 
   // Update viewport info on mount and window resize
   useEffect(() => {
