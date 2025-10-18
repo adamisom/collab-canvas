@@ -22,12 +22,16 @@
 }
 
 .canvas-sidebar {
-  width: 300px;
+  width: 200px;
+  min-width: 200px;
+  max-width: 200px;
   background: white;
   border-right: 1px solid #e2e8f0;
-  padding: 24px;
+  padding: 20px;
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
+  overflow-x: hidden;
 }
 
 .canvas-area {
@@ -113,13 +117,15 @@
 .canvas-status {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 8px;
+  min-width: 0;
 }
 
 .canvas-status h3 {
   color: #2d3748;
-  font-size: 18px;
-  margin: 0;
+  font-size: 16px;
+  margin: 0 0 12px 0;
+  text-align: center;
 }
 
 .canvas-instructions {
@@ -157,11 +163,13 @@
 }
 
 .sidebar-section {
-  margin: 20px 0;
-  padding: 16px;
+  margin: 0;
+  padding: 12px;
   background: #f7fafc;
   border-radius: 8px;
   border: 1px solid #e2e8f0;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .test-controls {

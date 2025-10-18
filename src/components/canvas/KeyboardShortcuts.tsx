@@ -27,21 +27,54 @@ const KeyboardShortcuts: React.FC = () => {
         <div className="shortcuts-expanded">
           <div className="shortcuts-section">
             <strong>Canvas Navigation:</strong>
-            <span>🖱️ Click+Drag to pan</span>
-            <span>🔍 Scroll to zoom</span>
-            <span>⌨️ Arrow keys to navigate</span>
-            <span>0 - Reset zoom and position</span>
+            <div className="shortcut-item">
+              <div className="shortcut-key">🖱️ Click+Drag</div>
+              <div className="shortcut-desc">to pan</div>
+            </div>
+            <div className="shortcut-item">
+              <div className="shortcut-key">🔍 Scroll</div>
+              <div className="shortcut-desc">to zoom</div>
+            </div>
+            <div className="shortcut-item">
+              <div className="shortcut-key">⌨️ Arrow keys</div>
+              <div className="shortcut-desc">to navigate</div>
+            </div>
+            <div className="shortcut-item">
+              <div className="shortcut-key">0</div>
+              <div className="shortcut-desc">Reset zoom</div>
+            </div>
           </div>
           
           <div className="shortcuts-section">
             <strong>Rectangle Operations:</strong>
-            <span>⇧+Arrows - Resize selected</span>
-            <span>⌘/Ctrl+C - Copy selected</span>
-            <span>⌘/Ctrl+V - Paste</span>
-            <span>⌘/Ctrl+D - Duplicate selected</span>
-            <span>⌘/Ctrl+] - Bring to front</span>
-            <span>⌘/Ctrl+[ - Send to back</span>
-            <span>Delete/Backspace - Delete selected</span>
+            <div className="shortcut-item">
+              <div className="shortcut-key">⇧+Arrows</div>
+              <div className="shortcut-desc">Resize</div>
+            </div>
+            <div className="shortcut-item">
+              <div className="shortcut-key">⌘/Ctrl+C</div>
+              <div className="shortcut-desc">Copy</div>
+            </div>
+            <div className="shortcut-item">
+              <div className="shortcut-key">⌘/Ctrl+V</div>
+              <div className="shortcut-desc">Paste</div>
+            </div>
+            <div className="shortcut-item">
+              <div className="shortcut-key">⌘/Ctrl+D</div>
+              <div className="shortcut-desc">Duplicate</div>
+            </div>
+            <div className="shortcut-item">
+              <div className="shortcut-key">⌘/Ctrl+]</div>
+              <div className="shortcut-desc">To front</div>
+            </div>
+            <div className="shortcut-item">
+              <div className="shortcut-key">⌘/Ctrl+[</div>
+              <div className="shortcut-desc">To back</div>
+            </div>
+            <div className="shortcut-item">
+              <div className="shortcut-key">Del/Backspace</div>
+              <div className="shortcut-desc">Delete</div>
+            </div>
           </div>
         </div>
       )}

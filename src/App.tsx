@@ -29,7 +29,7 @@ const CanvasContent: React.FC = () => {
     <main className="app-main canvas-main">
       <div className="canvas-sidebar">
         <div className="canvas-status">
-          <h3>🎨 Canvas Workspace</h3>
+          <h3>🎨  ( • ᴗ - ) ✧</h3>
           
           {error && (
             <div className="status-item error">
