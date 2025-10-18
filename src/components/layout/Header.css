@@ -36,15 +36,14 @@
 
 .user-info {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  text-align: right;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
 }
 
 .username-label {
   font-size: 12px;
   color: rgba(255, 255, 255, 0.8);
-  margin-bottom: 2px;
 }
 
 .username {
@@ -85,7 +84,8 @@
   }
   
   .user-info {
+    flex-direction: column;
     align-items: center;
-    text-align: center;
+    gap: 4px;
   }
 }
