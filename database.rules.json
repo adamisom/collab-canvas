@@ -15,8 +15,10 @@
       ".write": "auth != null"
     },
     "cursors": {
-      ".read": "auth != null",
-      ".write": "auth != null"
+      "$userId": {
+        ".read": "auth != null",
+        ".write": "auth != null && auth.uid === $userId"
+      }
     }
   }
 }
