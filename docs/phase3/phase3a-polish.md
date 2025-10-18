@@ -1122,6 +1122,58 @@ Before moving to Phase 3B, verify:
 
 ---
 
+## Quick Local Testing Plan
+
+### **Setup:**
+```bash
+npm run dev
+```
+Then open `http://localhost:5173` - this will connect to production Firebase.
+
+---
+
+### **Phase 3A Feature Testing:**
+
+#### **1. Duplicate + Copy/Paste**
+- ✅ Create a rectangle, select it, press **Cmd+C** → Should see "Rectangle copied" toast
+- ✅ Press **Cmd+V** → Should paste with 20px offset, auto-selected, see "Rectangle pasted" toast
+- ✅ Select rectangle, press **Cmd+D** → Should duplicate with 20px offset, see "Rectangle duplicated" toast
+- ✅ Try these shortcuts without selection → Should not work/no toast
+- ✅ **Text selection test:** Select text in sidebar (e.g., "Active Users"), press Cmd+C → Should copy text WITHOUT "Rectangle copied" toast
+
+#### **2. Enhanced Color Picker**
+- ✅ Select rectangle → Color picker appears in canvas stats bar
+- ✅ Click preset colors (red/blue/green) → Changes color, adds to history
+- ✅ Type hex code `#ff5500` in input, click ✓ → Changes color, adds to history
+- ✅ Color history shows last 5 colors used
+- ✅ **Vertical alignment:** Toggle rectangle selection on/off → Canvas stats bar should stay same height (no jumping)
+
+#### **3. Keyboard Shortcuts Display**
+- ✅ Check left sidebar → Should see collapsible "⌨️ Keyboard Shortcuts" section
+- ✅ Click to collapse/expand → State persists on refresh (localStorage)
+- ✅ Sidebar width stays consistent when toggling shortcuts
+
+#### **4. Layering & Z-Index**
+- ✅ Create 3 overlapping rectangles → Newer ones appear on top
+- ✅ Select bottom rectangle, press **Cmd+]** → Brings to front, see toast
+- ✅ Select top rectangle, press **Cmd+[** → Sends to back, see toast
+
+#### **5. AI Agent Commands**
+- ✅ Create and select rectangle, ask AI: "duplicate it" → Should duplicate
+- ✅ Ask AI: "bring to front" → Should move to front
+- ✅ Ask AI: "send to back" → Should move to back
+- ✅ Without selection, ask: "duplicate it" → Should get error message
+
+#### **6. UX Polish Checks**
+- ✅ Sidebar is narrow (~200px) and clean
+- ✅ Header shows: "🎨  ( • ᴗ - ) ✧"
+- ✅ Header height is compact
+- ✅ Sidebar spacing is tight but readable
+
+**Total test time: ~5 minutes** ⏱️
+
+---
+
 ## Next Steps
 
 **Proceed to Phase 3B**: [Multi-Select Implementation](./phase3b-multiselect.md)
