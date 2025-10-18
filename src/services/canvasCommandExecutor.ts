@@ -141,14 +141,17 @@ export class CanvasCommandExecutor {
       throw new Error('Viewport info not available')
     }
 
-    // Use provided coordinates or default to viewport center
+    // Use provided coordinates or default to slightly left and above viewport center
+    const defaultX = viewportInfo.centerX - 100
+    const defaultY = viewportInfo.centerY - 70
+    
     const x = this.clampNumber(
-      params.x ?? viewportInfo.centerX,
+      params.x ?? defaultX,
       CANVAS_BOUNDS.MIN_X,
       CANVAS_BOUNDS.MAX_X
     )
     const y = this.clampNumber(
-      params.y ?? viewportInfo.centerY,
+      params.y ?? defaultY,
       CANVAS_BOUNDS.MIN_Y,
       CANVAS_BOUNDS.MAX_Y
     )

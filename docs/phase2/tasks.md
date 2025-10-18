@@ -1428,8 +1428,8 @@ import AIChat from './components/ai/AIChat';
 - Verify real-time sync
 
 **Manual Testing Notes:**
-- Notes: 
-- Bugs found & fixes applied: 
+- Notes: Works. I did make the default position left of center though. For "Create a blue rectangle".
+- Bugs found & fixes applied: N/A
 
 ---
 
