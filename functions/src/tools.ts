@@ -96,6 +96,26 @@ export const duplicateRectangleTool = tool({
 });
 
 /**
+ * Tool 8: Bring rectangle to front
+ */
+export const bringToFrontTool = tool({
+  description: "Bring the selected rectangle to the front (on top of all other rectangles). Requires a rectangle to be selected.",
+  inputSchema: z.object({
+    shapeId: z.string().optional().describe(PARAM_DESCRIPTIONS.SHAPE_ID),
+  }),
+});
+
+/**
+ * Tool 9: Send rectangle to back
+ */
+export const sendToBackTool = tool({
+  description: "Send the selected rectangle to the back (behind all other rectangles). Requires a rectangle to be selected.",
+  inputSchema: z.object({
+    shapeId: z.string().optional().describe(PARAM_DESCRIPTIONS.SHAPE_ID),
+  }),
+});
+
+/**
  * Export all tools as an object
  */
 export const tools = {
@@ -106,4 +126,6 @@ export const tools = {
   deleteRectangle: deleteRectangleTool,
   createMultipleRectangles: createMultipleRectanglesTool,
   duplicateRectangle: duplicateRectangleTool,
+  bringToFront: bringToFrontTool,
+  sendToBack: sendToBackTool,
 };

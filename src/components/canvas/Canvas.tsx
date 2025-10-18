@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback, useEffect } from 'react'
+import React, { useRef, useState, useCallback, useEffect, useMemo } from 'react'
 import { Stage, Layer } from 'react-konva'
 import type Konva from 'konva'
 import type { KonvaEventObject } from 'konva/lib/Node'
@@ -47,6 +47,10 @@ const Canvas: React.FC<CanvasProps> = ({
   const pasteRectangleRef = useRef<() => Promise<RectangleType | null>>()
   const duplicateRectangleRef = useRef<(rectangleId: string) => Promise<RectangleType | null>>()
   
+  // Refs for layering operations
+  const bringToFrontRef = useRef<(rectangleId: string) => Promise<void>>()
+  const sendToBackRef = useRef<(rectangleId: string) => Promise<void>>()
+  
   // Get canvas context
   const { 
     rectangles, 
@@ -60,6 +64,8 @@ const Canvas: React.FC<CanvasProps> = ({
     copyRectangle,
     pasteRectangle,
     duplicateRectangle,
+    bringToFront,
+    sendToBack,
     selectionLocked,
     toastMessage,
     clearToast,
@@ -291,6 +297,15 @@ const Canvas: React.FC<CanvasProps> = ({
   // Get selected rectangle
   const selectedRectangle = rectangles.find(r => r.id === selectedRectangleId)
 
+  // Sort rectangles by zIndex for rendering (lower zIndex = render first = behind)
+  const sortedRectangles = useMemo(() => {
+    return [...rectangles].sort((a, b) => {
+      const aZ = a.zIndex ?? 0
+      const bZ = b.zIndex ?? 0
+      return aZ - bZ
+    })
+  }, [rectangles])
+
   // Persist showShortcuts to localStorage
   useEffect(() => {
     localStorage.setItem('collabcanvas_showShortcuts', String(showShortcuts))
@@ -302,6 +317,12 @@ const Canvas: React.FC<CanvasProps> = ({
     pasteRectangleRef.current = pasteRectangle
     duplicateRectangleRef.current = duplicateRectangle
   }, [copyRectangle, pasteRectangle, duplicateRectangle])
+
+  // Keep layering operation refs updated
+  useEffect(() => {
+    bringToFrontRef.current = bringToFront
+    sendToBackRef.current = sendToBack
+  }, [bringToFront, sendToBack])
 
   // Keyboard controls for canvas navigation and rectangle resizing
   useEffect(() => {
@@ -337,6 +358,24 @@ const Canvas: React.FC<CanvasProps> = ({
         if (selectedRectangleId) {
           e.preventDefault() // Prevent browser bookmark shortcut
           duplicateRectangleRef.current?.(selectedRectangleId)
+        }
+        return
+      }
+      
+      // Bring to front: Cmd+] (Mac) or Ctrl+] (Windows/Linux)
+      if ((e.metaKey || e.ctrlKey) && e.key === ']' && !isTyping) {
+        if (selectedRectangleId) {
+          e.preventDefault()
+          bringToFrontRef.current?.(selectedRectangleId)
+        }
+        return
+      }
+      
+      // Send to back: Cmd+[ (Mac) or Ctrl+[ (Windows/Linux)
+      if ((e.metaKey || e.ctrlKey) && e.key === '[' && !isTyping) {
+        if (selectedRectangleId) {
+          e.preventDefault()
+          sendToBackRef.current?.(selectedRectangleId)
         }
         return
       }
@@ -526,6 +565,8 @@ const Canvas: React.FC<CanvasProps> = ({
                 <span>⌘/Ctrl+C - Copy selected</span>
                 <span>⌘/Ctrl+V - Paste</span>
                 <span>⌘/Ctrl+D - Duplicate selected</span>
+                <span>⌘/Ctrl+] - Bring to front</span>
+                <span>⌘/Ctrl+[ - Send to back</span>
                 <span>Delete/Backspace - Delete selected</span>
               </div>
             </div>
@@ -553,8 +594,8 @@ const Canvas: React.FC<CanvasProps> = ({
           className={isDragging ? 'dragging' : ''}
         >
           <Layer>
-            {/* Render rectangles */}
-            {rectangles.map((rectangle) => (
+            {/* Render rectangles (sorted by zIndex) */}
+            {sortedRectangles.map((rectangle) => (
               <Rectangle
                 key={rectangle.id}
                 rectangle={rectangle}

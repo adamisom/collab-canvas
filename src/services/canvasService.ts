@@ -19,6 +19,7 @@ export interface Rectangle {
   width: number
   height: number
   color: string
+  zIndex?: number
   selectedBy?: string | null
   selectedByUsername?: string | null
   createdBy: string
@@ -81,10 +82,21 @@ export class CanvasService {
         throw new Error('Failed to generate rectangle ID')
       }
 
+      // Get all rectangles to find max zIndex (with fallback)
+      let maxZ = 1000 // Default if fetch fails
+      try {
+        const allRectangles = await this.getAllRectangles()
+        maxZ = this.getMaxZIndex(allRectangles)
+      } catch (zIndexError) {
+        // If we can't fetch rectangles for zIndex, use default
+        console.warn('Could not fetch rectangles for zIndex calculation, using default')
+      }
+
       const rectangle: Rectangle = {
         id: newRectangleRef.key,
         ...rectangleData,
         color: rectangleData.color || RECTANGLE_COLORS.BLUE,
+        zIndex: maxZ + 1000, // Default to top with gap
         createdAt: now,
         updatedAt: now
       }
@@ -185,6 +197,68 @@ export class CanvasService {
       console.error('Error deleting rectangle:', error)
       throw error
     }
+  }
+
+  /**
+   * Bring rectangle to front (sets zIndex to max + 1000)
+   * @param rectangleId - ID of the rectangle to bring to front
+   */
+  async bringToFront(rectangleId: string): Promise<void> {
+    try {
+      const allRectangles = await this.getAllRectangles()
+      const maxZ = this.getMaxZIndex(allRectangles)
+      
+      await this.updateRectangle(rectangleId, {
+        zIndex: maxZ + 1000
+      })
+    } catch (error) {
+      console.error('Error bringing rectangle to front:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Send rectangle to back (sets zIndex to min - 1000)
+   * @param rectangleId - ID of the rectangle to send to back
+   */
+  async sendToBack(rectangleId: string): Promise<void> {
+    try {
+      const allRectangles = await this.getAllRectangles()
+      const minZ = this.getMinZIndex(allRectangles)
+      
+      await this.updateRectangle(rectangleId, {
+        zIndex: minZ - 1000
+      })
+    } catch (error) {
+      console.error('Error sending rectangle to back:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Get maximum zIndex from rectangles (defaults to 1000 if no rectangles)
+   * @param rectangles - Array of rectangles to search
+   * @returns Maximum zIndex value
+   */
+  private getMaxZIndex(rectangles: Rectangle[]): number {
+    if (rectangles.length === 0) return 1000
+    
+    return Math.max(
+      ...rectangles.map(r => r.zIndex ?? 0)
+    )
+  }
+
+  /**
+   * Get minimum zIndex from rectangles (defaults to 0 if no rectangles)
+   * @param rectangles - Array of rectangles to search
+   * @returns Minimum zIndex value
+   */
+  private getMinZIndex(rectangles: Rectangle[]): number {
+    if (rectangles.length === 0) return 0
+    
+    return Math.min(
+      ...rectangles.map(r => r.zIndex ?? 0)
+    )
   }
 
   /**

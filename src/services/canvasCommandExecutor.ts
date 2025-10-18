@@ -17,6 +17,8 @@ import type {
   ResizeRectangleParams,
   DeleteRectangleParams,
   DuplicateRectangleParams,
+  BringToFrontParams,
+  SendToBackParams,
   CreateMultipleRectanglesParams
 } from '../shared/types'
 import { 
@@ -41,6 +43,8 @@ export interface CanvasContextMethods {
   resizeRectangle: (rectangleId: string, width: number, height: number, x?: number, y?: number) => Promise<void>
   deleteRectangle: (rectangleId: string) => Promise<void>
   duplicateRectangle: (rectangleId: string) => Promise<Rectangle | null>
+  bringToFront: (rectangleId: string) => Promise<void>
+  sendToBack: (rectangleId: string) => Promise<void>
   changeRectangleColor: (rectangleId: string, color: string) => Promise<void>
   selectRectangle: (rectangleId: string | null) => Promise<void>
   setSelectionLocked: (locked: boolean) => void
@@ -126,6 +130,14 @@ export class CanvasCommandExecutor {
 
       case 'duplicateRectangle':
         await this.executeDuplicateRectangle(parameters as DuplicateRectangleParams, createdRectangleId)
+        break
+
+      case 'bringToFront':
+        await this.executeBringToFront(parameters as BringToFrontParams, createdRectangleId)
+        break
+
+      case 'sendToBack':
+        await this.executeSendToBack(parameters as SendToBackParams, createdRectangleId)
         break
 
       case 'createMultipleRectangles':
@@ -317,6 +329,46 @@ export class CanvasCommandExecutor {
     }
 
     await this.context.duplicateRectangle(shapeId)
+  }
+
+  /**
+   * Bring rectangle to front
+   */
+  private async executeBringToFront(params: BringToFrontParams, createdRectangleId?: string): Promise<void> {
+    // Use provided shapeId, or createdRectangleId from multi-step, or fall back to selected rectangle
+    const shapeId = createdRectangleId || params.shapeId || this.context.selectedRectangleId
+
+    // Validate shapeId exists
+    if (!shapeId) {
+      throw new Error('No rectangle selected to bring to front')
+    }
+
+    // Only validate existence if not using createdRectangleId (to avoid race condition)
+    if (!createdRectangleId && !this.rectangleExists(shapeId)) {
+      throw new Error(`Rectangle ${shapeId} not found or was deleted`)
+    }
+
+    await this.context.bringToFront(shapeId)
+  }
+
+  /**
+   * Send rectangle to back
+   */
+  private async executeSendToBack(params: SendToBackParams, createdRectangleId?: string): Promise<void> {
+    // Use provided shapeId, or createdRectangleId from multi-step, or fall back to selected rectangle
+    const shapeId = createdRectangleId || params.shapeId || this.context.selectedRectangleId
+
+    // Validate shapeId exists
+    if (!shapeId) {
+      throw new Error('No rectangle selected to send to back')
+    }
+
+    // Only validate existence if not using createdRectangleId (to avoid race condition)
+    if (!createdRectangleId && !this.rectangleExists(shapeId)) {
+      throw new Error(`Rectangle ${shapeId} not found or was deleted`)
+    }
+
+    await this.context.sendToBack(shapeId)
   }
 
   /**

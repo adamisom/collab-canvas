@@ -30,6 +30,10 @@ interface CanvasContextType {
   duplicateRectangle: (rectangleId: string) => Promise<Rectangle | null>
   hasClipboardData: () => boolean
   
+  // Layering operations
+  bringToFront: (rectangleId: string) => Promise<void>
+  sendToBack: (rectangleId: string) => Promise<void>
+  
   // Viewport operations (for AI agent)
   getViewportInfo: () => ViewportInfo | null
   updateViewportInfo: (info: ViewportInfo) => void
@@ -409,6 +413,28 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     return clipboardRectangle !== null
   }, [clipboardRectangle])
 
+  // Bring rectangle to front
+  const bringToFront = useCallback(async (rectangleId: string): Promise<void> => {
+    try {
+      await canvasService.bringToFront(rectangleId)
+      setToastMessage('Brought to front')
+    } catch (error) {
+      console.error('Error bringing rectangle to front:', error)
+      setError('Failed to bring rectangle to front')
+    }
+  }, [])
+
+  // Send rectangle to back
+  const sendToBack = useCallback(async (rectangleId: string): Promise<void> => {
+    try {
+      await canvasService.sendToBack(rectangleId)
+      setToastMessage('Sent to back')
+    } catch (error) {
+      console.error('Error sending rectangle to back:', error)
+      setError('Failed to send rectangle to back')
+    }
+  }, [])
+
   const value: CanvasContextType = {
     rectangles,
     selectedRectangleId,
@@ -427,6 +453,8 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     pasteRectangle,
     duplicateRectangle,
     hasClipboardData,
+    bringToFront,
+    sendToBack,
     getViewportInfo,
     updateViewportInfo,
     clearError,

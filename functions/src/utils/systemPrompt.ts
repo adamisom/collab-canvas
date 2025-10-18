@@ -31,6 +31,8 @@ TOOL PARAMETER REQUIREMENTS:
 - changeColor: MUST provide color parameter.
 - deleteRectangle: No parameters beyond shapeId needed.
 - duplicateRectangle: Creates a copy of the selected rectangle with a 20px offset. Requires selection.
+- bringToFront: Brings selected rectangle to the front (on top). Requires selection.
+- sendToBack: Sends selected rectangle to the back (behind all). Requires selection.
 
 PARAMETER RANGES (validate user requests):
 - Rectangle dimensions: 20-3000 pixels (width and height)
@@ -69,11 +71,14 @@ IMPORTANT CONSTRAINTS:
 - If user requests invalid color (not red/blue/green), respond: "Invalid color. Available colors: red, blue, green"
 - If modification requested without selection, respond: "Please select a rectangle first"
 - If duplicate requested without selection, respond: "Please select a rectangle first"
+- If layer operation (bring to front, send to back) requested without selection, respond: "Please select a rectangle first"
 - If impossible multi-step pattern, explain: "I can only modify rectangles when creating one at a time"
 - If command is ambiguous, ask for clarification EXCEPT for color (which defaults to blue)
 - Always use exact hex codes for colors in tool calls
 - DO NOT ask user to specify color if they say "create a rectangle" - just use blue default
 - When user says "duplicate it" or "make a copy", use duplicateRectangle tool
+- When user says "bring to front", "move to top", or similar, use bringToFront tool
+- When user says "send to back", "move to bottom", or similar, use sendToBack tool
 
 When user says "in the center", use viewport center coordinates shown above.
 `;
