@@ -4,6 +4,7 @@
  */
 
 import * as functions from "firebase-functions";
+import {defineString} from "firebase-functions/params";
 import {initializeApp} from "firebase-admin/app";
 import {generateText} from "ai";
 import {createOpenAI} from "@ai-sdk/openai";
@@ -19,11 +20,15 @@ import {
 // Initialize Firebase Admin
 initializeApp();
 
+// Define OpenAI API key as an environment parameter for Functions v2
+const openaiApiKey = defineString("OPENAI_API_KEY");
+
 /**
  * Callable Cloud Function to process AI commands
  * Receives user message and context, calls OpenAI, returns structured commands
  */
 export const processAICommand = functions.https.onCall(
+  {secrets: [openaiApiKey]},
   async (request): Promise<ProcessAICommandResponse> => {
     // Enforce authentication
     if (!request.auth) {
@@ -57,8 +62,8 @@ export const processAICommand = functions.https.onCall(
         );
       }
 
-      // Get OpenAI API key from environment
-      const apiKey = functions.config().openai?.key;
+      // Get OpenAI API key from environment variable (Functions v2)
+      const apiKey = openaiApiKey.value();
       if (!apiKey) {
         console.error("OpenAI API key not configured");
         throw new functions.https.HttpsError(
