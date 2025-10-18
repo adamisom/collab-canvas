@@ -15,9 +15,10 @@
   border-bottom: 1px solid #e2e8f0;
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
+  align-items: flex-start;
+  flex-wrap: nowrap;
   gap: 16px;
+  min-height: 48px;
 }
 
 .canvas-stats {
@@ -26,6 +27,8 @@
   font-size: 12px;
   color: #4a5568;
   font-family: 'SF Mono', Monaco, monospace;
+  align-items: flex-start;
+  min-height: 24px;
 }
 
 .canvas-controls {
@@ -320,7 +323,7 @@
 /* Header Color Picker */
 .header-color-picker {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   margin-left: 16px;
   padding-left: 16px;
@@ -331,13 +334,16 @@
   font-size: 14px;
   color: #4a5568;
   font-weight: 500;
+  line-height: 24px;
 }
 
 /* Override ColorPicker styles for header layout */
 .header-color-picker .color-picker {
   flex-direction: row;
   gap: 8px;
-  align-items: center;
+  align-items: flex-start;
+  max-height: 24px;
+  overflow: visible;
 }
 
 .header-color-picker .color-picker-title {
@@ -353,6 +359,7 @@
 .header-color-picker .color-option {
   width: 20px;
   height: 20px;
+  flex-shrink: 0;
 }
 
 .header-color-picker .color-hex-form {
@@ -363,6 +370,10 @@
   margin-top: 0;
   padding-top: 0;
   border-top: none;
+}
+
+.header-color-picker .color-history-option {
+  flex-shrink: 0;
 }
 
 /* Placeholder to maintain consistent height when no rectangle is selected */
