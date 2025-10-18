@@ -1556,12 +1556,13 @@ import AIChat from './components/ai/AIChat';
 
 ---
 
-#### Scenario 12: No Auto-Selection (Multiple Rectangles)
+#### Scenario 12: Auto-Selection of Last Rectangle (Multiple Rectangles)
 - User types "Create 3 red rectangles"
-- AI creates 3 rectangles
-- None are selected
+- AI creates 3 rectangles in a row/column/grid
+- The last (3rd) rectangle is automatically selected
 - User types "Make it bigger"
-- AI returns error "Please select a rectangle first"
+- AI resizes the selected (last) rectangle successfully
+- Verify the 3rd rectangle grows, not the 1st or 2nd
 
 **Manual Testing Notes:**
 - Notes: 
