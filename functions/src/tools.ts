@@ -33,7 +33,7 @@ export const createRectangleTool = tool({
 export const changeColorTool = tool({
   description: "Change the color of an existing rectangle. Requires a rectangle to be selected.",
   inputSchema: z.object({
-    shapeId: z.string().describe(PARAM_DESCRIPTIONS.SHAPE_ID),
+    shapeId: z.string().optional().describe(PARAM_DESCRIPTIONS.SHAPE_ID),
     color: z.enum(VALID_RECTANGLE_COLORS).describe(PARAM_DESCRIPTIONS.COLOR),
   }),
 });
@@ -44,7 +44,7 @@ export const changeColorTool = tool({
 export const moveRectangleTool = tool({
   description: "Move an existing rectangle to a new position. Requires a rectangle to be selected.",
   inputSchema: z.object({
-    shapeId: z.string().describe(PARAM_DESCRIPTIONS.SHAPE_ID),
+    shapeId: z.string().optional().describe(PARAM_DESCRIPTIONS.SHAPE_ID),
     x: z.number().min(CANVAS_BOUNDS.MIN_X).max(CANVAS_BOUNDS.MAX_X).describe(PARAM_DESCRIPTIONS.X_COORD),
     y: z.number().min(CANVAS_BOUNDS.MIN_Y).max(CANVAS_BOUNDS.MAX_Y).describe(PARAM_DESCRIPTIONS.Y_COORD),
   }),
@@ -56,7 +56,7 @@ export const moveRectangleTool = tool({
 export const resizeRectangleTool = tool({
   description: "Resize an existing rectangle. Requires a rectangle to be selected. Provide width and/or height to resize.",
   inputSchema: z.object({
-    shapeId: z.string().describe(PARAM_DESCRIPTIONS.SHAPE_ID),
+    shapeId: z.string().optional().describe(PARAM_DESCRIPTIONS.SHAPE_ID),
     width: z.number().min(RECTANGLE_CONSTRAINTS.MIN_WIDTH).max(RECTANGLE_CONSTRAINTS.MAX_WIDTH).optional().describe(PARAM_DESCRIPTIONS.WIDTH),
     height: z.number().min(RECTANGLE_CONSTRAINTS.MIN_HEIGHT).max(RECTANGLE_CONSTRAINTS.MAX_HEIGHT).optional().describe(PARAM_DESCRIPTIONS.HEIGHT),
   }),
@@ -68,7 +68,7 @@ export const resizeRectangleTool = tool({
 export const deleteRectangleTool = tool({
   description: "Delete an existing rectangle. Requires a rectangle to be selected.",
   inputSchema: z.object({
-    shapeId: z.string().describe(PARAM_DESCRIPTIONS.SHAPE_ID),
+    shapeId: z.string().optional().describe(PARAM_DESCRIPTIONS.SHAPE_ID),
   }),
 });
 

@@ -1,7 +1,7 @@
 /**
  * Firebase Cloud Functions for AI Canvas Agent
  * Main entry point for the processAICommand callable function
- * Updated: Optional parameters for createRectangle tool
+ * Updated: Made shapeId optional in modification tools to fix parameter extraction
  */
 
 import * as functions from "firebase-functions";
@@ -104,14 +104,30 @@ export const processAICommand = functions.https.onCall(
       // Extract tool calls from result
       const toolCalls = result.toolCalls || [];
       
+      // Log what OpenAI returned for debugging
+      console.log("🔍 OpenAI returned tool calls:", JSON.stringify(toolCalls, null, 2));
+      
       // Return structured commands and optional message
       const response: ProcessAICommandResponse = {
-        commands: toolCalls.map((call) => ({
-          tool: call.toolName,
-          parameters: ('args' in call ? call.args : {}) as AICommandParameters,
-        })),
+        commands: toolCalls.map((call) => {
+          // The AI SDK can use either 'args' (for valid typed calls) or 'input' (for dynamic/invalid calls)
+          // We need to check both properties
+          let params = {};
+          if ('args' in call && call.args) {
+            params = call.args;
+          } else if ('input' in call && call.input) {
+            params = call.input;
+          }
+          console.log(`📦 Extracting params for ${call.toolName}:`, JSON.stringify(params));
+          return {
+            tool: call.toolName,
+            parameters: params as AICommandParameters,
+          };
+        }),
         message: result.text || undefined,
       };
+
+      console.log("📤 Sending to client:", JSON.stringify(response, null, 2));
 
       return response;
     } catch (error: unknown) {

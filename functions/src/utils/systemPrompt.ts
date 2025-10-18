@@ -52,7 +52,9 @@ RULES FOR MULTI-STEP COMMANDS:
 SELECTION CONTEXT:
 ${selectedShape ? `- User has selected rectangle ID: ${selectedShape.id}
   Color: ${selectedShape.color}, Position: (${selectedShape.x}, ${selectedShape.y}), Size: ${selectedShape.width}x${selectedShape.height}
-  Use this ID for modification commands (resize, move, changeColor, delete)` : "- No rectangle currently selected"}
+  
+  ⚠️ CRITICAL: When calling modification tools (resizeRectangle, moveRectangle, changeColor, deleteRectangle), 
+  you MUST include this exact shapeId: "${selectedShape.id}" in the tool parameters!` : "- No rectangle currently selected"}
 ${!selectedShape ? "- Modification commands (resize, move, change color, delete) require selection" : ""}
 
 CANVAS STATE:
