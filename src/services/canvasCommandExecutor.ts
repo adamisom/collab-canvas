@@ -192,7 +192,8 @@ export class CanvasCommandExecutor {
    * Change color of existing rectangle
    */
   private async executeChangeColor(params: ChangeColorParams, createdRectangleId?: string): Promise<void> {
-    const shapeId = createdRectangleId || params.shapeId
+    // Use provided shapeId, or createdRectangleId from multi-step, or fall back to selected rectangle
+    const shapeId = createdRectangleId || params.shapeId || this.context.selectedRectangleId
 
     // Validate shapeId exists
     if (!shapeId) {
@@ -216,7 +217,8 @@ export class CanvasCommandExecutor {
    * Move rectangle to new position
    */
   private async executeMoveRectangle(params: MoveRectangleParams, createdRectangleId?: string): Promise<void> {
-    const shapeId = createdRectangleId || params.shapeId
+    // Use provided shapeId, or createdRectangleId from multi-step, or fall back to selected rectangle
+    const shapeId = createdRectangleId || params.shapeId || this.context.selectedRectangleId
 
     // Validate shapeId exists
     if (!shapeId) {
@@ -238,7 +240,8 @@ export class CanvasCommandExecutor {
    * Resize existing rectangle
    */
   private async executeResizeRectangle(params: ResizeRectangleParams, createdRectangleId?: string): Promise<void> {
-    const shapeId = createdRectangleId || params.shapeId
+    // Use provided shapeId, or createdRectangleId from multi-step, or fall back to selected rectangle
+    const shapeId = createdRectangleId || params.shapeId || this.context.selectedRectangleId
 
     // Validate shapeId exists
     if (!shapeId) {
@@ -268,7 +271,8 @@ export class CanvasCommandExecutor {
    * Delete existing rectangle
    */
   private async executeDeleteRectangle(params: DeleteRectangleParams, createdRectangleId?: string): Promise<void> {
-    const shapeId = createdRectangleId || params.shapeId
+    // Use provided shapeId, or createdRectangleId from multi-step, or fall back to selected rectangle
+    const shapeId = createdRectangleId || params.shapeId || this.context.selectedRectangleId
 
     // Validate shapeId exists
     if (!shapeId) {
