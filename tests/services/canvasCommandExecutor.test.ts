@@ -13,8 +13,7 @@ import {
   mockChangeColorCommand,
   mockMoveRectangleCommand,
   mockResizeRectangleCommand,
-  mockDeleteRectangleCommand,
-  mockCreateMultipleRectanglesCommand
+  mockDeleteRectangleCommand
 } from '../fixtures/aiAgent.fixtures'
 
 describe('CanvasCommandExecutor', () => {

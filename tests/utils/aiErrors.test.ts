@@ -6,7 +6,7 @@
 
 import { describe, it, expect } from 'vitest'
 import { mapAIError, formatPartialSuccessMessage } from '../../src/utils/aiErrors'
-import { mockFirebaseErrors, mockExecutorErrors, mockNetworkError, mockUnknownError } from '../fixtures/aiAgent.fixtures'
+import { mockFirebaseErrors, mockExecutorErrors, mockUnknownError } from '../fixtures/aiAgent.fixtures'
 
 describe('mapAIError', () => {
   describe('Firebase HttpsError Codes', () => {

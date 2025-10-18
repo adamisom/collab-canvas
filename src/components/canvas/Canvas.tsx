@@ -194,12 +194,7 @@ const Canvas: React.FC<CanvasProps> = ({
           const canvasX = (pointer.x - stagePos.x) / currentScale
           const canvasY = (pointer.y - stagePos.y) / currentScale
           
-          console.log('Creating rectangle at:', canvasX, canvasY)
-          const newRectangle = await createRectangle(canvasX, canvasY)
-          
-          if (newRectangle) {
-            console.log('Rectangle created:', newRectangle)
-          }
+          await createRectangle(canvasX, canvasY)
         }
       }
     }
