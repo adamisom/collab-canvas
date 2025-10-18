@@ -92,6 +92,10 @@ export type DeleteRectangleParams = {
   shapeId?: string;
 };
 
+export type DuplicateRectangleParams = {
+  shapeId?: string;
+};
+
 export type CreateMultipleRectanglesParams = {
   count: number;
   color: string;
@@ -105,6 +109,7 @@ export type AICommandParameters =
   | MoveRectangleParams
   | ResizeRectangleParams
   | DeleteRectangleParams
+  | DuplicateRectangleParams
   | CreateMultipleRectanglesParams;
 
 export interface AICommand {

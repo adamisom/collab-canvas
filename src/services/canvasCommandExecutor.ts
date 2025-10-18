@@ -16,6 +16,7 @@ import type {
   MoveRectangleParams,
   ResizeRectangleParams,
   DeleteRectangleParams,
+  DuplicateRectangleParams,
   CreateMultipleRectanglesParams
 } from '../shared/types'
 import { 
@@ -39,6 +40,7 @@ export interface CanvasContextMethods {
   updateRectangle: (rectangleId: string, updates: Partial<Rectangle>) => Promise<void>
   resizeRectangle: (rectangleId: string, width: number, height: number, x?: number, y?: number) => Promise<void>
   deleteRectangle: (rectangleId: string) => Promise<void>
+  duplicateRectangle: (rectangleId: string) => Promise<Rectangle | null>
   changeRectangleColor: (rectangleId: string, color: string) => Promise<void>
   selectRectangle: (rectangleId: string | null) => Promise<void>
   setSelectionLocked: (locked: boolean) => void
@@ -120,6 +122,10 @@ export class CanvasCommandExecutor {
 
       case 'deleteRectangle':
         await this.executeDeleteRectangle(parameters as DeleteRectangleParams, createdRectangleId)
+        break
+
+      case 'duplicateRectangle':
+        await this.executeDuplicateRectangle(parameters as DuplicateRectangleParams, createdRectangleId)
         break
 
       case 'createMultipleRectangles':
@@ -291,6 +297,26 @@ export class CanvasCommandExecutor {
     }
 
     await this.context.deleteRectangle(shapeId)
+  }
+
+  /**
+   * Duplicate existing rectangle
+   */
+  private async executeDuplicateRectangle(params: DuplicateRectangleParams, createdRectangleId?: string): Promise<void> {
+    // Use provided shapeId, or createdRectangleId from multi-step, or fall back to selected rectangle
+    const shapeId = createdRectangleId || params.shapeId || this.context.selectedRectangleId
+
+    // Validate shapeId exists
+    if (!shapeId) {
+      throw new Error('No rectangle selected to duplicate')
+    }
+
+    // Only validate existence if not using createdRectangleId (to avoid race condition)
+    if (!createdRectangleId && !this.rectangleExists(shapeId)) {
+      throw new Error(`Rectangle ${shapeId} not found or was deleted`)
+    }
+
+    await this.context.duplicateRectangle(shapeId)
   }
 
   /**
