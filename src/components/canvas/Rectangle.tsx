@@ -75,7 +75,7 @@ const RectangleComponent: React.FC<RectangleProps> = ({
   }
 
   // Handle resize operations
-  const handleResizeStart = (_direction: string) => {
+  const handleResizeStart = () => {
     setIsResizing(true)
     // Capture the rectangle state at the start of resize
     setResizeStartRect({ ...rectangle })
@@ -111,7 +111,7 @@ const RectangleComponent: React.FC<RectangleProps> = ({
     onResize(rectangle, resizeUpdate.width, resizeUpdate.height, resizeUpdate.x, resizeUpdate.y)
   }
 
-  const handleResizeEnd = (_direction: string) => {
+  const handleResizeEnd = () => {
     setIsResizing(false)
     // Clear the captured resize start state and current visual rect
     setResizeStartRect(null)

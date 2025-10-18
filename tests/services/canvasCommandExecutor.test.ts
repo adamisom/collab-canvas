@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { CanvasCommandExecutor, type CanvasContextMethods } from '../../src/services/canvasCommandExecutor'
 import type { Rectangle } from '../../src/services/canvasService'
-import type { ViewportInfo } from '../../src/types/ai'
 import { CANVAS_BOUNDS, RECTANGLE_CONSTRAINTS, DEFAULT_RECT } from '../../src/utils/constants'
 
 // Mock CanvasContext

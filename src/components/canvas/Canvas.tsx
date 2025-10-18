@@ -162,7 +162,7 @@ const Canvas: React.FC<CanvasProps> = ({
   }, [isRectangleDragging, isRectangleResizing])
 
   // Handle drag end  
-  const handleDragEnd = useCallback((_e: any) => {
+  const handleDragEnd = useCallback(() => {
     // Reset dragging state
     setIsDragging(false)
     
@@ -317,7 +317,7 @@ const Canvas: React.FC<CanvasProps> = ({
       // Canvas navigation (when not resizing)
       if (stageRef.current) {
         const currentPos = getCurrentStagePosition()
-        let newPosition = { ...currentPos }
+        const newPosition = { ...currentPos }
         
         switch (e.key) {
           case 'ArrowUp':
@@ -352,7 +352,7 @@ const Canvas: React.FC<CanvasProps> = ({
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [selectedRectangleId, rectangles, handleRectangleResize, deleteRectangle, isRectangleDragging, isRectangleResizing])
+  }, [selectedRectangleId, rectangles, handleRectangleResize, deleteRectangle, isRectangleDragging, isRectangleResizing, getCurrentStagePosition])
 
   // Update viewport info on mount and window resize
   useEffect(() => {

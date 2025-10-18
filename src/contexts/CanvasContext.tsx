@@ -35,6 +35,8 @@ interface CanvasContextType {
 
 const CanvasContext = createContext<CanvasContextType | null>(null)
 
+// Standard React context pattern: exporting hook with provider
+// eslint-disable-next-line react-refresh/only-export-components
 export const useCanvas = () => {
   const context = useContext(CanvasContext)
   if (!context) {

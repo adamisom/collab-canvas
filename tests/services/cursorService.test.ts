@@ -194,7 +194,7 @@ describe('CursorService', () => {
 
   describe('cleanupStaleCursors', () => {
     it('should remove cursors older than 30 seconds', async () => {
-      const { dbGet, dbRemove, dbRef } = await import('../../src/services/firebaseService')
+      const { dbRemove, dbRef } = await import('../../src/services/firebaseService')
       const now = Date.now()
       
       const mockData = {

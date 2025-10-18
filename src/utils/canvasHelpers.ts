@@ -166,7 +166,7 @@ export const throttle = <T extends (...args: any[]) => void>(
     const currentTime = Date.now()
     
     if (currentTime - lastExecTime > delay) {
-      func.apply(null, args)
+      func(...args)
       lastExecTime = currentTime
     } else {
       if (timeoutId) {
@@ -174,7 +174,7 @@ export const throttle = <T extends (...args: any[]) => void>(
       }
       
       timeoutId = setTimeout(() => {
-        func.apply(null, args)
+        func(...args)
         lastExecTime = Date.now()
       }, delay - (currentTime - lastExecTime))
     }
@@ -194,7 +194,7 @@ export const debounce = <T extends (...args: any[]) => void>(
     }
     
     timeoutId = setTimeout(() => {
-      func.apply(null, args)
+      func(...args)
     }, delay)
   }
 }
