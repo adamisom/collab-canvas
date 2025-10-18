@@ -17,13 +17,13 @@ import {
  * Tool 1: Create a single rectangle
  */
 export const createRectangleTool = tool({
-  description: "Create a single rectangle on the canvas at specified position with given dimensions and color",
+  description: "Create a single rectangle on the canvas at specified position with given dimensions and color. If position not specified, creates at viewport center.",
   inputSchema: z.object({
-    x: z.number().min(CANVAS_BOUNDS.MIN_X).max(CANVAS_BOUNDS.MAX_X).describe(PARAM_DESCRIPTIONS.X_COORD),
-    y: z.number().min(CANVAS_BOUNDS.MIN_Y).max(CANVAS_BOUNDS.MAX_Y).describe(PARAM_DESCRIPTIONS.Y_COORD),
-    width: z.number().min(RECTANGLE_CONSTRAINTS.MIN_WIDTH).max(RECTANGLE_CONSTRAINTS.MAX_WIDTH).describe(PARAM_DESCRIPTIONS.WIDTH),
-    height: z.number().min(RECTANGLE_CONSTRAINTS.MIN_HEIGHT).max(RECTANGLE_CONSTRAINTS.MAX_HEIGHT).describe(PARAM_DESCRIPTIONS.HEIGHT),
-    color: z.enum(VALID_RECTANGLE_COLORS).describe(PARAM_DESCRIPTIONS.COLOR),
+    x: z.number().min(CANVAS_BOUNDS.MIN_X).max(CANVAS_BOUNDS.MAX_X).optional().describe(PARAM_DESCRIPTIONS.X_COORD),
+    y: z.number().min(CANVAS_BOUNDS.MIN_Y).max(CANVAS_BOUNDS.MAX_Y).optional().describe(PARAM_DESCRIPTIONS.Y_COORD),
+    width: z.number().min(RECTANGLE_CONSTRAINTS.MIN_WIDTH).max(RECTANGLE_CONSTRAINTS.MAX_WIDTH).optional().describe(PARAM_DESCRIPTIONS.WIDTH),
+    height: z.number().min(RECTANGLE_CONSTRAINTS.MIN_HEIGHT).max(RECTANGLE_CONSTRAINTS.MAX_HEIGHT).optional().describe(PARAM_DESCRIPTIONS.HEIGHT),
+    color: z.enum(VALID_RECTANGLE_COLORS).optional().describe(PARAM_DESCRIPTIONS.COLOR),
   }),
 });
 

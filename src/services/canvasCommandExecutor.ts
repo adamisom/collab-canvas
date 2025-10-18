@@ -135,8 +135,23 @@ export class CanvasCommandExecutor {
    * Create a single rectangle
    */
   private async executeCreateRectangle(params: CreateRectangleParams): Promise<Rectangle | null> {
-    const x = this.clampNumber(params.x, CANVAS_BOUNDS.MIN_X, CANVAS_BOUNDS.MAX_X)
-    const y = this.clampNumber(params.y, CANVAS_BOUNDS.MIN_Y, CANVAS_BOUNDS.MAX_Y)
+    // Get viewport info for default positioning
+    const viewportInfo = this.getViewportInfo()
+    if (!viewportInfo) {
+      throw new Error('Viewport info not available')
+    }
+
+    // Use provided coordinates or default to viewport center
+    const x = this.clampNumber(
+      params.x ?? viewportInfo.centerX,
+      CANVAS_BOUNDS.MIN_X,
+      CANVAS_BOUNDS.MAX_X
+    )
+    const y = this.clampNumber(
+      params.y ?? viewportInfo.centerY,
+      CANVAS_BOUNDS.MIN_Y,
+      CANVAS_BOUNDS.MAX_Y
+    )
     const width = this.clampNumber(
       params.width || DEFAULT_RECT.WIDTH, 
       RECTANGLE_CONSTRAINTS.MIN_WIDTH, 
@@ -148,9 +163,12 @@ export class CanvasCommandExecutor {
       RECTANGLE_CONSTRAINTS.MAX_HEIGHT
     )
 
+    // Use provided color or default to blue
+    const color = params.color || DEFAULT_RECT.FILL
+    
     // Validate color
-    if (!this.isValidColor(params.color)) {
-      throw new Error(`Invalid color: ${params.color}. Must be one of: ${VALID_AI_COLORS.join(', ')}`)
+    if (!this.isValidColor(color)) {
+      throw new Error(`Invalid color: ${color}. Must be one of: ${VALID_AI_COLORS.join(', ')}`)
     }
 
     // Create rectangle via CanvasContext
@@ -164,7 +182,7 @@ export class CanvasCommandExecutor {
     await this.context.updateRectangle(rect.id, {
       width,
       height,
-      color: params.color
+      color
     })
 
     return rect

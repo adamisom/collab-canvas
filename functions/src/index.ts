@@ -1,6 +1,7 @@
 /**
  * Firebase Cloud Functions for AI Canvas Agent
  * Main entry point for the processAICommand callable function
+ * Updated: Optional parameters for createRectangle tool
  */
 
 import * as functions from "firebase-functions";
