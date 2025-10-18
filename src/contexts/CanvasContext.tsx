@@ -3,6 +3,7 @@ import { canvasService } from '../services/canvasService'
 import type { Rectangle, RectangleInput } from '../services/canvasService'
 import { useAuth } from './AuthContext'
 import type { ViewportInfo } from '../shared/types'
+import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../utils/constants'
 
 interface CanvasContextType {
   rectangles: Rectangle[]
@@ -22,6 +23,12 @@ interface CanvasContextType {
   // Selection operations
   selectRectangle: (rectangleId: string | null) => Promise<void>
   setSelectionLocked: (locked: boolean) => void
+  
+  // Clipboard operations
+  copyRectangle: (rectangleId: string) => void
+  pasteRectangle: () => Promise<Rectangle | null>
+  duplicateRectangle: (rectangleId: string) => Promise<Rectangle | null>
+  hasClipboardData: () => boolean
   
   // Viewport operations (for AI agent)
   getViewportInfo: () => ViewportInfo | null
@@ -56,6 +63,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
   const [error, setError] = useState<string | null>(null)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const [selectionLocked, setSelectionLocked] = useState(false)
+  const [clipboardRectangle, setClipboardRectangle] = useState<Rectangle | null>(null)
   
   // Use ref to access current selectedRectangleId in Firebase callback
   const selectedRectangleIdRef = useRef<string | null>(null)
@@ -111,6 +119,13 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       // User signed out, clean up their selections
       canvasService.clearUserSelections(prevUserIdRef.current)
       prevUserIdRef.current = null
+    }
+  }, [user])
+
+  // Clear clipboard on sign out
+  useEffect(() => {
+    if (!user) {
+      setClipboardRectangle(null)
     }
   }, [user])
 
@@ -282,6 +297,118 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     }
   }, [user])
 
+  // Copy rectangle to clipboard
+  const copyRectangle = useCallback((rectangleId: string) => {
+    const rectangle = rectangles.find(r => r.id === rectangleId)
+    if (!rectangle) {
+      setToastMessage('Rectangle not found')
+      return
+    }
+    
+    setClipboardRectangle(rectangle)
+    setToastMessage('Rectangle copied')
+  }, [rectangles])
+
+  // Paste rectangle from clipboard
+  const pasteRectangle = useCallback(async (): Promise<Rectangle | null> => {
+    if (!user) {
+      setError('You must be signed in to paste')
+      return null
+    }
+    
+    if (!clipboardRectangle) {
+      setToastMessage('Nothing to paste')
+      return null
+    }
+    
+    try {
+      const PASTE_OFFSET = 20
+      const newX = Math.min(
+        clipboardRectangle.x + PASTE_OFFSET, 
+        CANVAS_WIDTH - clipboardRectangle.width
+      )
+      const newY = Math.min(
+        clipboardRectangle.y + PASTE_OFFSET, 
+        CANVAS_HEIGHT - clipboardRectangle.height
+      )
+      
+      const input: RectangleInput = {
+        x: newX,
+        y: newY,
+        width: clipboardRectangle.width,
+        height: clipboardRectangle.height,
+        color: clipboardRectangle.color,
+        createdBy: user.uid
+      }
+      
+      const pasted = await canvasService.createRectangle(input)
+      
+      if (pasted) {
+        await selectRectangle(pasted.id)
+        setToastMessage('Rectangle pasted')
+      }
+      
+      return pasted
+    } catch (err) {
+      console.error('Error pasting rectangle:', err)
+      setError(err instanceof Error ? err.message : 'Failed to paste rectangle')
+      return null
+    }
+  }, [user, clipboardRectangle, selectRectangle])
+
+  // Duplicate rectangle (copy + paste in one action)
+  const duplicateRectangle = useCallback(async (rectangleId: string): Promise<Rectangle | null> => {
+    if (!user) {
+      setError('You must be signed in to duplicate')
+      return null
+    }
+    
+    const rectangle = rectangles.find(r => r.id === rectangleId)
+    if (!rectangle) {
+      setToastMessage('Rectangle not found')
+      return null
+    }
+    
+    try {
+      const DUPLICATE_OFFSET = 20
+      const newX = Math.min(
+        rectangle.x + DUPLICATE_OFFSET, 
+        CANVAS_WIDTH - rectangle.width
+      )
+      const newY = Math.min(
+        rectangle.y + DUPLICATE_OFFSET, 
+        CANVAS_HEIGHT - rectangle.height
+      )
+      
+      const input: RectangleInput = {
+        x: newX,
+        y: newY,
+        width: rectangle.width,
+        height: rectangle.height,
+        color: rectangle.color,
+        createdBy: user.uid
+      }
+      
+      const duplicated = await canvasService.createRectangle(input)
+      
+      if (duplicated) {
+        await selectRectangle(duplicated.id)
+        setToastMessage('Rectangle duplicated')
+      }
+      
+      return duplicated
+    } catch (err) {
+      console.error('Error duplicating rectangle:', err)
+      setError(err instanceof Error ? err.message : 'Failed to duplicate rectangle')
+      return null
+    }
+  }, [user, rectangles, selectRectangle])
+
+  // Check if clipboard has data
+  const hasClipboardData = useCallback(() => {
+    return clipboardRectangle !== null
+  }, [clipboardRectangle])
+
   const value: CanvasContextType = {
     rectangles,
     selectedRectangleId,
@@ -296,6 +423,10 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     changeRectangleColor,
     selectRectangle,
     setSelectionLocked,
+    copyRectangle,
+    pasteRectangle,
+    duplicateRectangle,
+    hasClipboardData,
     getViewportInfo,
     updateViewportInfo,
     clearError,

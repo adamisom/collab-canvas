@@ -36,6 +36,11 @@ const Canvas: React.FC<CanvasProps> = ({
   // Track if user just used AI command (to prevent accidental deselect on first click)
   const justUsedAICommandRef = useRef(false)
   
+  // Refs for clipboard operations (to avoid dependency array issues)
+  const copyRectangleRef = useRef<(rectangleId: string) => void>()
+  const pasteRectangleRef = useRef<() => Promise<RectangleType | null>>()
+  const duplicateRectangleRef = useRef<(rectangleId: string) => Promise<RectangleType | null>>()
+  
   // Get canvas context
   const { 
     rectangles, 
@@ -46,6 +51,10 @@ const Canvas: React.FC<CanvasProps> = ({
     deleteRectangle, 
     selectRectangle,
     changeRectangleColor,
+    copyRectangle,
+    pasteRectangle,
+    duplicateRectangle,
+    selectionLocked,
     toastMessage,
     clearToast,
     updateViewportInfo
@@ -276,6 +285,12 @@ const Canvas: React.FC<CanvasProps> = ({
   // Get selected rectangle
   const selectedRectangle = rectangles.find(r => r.id === selectedRectangleId)
 
+  // Keep clipboard operation refs updated
+  useEffect(() => {
+    copyRectangleRef.current = copyRectangle
+    pasteRectangleRef.current = pasteRectangle
+    duplicateRectangleRef.current = duplicateRectangle
+  }, [copyRectangle, pasteRectangle, duplicateRectangle])
 
   // Keyboard controls for canvas navigation and rectangle resizing
   useEffect(() => {
@@ -286,6 +301,34 @@ const Canvas: React.FC<CanvasProps> = ({
       const activeElement = document.activeElement
       const isTyping = activeElement instanceof HTMLInputElement || 
                        activeElement instanceof HTMLTextAreaElement
+      
+      // Don't handle shortcuts during AI operations
+      if (selectionLocked) return
+      
+      // Copy: Cmd+C (Mac) or Ctrl+C (Windows/Linux)
+      if ((e.metaKey || e.ctrlKey) && e.key === 'c' && !isTyping) {
+        if (selectedRectangleId) {
+          e.preventDefault()
+          copyRectangleRef.current?.(selectedRectangleId)
+        }
+        return
+      }
+      
+      // Paste: Cmd+V (Mac) or Ctrl+V (Windows/Linux)
+      if ((e.metaKey || e.ctrlKey) && e.key === 'v' && !isTyping) {
+        e.preventDefault()
+        pasteRectangleRef.current?.()
+        return
+      }
+      
+      // Duplicate: Cmd+D (Mac) or Ctrl+D (Windows/Linux)
+      if ((e.metaKey || e.ctrlKey) && e.key === 'd' && !isTyping) {
+        if (selectedRectangleId) {
+          e.preventDefault() // Prevent browser bookmark shortcut
+          duplicateRectangleRef.current?.(selectedRectangleId)
+        }
+        return
+      }
       
       // Handle rectangle deletion
       if ((e.key === 'Delete' || e.key === 'Backspace') && selectedRectangleId) {
@@ -381,7 +424,7 @@ const Canvas: React.FC<CanvasProps> = ({
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [selectedRectangleId, rectangles, handleRectangleResize, deleteRectangle, isRectangleDragging, isRectangleResizing, getCurrentStagePosition])
+  }, [selectedRectangleId, rectangles, handleRectangleResize, deleteRectangle, isRectangleDragging, isRectangleResizing, getCurrentStagePosition, selectionLocked])
 
   // Detect when rectangle is selected after AI command (input was focused)
   useEffect(() => {

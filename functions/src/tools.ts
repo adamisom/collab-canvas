@@ -86,6 +86,16 @@ export const createMultipleRectanglesTool = tool({
 });
 
 /**
+ * Tool 7: Duplicate existing rectangle
+ */
+export const duplicateRectangleTool = tool({
+  description: "Duplicate the currently selected rectangle with a slight offset. Creates a copy of the rectangle 20 pixels offset from the original.",
+  inputSchema: z.object({
+    shapeId: z.string().optional().describe(PARAM_DESCRIPTIONS.SHAPE_ID),
+  }),
+});
+
+/**
  * Export all tools as an object
  */
 export const tools = {
@@ -95,4 +105,5 @@ export const tools = {
   resizeRectangle: resizeRectangleTool,
   deleteRectangle: deleteRectangleTool,
   createMultipleRectangles: createMultipleRectanglesTool,
+  duplicateRectangle: duplicateRectangleTool,
 };
