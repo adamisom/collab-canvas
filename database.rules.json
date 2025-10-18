@@ -2,6 +2,8 @@
   "rules": {
     "users": {
       "$userId": {
+        ".read": "auth.uid === $userId",
+        ".write": "auth.uid === $userId",
         "aiCommandCount": {
           ".read": "auth.uid === $userId",
           ".write": "auth.uid === $userId && (!data.exists() || newData.val() > data.val())"
