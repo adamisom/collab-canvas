@@ -175,6 +175,11 @@ export class CanvasCommandExecutor {
   private async executeChangeColor(params: ChangeColorParams, createdRectangleId?: string): Promise<void> {
     const shapeId = createdRectangleId || params.shapeId
 
+    // Validate shapeId exists
+    if (!shapeId) {
+      throw new Error('No rectangle ID provided')
+    }
+
     // Validate rectangle exists
     if (!this.rectangleExists(shapeId)) {
       throw new Error(`Rectangle ${shapeId} not found or was deleted`)
@@ -194,6 +199,11 @@ export class CanvasCommandExecutor {
   private async executeMoveRectangle(params: MoveRectangleParams, createdRectangleId?: string): Promise<void> {
     const shapeId = createdRectangleId || params.shapeId
 
+    // Validate shapeId exists
+    if (!shapeId) {
+      throw new Error('No rectangle ID provided')
+    }
+
     // Validate rectangle exists
     if (!this.rectangleExists(shapeId)) {
       throw new Error(`Rectangle ${shapeId} not found or was deleted`)
@@ -210,6 +220,11 @@ export class CanvasCommandExecutor {
    */
   private async executeResizeRectangle(params: ResizeRectangleParams, createdRectangleId?: string): Promise<void> {
     const shapeId = createdRectangleId || params.shapeId
+
+    // Validate shapeId exists
+    if (!shapeId) {
+      throw new Error('No rectangle ID provided')
+    }
 
     // Validate rectangle exists
     if (!this.rectangleExists(shapeId)) {
@@ -235,6 +250,11 @@ export class CanvasCommandExecutor {
    */
   private async executeDeleteRectangle(params: DeleteRectangleParams, createdRectangleId?: string): Promise<void> {
     const shapeId = createdRectangleId || params.shapeId
+
+    // Validate shapeId exists
+    if (!shapeId) {
+      throw new Error('No rectangle ID provided')
+    }
 
     // Validate rectangle exists
     if (!this.rectangleExists(shapeId)) {

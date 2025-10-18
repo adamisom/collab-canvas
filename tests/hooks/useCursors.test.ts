@@ -1,9 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { useCursors } from '../../src/hooks/useCursors'
+import type { User } from 'firebase/auth'
 
 // Mock the AuthContext
-const mockUser = { uid: 'user1' } as any
+const mockUser: Partial<User> = { uid: 'user1' }
 const mockUsername = 'Alice'
 
 vi.mock('../../src/contexts/AuthContext', () => ({
@@ -23,9 +24,9 @@ vi.mock('../../src/services/cursorService', () => ({
 }))
 
 describe('useCursors Hook', () => {
-  let mockUpdateCursor: any
-  let mockOnCursorsChange: any
-  let mockRemoveCursor: any
+  let mockUpdateCursor: Mock
+  let mockOnCursorsChange: Mock
+  let mockRemoveCursor: Mock
 
   beforeEach(async () => {
     // Get the mocked functions
@@ -71,7 +72,7 @@ describe('useCursors Hook', () => {
       }
 
       // Mock the onCursorsChange to simulate receiving data with own cursor
-      vi.mocked(mockOnCursorsChange).mockImplementation((callback: any) => {
+      vi.mocked(mockOnCursorsChange).mockImplementation((callback: (cursors: Record<string, unknown>) => void) => {
         const allCursors = {
           ...mockOtherUsersCursors,
           'user1': { // Own cursor should be filtered out
@@ -94,7 +95,7 @@ describe('useCursors Hook', () => {
     })
 
     it('should handle empty cursors object', () => {
-      vi.mocked(mockOnCursorsChange).mockImplementation((callback: any) => {
+      vi.mocked(mockOnCursorsChange).mockImplementation((callback: (cursors: Record<string, unknown>) => void) => {
         callback({}) // Empty cursors
         return vi.fn()
       })
@@ -105,9 +106,9 @@ describe('useCursors Hook', () => {
     })
 
     it('should update cursors when other users move', () => {
-      let mockCallback: ((cursors: any) => void) | null = null
+      let mockCallback: ((cursors: Record<string, unknown>) => void) | null = null
       
-      vi.mocked(mockOnCursorsChange).mockImplementation((callback: any) => {
+      vi.mocked(mockOnCursorsChange).mockImplementation((callback: (cursors: Record<string, unknown>) => void) => {
         mockCallback = callback
         return vi.fn()
       })

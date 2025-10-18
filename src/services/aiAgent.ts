@@ -19,7 +19,8 @@ import type {
   ProcessAICommandRequest,
   ProcessAICommandResponse,
   AICommand,
-  CommandSnapshot
+  CommandSnapshot,
+  CreateRectangleParams
 } from '../types/ai'
 import { CanvasCommandExecutor, type CanvasContextMethods } from './canvasCommandExecutor'
 import { mapAIError, formatPartialSuccessMessage, type AIError } from '../utils/aiErrors'
@@ -192,7 +193,8 @@ export class AIAgent {
    */
   private async executeCreateRectangleCommand(command: AICommand): Promise<string | undefined> {
     // Execute the creation
-    const rect = await this.executor['executeCreateRectangle'](command.parameters)
+    // Type assertion is safe here because this method is only called when command.tool === 'createRectangle'
+    const rect = await this.executor['executeCreateRectangle'](command.parameters as CreateRectangleParams)
 
     if (!rect) {
       throw new Error('Failed to create rectangle')

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { CanvasService } from '../../src/services/canvasService'
 import type { RectangleInput } from '../../src/services/canvasService'
+import type { DataSnapshot, ThenableReference } from 'firebase/database'
 
 // Mock Firebase
 vi.mock('../../src/services/firebaseService', () => ({
@@ -23,7 +24,7 @@ describe('CanvasService', () => {
     
     // Reset dbPush to default value
     const { dbPush } = await import('../../src/services/firebaseService')
-    vi.mocked(dbPush).mockReturnValue({ key: 'test-rectangle-id' } as any)
+    vi.mocked(dbPush).mockReturnValue({ key: 'test-rectangle-id' } as Partial<ThenableReference> as ThenableReference)
     
     canvasService = new CanvasService()
   })
@@ -61,7 +62,7 @@ describe('CanvasService', () => {
       const { dbPush } = await import('../../src/services/firebaseService')
       
       // Mock dbPush to return null key for this specific test
-      vi.mocked(dbPush).mockReturnValueOnce({ key: null } as any)
+      vi.mocked(dbPush).mockReturnValueOnce({ key: null } as Partial<ThenableReference> as ThenableReference)
 
       const rectangleInput: RectangleInput = {
         x: 100,
@@ -83,7 +84,7 @@ describe('CanvasService', () => {
       vi.mocked(dbGet).mockResolvedValue({
         exists: () => true,
         val: () => ({ id: 'test-id', x: 100, y: 100 })
-      } as any)
+      } as Partial<DataSnapshot> as DataSnapshot)
 
       const updates = {
         x: 200,
@@ -110,7 +111,7 @@ describe('CanvasService', () => {
       // Mock dbGet to return non-existing rectangle
       vi.mocked(dbGet).mockResolvedValue({
         exists: () => false
-      } as any)
+      } as Partial<DataSnapshot> as DataSnapshot)
 
       const updates = {
         x: 200,
@@ -135,7 +136,7 @@ describe('CanvasService', () => {
       vi.mocked(dbGet).mockResolvedValue({
         exists: () => true,
         val: () => ({ id: 'test-id', x: 100, y: 100 })
-      } as any)
+      } as Partial<DataSnapshot> as DataSnapshot)
 
       await canvasService.resizeRectangle('test-id', 200, 150)
 
@@ -157,7 +158,7 @@ describe('CanvasService', () => {
       vi.mocked(dbGet).mockResolvedValue({
         exists: () => true,
         val: () => ({ id: 'test-id', x: 100, y: 100 })
-      } as any)
+      } as Partial<DataSnapshot> as DataSnapshot)
 
       await canvasService.resizeRectangle('test-id', 200, 150, 100, 50)
 
@@ -181,7 +182,7 @@ describe('CanvasService', () => {
       vi.mocked(dbGet).mockResolvedValue({
         exists: () => true,
         val: () => ({ id: 'test-id', x: 100, y: 100 })
-      } as any)
+      } as Partial<DataSnapshot> as DataSnapshot)
 
       // Try to resize smaller than minimum (20x20)
       await canvasService.resizeRectangle('test-id', 10, 5)
@@ -204,7 +205,7 @@ describe('CanvasService', () => {
       vi.mocked(dbGet).mockResolvedValue({
         exists: () => true,
         val: () => ({ id: 'test-id', x: 100, y: 100 })
-      } as any)
+      } as Partial<DataSnapshot> as DataSnapshot)
 
       // Try to resize larger than canvas
       await canvasService.resizeRectangle('test-id', 5000, 4000)
@@ -227,7 +228,7 @@ describe('CanvasService', () => {
       vi.mocked(dbGet).mockResolvedValue({
         exists: () => true,
         val: () => ({ id: 'test-id', x: 100, y: 100 })
-      } as any)
+      } as Partial<DataSnapshot> as DataSnapshot)
 
       // Try to position outside canvas
       await canvasService.resizeRectangle('test-id', 100, 100, -50, -50)
@@ -261,7 +262,7 @@ describe('CanvasService', () => {
       const { dbGet } = await import('../../src/services/firebaseService')
       vi.mocked(dbGet).mockResolvedValue({ 
         exists: () => false 
-      } as any)
+      } as Partial<DataSnapshot> as DataSnapshot)
 
       const result = await canvasService.getAllRectangles()
 
@@ -278,7 +279,7 @@ describe('CanvasService', () => {
       vi.mocked(dbGet).mockResolvedValue({ 
         exists: () => true,
         val: () => mockData
-      } as any)
+      } as Partial<DataSnapshot> as DataSnapshot)
 
       const result = await canvasService.getAllRectangles()
 
@@ -304,7 +305,7 @@ describe('CanvasService', () => {
       vi.mocked(dbGet).mockResolvedValue({ 
         exists: () => true,
         val: () => mockRectangle
-      } as any)
+      } as Partial<DataSnapshot> as DataSnapshot)
 
       const result = await canvasService.getRectangle('test-id')
 
@@ -315,7 +316,7 @@ describe('CanvasService', () => {
       const { dbGet } = await import('../../src/services/firebaseService')
       vi.mocked(dbGet).mockResolvedValue({ 
         exists: () => false 
-      } as any)
+      } as Partial<DataSnapshot> as DataSnapshot)
 
       const result = await canvasService.getRectangle('nonexistent-id')
 
@@ -337,7 +338,7 @@ describe('CanvasService', () => {
           exists: () => true,
           val: () => mockData
         }
-        callback(mockSnapshot as any)
+        callback(mockSnapshot as Partial<DataSnapshot> as DataSnapshot)
         return vi.fn() // Return unsubscribe function
       })
 
@@ -355,7 +356,7 @@ describe('CanvasService', () => {
         const mockSnapshot = {
           exists: () => false
         }
-        callback(mockSnapshot as any)
+        callback(mockSnapshot as Partial<DataSnapshot> as DataSnapshot)
         return vi.fn() // Return unsubscribe function
       })
 
@@ -382,7 +383,7 @@ describe('CanvasService', () => {
           createdAt: Date.now(),
           updatedAt: Date.now()
         })
-      } as any)
+      } as Partial<DataSnapshot> as DataSnapshot)
     })
 
     describe('selectRectangle', () => {
@@ -413,7 +414,7 @@ describe('CanvasService', () => {
             selectedBy: 'user456',
             selectedByUsername: 'TestUser'
           })
-        } as any)
+        } as Partial<DataSnapshot> as DataSnapshot)
         
         const result = await canvasService.selectRectangle('test-rectangle-id', 'user456', 'TestUser')
         
@@ -432,7 +433,7 @@ describe('CanvasService', () => {
             selectedBy: 'other-user',
             selectedByUsername: 'OtherUser'
           })
-        } as any)
+        } as Partial<DataSnapshot> as DataSnapshot)
         
         const result = await canvasService.selectRectangle('test-rectangle-id', 'user456', 'TestUser')
         
@@ -445,7 +446,7 @@ describe('CanvasService', () => {
         
         vi.mocked(dbGet).mockResolvedValueOnce({
           exists: () => false
-        } as any)
+        } as Partial<DataSnapshot> as DataSnapshot)
         
         const result = await canvasService.selectRectangle('nonexistent-id', 'user456', 'TestUser')
         
@@ -466,7 +467,7 @@ describe('CanvasService', () => {
             selectedBy: 'user456',
             selectedByUsername: 'TestUser'
           })
-        } as any)
+        } as Partial<DataSnapshot> as DataSnapshot)
         
         await canvasService.deselectRectangle('test-rectangle-id', 'user456')
         
@@ -491,7 +492,7 @@ describe('CanvasService', () => {
             selectedBy: 'other-user',
             selectedByUsername: 'OtherUser'
           })
-        } as any)
+        } as Partial<DataSnapshot> as DataSnapshot)
         
         await canvasService.deselectRectangle('test-rectangle-id', 'user456')
         
@@ -503,7 +504,7 @@ describe('CanvasService', () => {
         
         vi.mocked(dbGet).mockResolvedValueOnce({
           exists: () => false
-        } as any)
+        } as Partial<DataSnapshot> as DataSnapshot)
         
         await expect(canvasService.deselectRectangle('nonexistent-id', 'user456')).resolves.not.toThrow()
         expect(dbUpdate).not.toHaveBeenCalled()
@@ -610,7 +611,7 @@ describe('CanvasService', () => {
       vi.mocked(dbGet).mockResolvedValueOnce({
         exists: () => true,
         val: () => mockRectangles
-      } as any)
+      } as Partial<DataSnapshot> as DataSnapshot)
 
       await canvasService.clearUserSelections(userId)
 
@@ -633,7 +634,7 @@ describe('CanvasService', () => {
       vi.mocked(dbGet).mockResolvedValueOnce({
         exists: () => false,
         val: () => null
-      } as any)
+      } as Partial<DataSnapshot> as DataSnapshot)
 
       await canvasService.clearUserSelections('user123')
 
@@ -657,7 +658,7 @@ describe('CanvasService', () => {
       vi.mocked(dbGet).mockResolvedValueOnce({
         exists: () => true,
         val: () => mockRectangles
-      } as any)
+      } as Partial<DataSnapshot> as DataSnapshot)
 
       await canvasService.clearUserSelections('user123')
 

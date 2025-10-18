@@ -60,7 +60,12 @@ const ResizeHandle: React.FC<ResizeHandleProps> = ({
     stopEventPropagation(e)
     
     setIsDragging(true)
-    const pos = e.target.getStage().getPointerPosition()
+    const stage = e.target.getStage()
+    if (!stage) return
+    
+    const pos = stage.getPointerPosition()
+    if (!pos) return
+    
     // Store the initial drag position
     setInitialDragStart({ x: pos.x, y: pos.y })
     
@@ -74,7 +79,12 @@ const ResizeHandle: React.FC<ResizeHandleProps> = ({
     
     stopEventPropagation(e)
     
-    const pos = e.target.getStage().getPointerPosition()
+    const stage = e.target.getStage()
+    if (!stage) return
+    
+    const pos = stage.getPointerPosition()
+    if (!pos) return
+    
     // Calculate delta from the INITIAL drag start position, not the previous position
     const deltaX = pos.x - initialDragStart.x
     const deltaY = pos.y - initialDragStart.y

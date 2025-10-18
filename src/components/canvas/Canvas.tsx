@@ -98,6 +98,8 @@ const Canvas: React.FC<CanvasProps> = ({
     if (isDragging || isRectangleDragging || isRectangleResizing) return // Don't broadcast while panning, dragging, or resizing
 
     const stage = e.target.getStage()
+    if (!stage) return
+    
     const pointer = stage.getPointerPosition()
     
     if (pointer) {
@@ -319,7 +321,9 @@ const Canvas: React.FC<CanvasProps> = ({
       // Canvas navigation (when not resizing)
       if (stageRef.current) {
         const currentPos = getCurrentStagePosition()
-        const newPosition = { ...currentPos }
+        if (!currentPos || currentPos.x === undefined || currentPos.y === undefined) return
+        
+        const newPosition = { x: currentPos.x, y: currentPos.y }
         
         switch (e.key) {
           case 'ArrowUp':

@@ -45,7 +45,7 @@ export function mapAIError(error: unknown): AIError {
         }
 
       case 'failed-precondition':
-        if (error.message.includes('too many rectangles')) {
+        if (error.message && error.message.includes('too many rectangles')) {
           return {
             message: 'Canvas has too many rectangles (limit: 1000)',
             retryable: false,
