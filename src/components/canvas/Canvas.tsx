@@ -401,7 +401,13 @@ const Canvas: React.FC<CanvasProps> = ({
     setIsRectangleResizing(false)
   }, [])
 
-  // PR #6: Circle handlers (similar to rectangle handlers)
+  // ============================================================================
+  // REFACTORED (Post-3C): Shared drag state for all shapes
+  // All shapes (circle/line/text) reuse setIsRectangleDragging state
+  // Reduces duplication but maintains independent handlers
+  // ============================================================================
+
+  // PR #6: Circle handlers (circle click has special toggle behavior)
   const handleCircleClick = useCallback(async (circleId: string) => {
     if (document.activeElement instanceof HTMLElement) {
       document.activeElement.blur()
@@ -418,8 +424,8 @@ const Canvas: React.FC<CanvasProps> = ({
     }
   }, [clearSelection, selectShape, primarySelectionId])
 
-  const handleCircleDragStart = useCallback(async () => {
-    setIsRectangleDragging(true)  // Reuse rectangle dragging state
+  const handleCircleDragStart = useCallback(() => {
+    setIsRectangleDragging(true)  // Shared state
   }, [])
 
   const handleCircleDragEnd = useCallback(async (circleId: string, newX: number, newY: number) => {
@@ -448,11 +454,11 @@ const Canvas: React.FC<CanvasProps> = ({
   const handleLineClick = useCallback((lineId: string) => {
     selectShape(lineId, 'line')
   }, [selectShape])
-
+  
   const handleLineDragStart = useCallback(() => {
-    setIsRectangleDragging(true)
+    setIsRectangleDragging(true)  // Shared state
   }, [])
-
+  
   const handleLineDragEnd = useCallback(async (lineId: string, newX: number, newY: number) => {
     try {
       await updateLine(lineId, { x: newX, y: newY })
@@ -471,13 +477,13 @@ const Canvas: React.FC<CanvasProps> = ({
     }
   }, [updateLineEndpoints])
 
-  // PR #8: Text handlers
+  // PR #8: TEXT HANDLERS
   const handleTextClick = useCallback((textId: string) => {
     selectShape(textId, 'text')
   }, [selectShape])
 
   const handleTextDragStart = useCallback(() => {
-    setIsRectangleDragging(true)
+    setIsRectangleDragging(true)  // Shared state
   }, [])
 
   const handleTextDragEnd = useCallback(async (textId: string, newX: number, newY: number) => {
