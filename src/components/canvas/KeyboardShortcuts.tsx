@@ -28,7 +28,7 @@ const KeyboardShortcuts: React.FC = () => {
           <div className="shortcuts-section">
             <strong>Canvas Navigation:</strong>
             <div className="shortcut-item">
-              <div className="shortcut-key">🖱️ Click+Drag</div>
+              <div className="shortcut-key">👆 Click+Drag</div>
               <div className="shortcut-desc">to pan</div>
             </div>
             <div className="shortcut-item">
@@ -36,7 +36,7 @@ const KeyboardShortcuts: React.FC = () => {
               <div className="shortcut-desc">Pan mode</div>
             </div>
             <div className="shortcut-item">
-              <div className="shortcut-key">🔍 Scroll</div>
+              <div className="shortcut-key">🔍 Pinch/Expand</div>
               <div className="shortcut-desc">to zoom</div>
             </div>
             <div className="shortcut-item">
@@ -45,7 +45,7 @@ const KeyboardShortcuts: React.FC = () => {
             </div>
             <div className="shortcut-item">
               <div className="shortcut-key">0</div>
-              <div className="shortcut-desc">Reset zoom</div>
+              <div className="shortcut-desc">Reset zoom/pos</div>
             </div>
           </div>
           
