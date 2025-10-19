@@ -49,6 +49,10 @@ interface CanvasContextType {
   updateText: (textId: string, updates: Partial<TextShape>) => Promise<void>
   deleteText: (textId: string) => Promise<void>
   changeTextColor: (textId: string, color: string) => Promise<void>
+  // PR #9: Text formatting operations
+  changeTextFontSize: (textId: string, fontSize: number) => Promise<void>
+  toggleTextBold: (textId: string) => Promise<void>
+  toggleTextItalic: (textId: string) => Promise<void>
   
   // Unified shape operations (PR #6, updated PR #8)
   selectShape: (shapeId: string, shapeType: ShapeType, additive?: boolean) => Promise<void>
@@ -456,8 +460,8 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       setSelectedShapes(newSelection)
       setPrimarySelectionId(rectangleId)
       setPrimarySelectionType('rectangle')
-      await canvasService.selectRectangle(rectangleId, user.uid, username)
-    } else {
+        await canvasService.selectRectangle(rectangleId, user.uid, username)
+      } else {
       // Add/remove from selection (toggle)
       const isCurrentlySelected = selectedShapes.has(rectangleId)
 
@@ -475,7 +479,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
               const newPrimary = Array.from(next.keys())[0]
               setPrimarySelectionId(newPrimary)
               setPrimarySelectionType(next.get(newPrimary) || null)
-            } else {
+        } else {
               setPrimarySelectionId(null)
               setPrimarySelectionType(null)
             }
@@ -531,7 +535,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       if (rect && (!rect.selectedBy || rect.selectedBy === user.uid)) {
         await canvasService.selectRectangle(id, user.uid, username)
         selected.push(id)
-      } else {
+    } else {
         skipped.push(id)
       }
     }
@@ -961,6 +965,40 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       setError('Failed to change text color')
     }
   }, [])
+
+  // PR #9: Text formatting operations
+  const changeTextFontSize = useCallback(async (textId: string, fontSize: number) => {
+    try {
+      await canvasService.updateText(textId, { fontSize })
+    } catch (error) {
+      console.error('Error changing text font size:', error)
+      setError('Failed to change text font size')
+    }
+  }, [])
+
+  const toggleTextBold = useCallback(async (textId: string) => {
+    try {
+      const text = texts.find(t => t.id === textId)
+      if (!text) return
+      const newWeight = text.fontWeight === 'bold' ? 'normal' : 'bold'
+      await canvasService.updateText(textId, { fontWeight: newWeight })
+    } catch (error) {
+      console.error('Error toggling text bold:', error)
+      setError('Failed to toggle text bold')
+    }
+  }, [texts])
+
+  const toggleTextItalic = useCallback(async (textId: string) => {
+    try {
+      const text = texts.find(t => t.id === textId)
+      if (!text) return
+      const newStyle = text.fontStyle === 'italic' ? 'normal' : 'italic'
+      await canvasService.updateText(textId, { fontStyle: newStyle })
+    } catch (error) {
+      console.error('Error toggling text italic:', error)
+      setError('Failed to toggle text italic')
+    }
+  }, [texts])
 
   // ============================================================================
   // PR #6: UNIFIED SHAPE OPERATIONS (type-discriminated)
@@ -1416,6 +1454,9 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     updateText,  // PR #8
     deleteText,  // PR #8
     changeTextColor,  // PR #8
+    changeTextFontSize,  // PR #9
+    toggleTextBold,  // PR #9
+    toggleTextItalic,  // PR #9
     selectShape,  // PR #6, updated PR #7, updated PR #8
     deleteShape,  // PR #6, updated PR #7, updated PR #8
     changeShapeColor,  // PR #6, updated PR #7, updated PR #8

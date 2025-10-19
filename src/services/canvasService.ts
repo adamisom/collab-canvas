@@ -891,8 +891,10 @@ export class CanvasService {
         x: textData.x,
         y: textData.y,
         text: textData.text || 'New Text',
-        fontSize: 16,  // Fixed for PR #8
-        fontFamily: 'Arial',  // Fixed for PR #8
+        fontSize: 16,  // Default for PR #8
+        fontFamily: 'Arial',  // Default for PR #8
+        fontWeight: 'normal',  // PR #9: Default
+        fontStyle: 'normal',  // PR #9: Default
         color: textData.color || RECTANGLE_COLORS.BLUE,
         zIndex: maxZ + 1000,
         createdBy: textData.createdBy,

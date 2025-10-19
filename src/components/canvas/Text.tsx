@@ -76,6 +76,8 @@ const Text: React.FC<TextProps> = ({
     input.style.top = `${absPos.y}px`
     input.style.fontSize = `${16 * scale}px`  // Scale with zoom for better UX
     input.style.fontFamily = textShape.fontFamily
+    input.style.fontWeight = textShape.fontWeight || 'normal'  // PR #9
+    input.style.fontStyle = textShape.fontStyle || 'normal'  // PR #9
     input.style.color = textShape.color
     input.style.border = '2px solid #3b82f6'
     input.style.padding = '2px 4px'
@@ -138,6 +140,9 @@ const Text: React.FC<TextProps> = ({
         text={textShape.text}
         fontSize={textShape.fontSize}
         fontFamily={textShape.fontFamily}
+        fontStyle={textShape.fontWeight === 'bold' && textShape.fontStyle === 'italic' ? 'bold italic' : 
+                   textShape.fontWeight === 'bold' ? 'bold' : 
+                   textShape.fontStyle === 'italic' ? 'italic' : 'normal'}  // PR #9: Combined font style
         fill={textShape.color}
         stroke={isSelected ? SELECTION_COLORS.STROKE : undefined}
         strokeWidth={isSelected ? 2 : 0}

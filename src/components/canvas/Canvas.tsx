@@ -14,6 +14,7 @@ import Text from './Text'  // PR #8
 import SelectionBox from './SelectionBox'
 import ShapeModeSelector from './ShapeModeSelector'  // PR #6
 import ColorPicker from './ColorPicker'
+import TextFormatToolbar from './TextFormatToolbar'  // PR #9
 import Toast from '../ui/Toast'
 import type { Rectangle as RectangleType } from '../../services/canvasService'
 import './Canvas.css'
@@ -85,6 +86,9 @@ const Canvas: React.FC<CanvasProps> = ({
     updateLine,            // PR #7
     updateLineEndpoints,   // PR #7
     updateText,            // PR #8
+    changeTextFontSize,    // PR #9
+    toggleTextBold,        // PR #9
+    toggleTextItalic,      // PR #9
     resizeRectangle, 
     resizeCircle,          // PR #6
     deleteRectangle, 
@@ -870,6 +874,18 @@ const Canvas: React.FC<CanvasProps> = ({
                 onColorChange={handleColorChange}
               />
             </div>
+          )}
+          
+          {/* PR #9: Text Format Toolbar */}
+          {selectedText && (
+            <TextFormatToolbar
+              fontSize={selectedText.fontSize}
+              fontWeight={selectedText.fontWeight || 'normal'}
+              fontStyle={selectedText.fontStyle || 'normal'}
+              onFontSizeChange={(size) => changeTextFontSize(selectedText.id, size)}
+              onBoldToggle={() => toggleTextBold(selectedText.id)}
+              onItalicToggle={() => toggleTextItalic(selectedText.id)}
+            />
           )}
         </div>
         
