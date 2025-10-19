@@ -401,12 +401,30 @@ const Canvas: React.FC<CanvasProps> = ({
   }, [selectionBoxStart, selectionBoxEnd, rectangles, selectMultiple, isLassoMode, lassoPoints, selectShapesInLasso])
 
   // Handle rectangle click (selection/deselection)
-  const handleRectangleClick = useCallback(async (rectangle: RectangleType) => {
+  const handleRectangleClick = useCallback(async (rectangle: RectangleType, cmdOrCtrlPressed: boolean = false) => {
     // Remove focus from any input field (e.g., AI chat input) so keyboard shortcuts work
     if (document.activeElement instanceof HTMLElement) {
       document.activeElement.blur()
     }
     
+    // Cmd/Ctrl+Click: Add/remove from multi-select (toggle)
+    if (cmdOrCtrlPressed) {
+      const isAlreadySelected = selectedRectangleIds.has(rectangle.id)
+      
+      if (isAlreadySelected) {
+        // Remove from selection
+        const newSelection = Array.from(selectedRectangleIds).filter(id => id !== rectangle.id)
+        await selectMultiple(newSelection)
+      } else {
+        // Add to selection
+        const newSelection = Array.from(selectedRectangleIds)
+        newSelection.push(rectangle.id)
+        await selectMultiple(newSelection)
+      }
+      return
+    }
+    
+    // Regular click: Select single (or deselect if already primary)
     // If the rectangle is already the primary selection
     if (primarySelectionId === rectangle.id) {
       // Don't deselect if user just used AI command (first click after AI action)
@@ -420,7 +438,7 @@ const Canvas: React.FC<CanvasProps> = ({
       // Otherwise, select it
       await selectRectangle(rectangle.id)
     }
-  }, [clearSelection, selectRectangle, primarySelectionId])
+  }, [clearSelection, selectRectangle, selectMultiple, primarySelectionId, selectedRectangleIds])
 
   // Handle rectangle drag start
   const handleRectangleDragStart = useCallback(async (rectangle: RectangleType) => {
