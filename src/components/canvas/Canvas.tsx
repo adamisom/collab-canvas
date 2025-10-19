@@ -1124,6 +1124,8 @@ const Canvas: React.FC<CanvasProps> = ({
           <span>Shapes: {rectangles.length + circles.length + lines.length + texts.length}</span>  {/* PR #8: Added texts */}
           <span>Friends: {Object.keys(cursors).length}</span>
           
+          <div className="canvas-info-divider" />
+          
           {/* PR #6: Shape Mode Selector */}
           <ShapeModeSelector
             mode={shapeMode}

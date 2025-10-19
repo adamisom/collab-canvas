@@ -10,7 +10,7 @@
 }
 
 .canvas-info {
-  padding: 4px 16px;
+  padding: 8px 16px 4px 16px;
   background: white;
   border-bottom: 1px solid #e2e8f0;
   display: flex;
@@ -29,6 +29,13 @@
   font-family: 'SF Mono', Monaco, monospace;
   align-items: flex-start;
   min-height: 24px;
+}
+
+.canvas-info-divider {
+  width: 1px;
+  height: 20px;
+  background: #e2e8f0;
+  margin: 0 4px 0 0;
 }
 
 .canvas-controls {
