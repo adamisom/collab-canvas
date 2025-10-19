@@ -1,13 +1,15 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react'
 import { canvasService } from '../services/canvasService'
-import type { Rectangle, RectangleInput } from '../services/canvasService'
+import type { Rectangle, RectangleInput, CircleInput } from '../services/canvasService'
 import { useAuth } from './AuthContext'
 import type { ViewportInfo } from '../shared/types'
-import type { Shape, ShapeType } from '../shared/shapes'
+import type { Shape, ShapeType, CircleShape } from '../shared/shapes'
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../utils/constants'
 
 interface CanvasContextType {
   rectangles: Rectangle[]
+  circles: CircleShape[]  // PR #6
+  shapeMode: 'rectangle' | 'circle'  // PR #6
   selectedShapes: Map<string, ShapeType> // REFACTORED: Phase 3C PR #5 - unified selection
   primarySelectionId: string | null  // Last clicked shape
   primarySelectionType: ShapeType | null  // NEW: Type of primary selection
@@ -16,12 +18,27 @@ interface CanvasContextType {
   toastMessage: string | null
   selectionLocked: boolean
   
+  // Shape mode operations (PR #6)
+  setShapeMode: (mode: 'rectangle' | 'circle') => void
+  
   // Rectangle operations
   createRectangle: (x: number, y: number) => Promise<Rectangle | null>
   updateRectangle: (rectangleId: string, updates: Partial<Omit<Rectangle, 'id' | 'createdBy' | 'createdAt'>>) => Promise<void>
   resizeRectangle: (rectangleId: string, newWidth: number, newHeight: number, newX?: number, newY?: number) => Promise<void>
   deleteRectangle: (rectangleId: string) => Promise<void>
   changeRectangleColor: (rectangleId: string, color: string) => Promise<void>
+  
+  // Circle operations (PR #6)
+  createCircle: (x: number, y: number) => Promise<CircleShape | null>
+  updateCircle: (circleId: string, updates: Partial<CircleShape>) => Promise<void>
+  resizeCircle: (circleId: string, radius: number, x?: number, y?: number) => Promise<void>
+  deleteCircle: (circleId: string) => Promise<void>
+  changeCircleColor: (circleId: string, color: string) => Promise<void>
+  
+  // Unified shape operations (PR #6)
+  selectShape: (shapeId: string, shapeType: ShapeType, additive?: boolean) => Promise<void>
+  deleteShape: (shapeId: string, shapeType: ShapeType) => Promise<void>
+  changeShapeColor: (shapeId: string, shapeType: ShapeType, color: string) => Promise<void>
   
   // Selection operations (UPDATED)
   selectRectangle: (rectangleId: string, additive?: boolean) => Promise<void>
@@ -73,6 +90,8 @@ interface CanvasProviderProps {
 
 export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
   const [rectangles, setRectangles] = useState<Rectangle[]>([])
+  const [circles, setCircles] = useState<CircleShape[]>([])  // PR #6
+  const [shapeMode, setShapeMode] = useState<'rectangle' | 'circle'>('rectangle')  // PR #6
   const [selectedShapes, setSelectedShapes] = useState<Map<string, ShapeType>>(new Map())  // REFACTORED: PR #5
   const [primarySelectionId, setPrimarySelectionId] = useState<string | null>(null)
   const [primarySelectionType, setPrimarySelectionType] = useState<ShapeType | null>(null)  // NEW: PR #5
@@ -106,6 +125,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
   useEffect(() => {
     if (!user) {
       setRectangles([])
+      setCircles([])  // PR #6
       setSelectedShapes(new Map())
       setPrimarySelectionId(null)
       setPrimarySelectionType(null)
@@ -117,7 +137,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     setError(null)
 
     // Set up real-time listener for rectangles
-    const unsubscribe = canvasService.onRectanglesChange((newRectangles) => {
+    const unsubscribeRectangles = canvasService.onRectanglesChange((newRectangles) => {
       setRectangles(newRectangles)
       setLoading(false)
       
@@ -126,12 +146,15 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       const currentPrimaryId = primarySelectionIdRef.current
       
       if (currentSelectedShapes.size > 0) {
-        const existingIds = new Set(newRectangles.map(r => r.id))
+        const existingRectIds = new Set(newRectangles.map(r => r.id))
         const updatedSelection = new Map<string, ShapeType>()
         
-        // Keep only selections that still exist (rectangles only for now)
+        // Keep only selections that still exist
         for (const [id, type] of currentSelectedShapes) {
-          if (type === 'rectangle' && existingIds.has(id)) {
+          if (type === 'rectangle' && existingRectIds.has(id)) {
+            updatedSelection.set(id, type)
+          } else if (type !== 'rectangle') {
+            // Keep non-rectangle selections (circles, etc.) - they'll be validated separately
             updatedSelection.set(id, type)
           }
         }
@@ -140,8 +163,41 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
           setSelectedShapes(updatedSelection)
         }
         
-        // Clear primary if it no longer exists
-        if (currentPrimaryId && !existingIds.has(currentPrimaryId)) {
+        // Clear primary if it no longer exists and was a rectangle
+        if (currentPrimaryId && primarySelectionTypeRef.current === 'rectangle' && !existingRectIds.has(currentPrimaryId)) {
+          const firstId = updatedSelection.size > 0 ? Array.from(updatedSelection.keys())[0] : null
+          setPrimarySelectionId(firstId)
+          setPrimarySelectionType(firstId ? updatedSelection.get(firstId) || null : null)
+        }
+      }
+    })
+
+    // PR #6: Set up real-time listener for circles
+    const unsubscribeCircles = canvasService.onCirclesChange((newCircles) => {
+      setCircles(newCircles)
+      
+      // Similar cleanup logic for circles
+      const currentSelectedShapes = selectedShapesRef.current
+      const currentPrimaryId = primarySelectionIdRef.current
+      
+      if (currentSelectedShapes.size > 0) {
+        const existingCircleIds = new Set(newCircles.map(c => c.id))
+        const updatedSelection = new Map<string, ShapeType>()
+        
+        for (const [id, type] of currentSelectedShapes) {
+          if (type === 'circle' && existingCircleIds.has(id)) {
+            updatedSelection.set(id, type)
+          } else if (type !== 'circle') {
+            updatedSelection.set(id, type)
+          }
+        }
+        
+        if (updatedSelection.size !== currentSelectedShapes.size) {
+          setSelectedShapes(updatedSelection)
+        }
+        
+        // Clear primary if it no longer exists and was a circle
+        if (currentPrimaryId && primarySelectionTypeRef.current === 'circle' && !existingCircleIds.has(currentPrimaryId)) {
           const firstId = updatedSelection.size > 0 ? Array.from(updatedSelection.keys())[0] : null
           setPrimarySelectionId(firstId)
           setPrimarySelectionType(firstId ? updatedSelection.get(firstId) || null : null)
@@ -150,7 +206,8 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     })
 
     return () => {
-      unsubscribe()
+      unsubscribeRectangles()
+      unsubscribeCircles()  // PR #6
     }
   }, [user])
 
@@ -522,6 +579,210 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     }
   }, [user])
 
+  // ============================================================================
+  // PR #6: CIRCLE OPERATIONS
+  // ============================================================================
+
+  // Create a new circle
+  const createCircle = useCallback(async (x: number, y: number): Promise<CircleShape | null> => {
+    if (!user) {
+      setError('Must be logged in to create circles')
+      return null
+    }
+
+    try {
+      const circleInput: CircleInput = {
+        x,
+        y,
+        radius: 40,  // Default radius
+        createdBy: user.uid
+      }
+
+      const newCircle = await canvasService.createCircle(circleInput)
+      
+      // Select the newly created circle (single selection)
+      const newSelection = new Map<string, ShapeType>()
+      newSelection.set(newCircle.id, 'circle')
+      setSelectedShapes(newSelection)
+      setPrimarySelectionId(newCircle.id)
+      setPrimarySelectionType('circle')
+      
+      return newCircle
+    } catch (error) {
+      console.error('Error creating circle:', error)
+      setError('Failed to create circle')
+      return null
+    }
+  }, [user])
+
+  // Update an existing circle
+  const updateCircle = useCallback(async (
+    circleId: string, 
+    updates: Partial<CircleShape>
+  ): Promise<void> => {
+    try {
+      await canvasService.updateCircle(circleId, updates)
+    } catch (error) {
+      console.error('Error updating circle:', error)
+      setError('Failed to update circle')
+    }
+  }, [])
+
+  // Resize an existing circle
+  const resizeCircle = useCallback(async (
+    circleId: string, 
+    radius: number, 
+    x?: number, 
+    y?: number
+  ): Promise<void> => {
+    try {
+      await canvasService.resizeCircle(circleId, radius, x, y)
+    } catch (error) {
+      console.error('Error resizing circle:', error)
+      setError('Failed to resize circle')
+    }
+  }, [])
+
+  // Delete a circle
+  const deleteCircle = useCallback(async (circleId: string): Promise<void> => {
+    try {
+      await canvasService.deleteCircle(circleId)
+      
+      // Remove from selection if deleted
+      if (selectedShapes.has(circleId)) {
+        setSelectedShapes(prev => {
+          const next = new Map(prev)
+          next.delete(circleId)
+          return next
+        })
+        
+        // Update primary if it was deleted
+        if (primarySelectionId === circleId) {
+          const remaining = Array.from(selectedShapes.keys()).filter(id => id !== circleId)
+          setPrimarySelectionId(remaining.length > 0 ? remaining[0] : null)
+          setPrimarySelectionType(remaining.length > 0 ? selectedShapes.get(remaining[0]) || null : null)
+        }
+      }
+    } catch (error) {
+      console.error('Error deleting circle:', error)
+      setError('Failed to delete circle')
+    }
+  }, [selectedShapes, primarySelectionId])
+
+  // Change circle color
+  const changeCircleColor = useCallback(async (circleId: string, color: string) => {
+    try {
+      await canvasService.updateCircle(circleId, { color })
+    } catch (error) {
+      console.error('Error changing circle color:', error)
+      setError('Failed to change circle color')
+    }
+  }, [])
+
+  // ============================================================================
+  // PR #6: UNIFIED SHAPE OPERATIONS (type-discriminated)
+  // ============================================================================
+
+  // Unified selectShape (handles rectangles, circles, etc.)
+  const selectShape = useCallback(async (shapeId: string, shapeType: ShapeType, additive: boolean = false) => {
+    if (!user || !username) return
+    
+    if (selectionLocked) {
+      console.log('Selection locked, ignoring selection change')
+      return
+    }
+
+    // Delegate to the appropriate service method
+    if (shapeType === 'rectangle') {
+      await selectRectangle(shapeId, additive)
+    } else if (shapeType === 'circle') {
+      // Similar logic to selectRectangle
+      const circle = circles.find(c => c.id === shapeId)
+      if (!circle) {
+        showToast('Circle not found')
+        return
+      }
+
+      if (circle.selectedBy && circle.selectedBy !== user.uid) {
+        showToast(`Circle is currently selected by ${circle.selectedByUsername || 'another user'}`)
+        return
+      }
+
+      if (!additive) {
+        // Clear all previous selections
+        for (const [prevId, prevType] of selectedShapes) {
+          if (prevType === 'rectangle') {
+            await canvasService.deselectRectangle(prevId, user.uid)
+          } else if (prevType === 'circle') {
+            await canvasService.deselectCircle(prevId, user.uid)
+          }
+        }
+
+        // Select this one
+        const newSelection = new Map<string, ShapeType>()
+        newSelection.set(shapeId, 'circle')
+        setSelectedShapes(newSelection)
+        setPrimarySelectionId(shapeId)
+        setPrimarySelectionType('circle')
+        await canvasService.selectCircle(shapeId, user.uid, username)
+      } else {
+        // Additive selection (toggle)
+        const isCurrentlySelected = selectedShapes.has(shapeId)
+
+        if (isCurrentlySelected) {
+          // Remove from selection
+          await canvasService.deselectCircle(shapeId, user.uid)
+
+          setSelectedShapes(prev => {
+            const next = new Map(prev)
+            next.delete(shapeId)
+
+            if (shapeId === primarySelectionId) {
+              if (next.size > 0) {
+                const newPrimary = Array.from(next.keys())[0]
+                setPrimarySelectionId(newPrimary)
+                setPrimarySelectionType(next.get(newPrimary) || null)
+              } else {
+                setPrimarySelectionId(null)
+                setPrimarySelectionType(null)
+              }
+            }
+            return next
+          })
+        } else {
+          // Add to selection
+          await canvasService.selectCircle(shapeId, user.uid, username)
+
+          setSelectedShapes(prev => {
+            const next = new Map(prev)
+            next.set(shapeId, 'circle')
+            return next
+          })
+          setPrimarySelectionId(shapeId)
+          setPrimarySelectionType('circle')
+        }
+      }
+    }
+  }, [user, username, circles, selectedShapes, primarySelectionId, selectionLocked, showToast, selectRectangle])
+
+  // Unified deleteShape (handles rectangles, circles, etc.)
+  const deleteShape = useCallback(async (shapeId: string, shapeType: ShapeType) => {
+    if (shapeType === 'rectangle') {
+      await deleteRectangle(shapeId)
+    } else if (shapeType === 'circle') {
+      await deleteCircle(shapeId)
+    }
+  }, [deleteRectangle, deleteCircle])
+
+  // Unified changeShapeColor (handles rectangles, circles, etc.)
+  const changeShapeColor = useCallback(async (shapeId: string, shapeType: ShapeType, color: string) => {
+    if (shapeType === 'rectangle') {
+      await changeRectangleColor(shapeId, color)
+    } else if (shapeType === 'circle') {
+      await changeCircleColor(shapeId, color)
+    }
+  }, [changeRectangleColor, changeCircleColor])
+
   // REFACTORED PR #5: Copy all selected shapes to clipboard (currently only rectangles)
   const copySelectedRectangles = useCallback(() => {
     const selected = rectangles.filter(r => selectedShapes.has(r.id))
@@ -695,6 +956,8 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
 
   const value: CanvasContextType = {
     rectangles,
+    circles,  // PR #6
+    shapeMode,  // PR #6
     selectedShapes,
     primarySelectionId,
     primarySelectionType,
@@ -702,11 +965,20 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     error,
     toastMessage,
     selectionLocked,
+    setShapeMode,  // PR #6
     createRectangle,
     updateRectangle,
     resizeRectangle,
     deleteRectangle,
     changeRectangleColor,
+    createCircle,  // PR #6
+    updateCircle,  // PR #6
+    resizeCircle,  // PR #6
+    deleteCircle,  // PR #6
+    changeCircleColor,  // PR #6
+    selectShape,  // PR #6
+    deleteShape,  // PR #6
+    changeShapeColor,  // PR #6
     selectRectangle,
     selectMultiple,
     selectAll,

@@ -11,6 +11,7 @@ import {
 } from './firebaseService'
 import type { DatabaseReference, DataSnapshot } from './firebaseService'
 import { DB_PATHS, RECTANGLE_COLORS, RECTANGLE_CONSTRAINTS, CANVAS_BOUNDS } from '../utils/constants'
+import type { CircleShape } from '../shared/shapes'
 
 export interface Rectangle {
   id: string
@@ -36,16 +37,32 @@ export interface RectangleInput {
   createdBy: string
 }
 
+export interface CircleInput {
+  x: number
+  y: number
+  radius: number
+  color?: string
+  createdBy: string
+}
+
 /**
  * Canvas Service
- * Handles all Firebase Realtime Database operations for rectangles
+ * Handles all Firebase Realtime Database operations for shapes (rectangles, circles, etc.)
  * Provides CRUD operations and real-time synchronization
+ * 
+ * Phase 3C: Shapes are stored in separate Firebase collections:
+ * - /rectangles
+ * - /circles (PR #6)
+ * - /lines (PR #7)
+ * - /text (PR #8)
  */
 export class CanvasService {
   private rectanglesRef: DatabaseReference
+  private circlesRef: DatabaseReference  // PR #6
 
   constructor() {
     this.rectanglesRef = dbRef(firebaseDatabase, DB_PATHS.RECTANGLES)
+    this.circlesRef = dbRef(firebaseDatabase, '/circles')  // PR #6
   }
 
   /**
@@ -262,6 +279,41 @@ export class CanvasService {
   }
 
   /**
+   * PR #6: Get max zIndex across ALL shape types (rectangles, circles, etc.)
+   * Used when creating new shapes to ensure they appear on top
+   * @private
+   */
+  private async getMaxZIndexAcrossAllShapes(): Promise<number> {
+    try {
+      let maxZ = 0
+
+      // Check rectangles
+      const rectSnapshot = await dbGet(this.rectanglesRef)
+      if (rectSnapshot.exists()) {
+        const rectangles = Object.values(rectSnapshot.val() as Record<string, Rectangle>)
+        const rectMax = Math.max(...rectangles.map(r => r.zIndex ?? 0))
+        maxZ = Math.max(maxZ, rectMax)
+      }
+
+      // Check circles (PR #6)
+      const circleSnapshot = await dbGet(this.circlesRef)
+      if (circleSnapshot.exists()) {
+        const circles = Object.values(circleSnapshot.val() as Record<string, CircleShape>)
+        const circleMax = Math.max(...circles.map(c => c.zIndex ?? 0))
+        maxZ = Math.max(maxZ, circleMax)
+      }
+
+      // TODO PR #7: Add lines
+      // TODO PR #8: Add text
+
+      return maxZ
+    } catch (error) {
+      console.error('Error fetching max zIndex across shapes:', error)
+      return 1000 // Fallback
+    }
+  }
+
+  /**
    * Get all rectangles from the database (one-time fetch)
    * @returns Array of all rectangles
    */
@@ -422,6 +474,218 @@ export class CanvasService {
     } catch (error) {
       console.error('Error clearing user selections:', error)
       // Don't throw error - this is cleanup, shouldn't block sign out
+    }
+  }
+
+  // ============================================================================
+  // PR #6: CIRCLE OPERATIONS
+  // ============================================================================
+
+  /**
+   * Create a new circle in the database
+   * @param circleData - Circle properties (x, y, radius, color, createdBy)
+   * @returns The created circle with generated ID
+   */
+  async createCircle(circleData: CircleInput): Promise<CircleShape> {
+    try {
+      const now = Date.now()
+      const newCircleRef = dbPush(this.circlesRef)
+      
+      if (!newCircleRef.key) {
+        throw new Error('Failed to generate circle ID')
+      }
+
+      // Get max zIndex across ALL shapes and add 1000
+      const maxZ = await this.getMaxZIndexAcrossAllShapes()
+
+      const circle: CircleShape = {
+        id: newCircleRef.key,
+        type: 'circle',
+        x: circleData.x,
+        y: circleData.y,
+        radius: circleData.radius,
+        color: circleData.color || RECTANGLE_COLORS.BLUE,
+        zIndex: maxZ + 1000,
+        createdBy: circleData.createdBy,
+        createdAt: now,
+        selectedBy: null,
+        selectedAt: null
+      }
+
+      await dbUpdate(newCircleRef, circle)
+      return circle
+    } catch (error) {
+      console.error('Error creating circle:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Listen for real-time changes to all circles
+   * @param callback - Function called with array of circles on each update
+   * @returns Unsubscribe function to stop listening
+   */
+  onCirclesChange(callback: (circles: CircleShape[]) => void): () => void {
+    const handleChange = (snapshot: DataSnapshot) => {
+      if (!snapshot.exists()) {
+        callback([])
+        return
+      }
+
+      const circlesData = snapshot.val() as Record<string, CircleShape>
+      const circles = Object.entries(circlesData).map(([key, value]) => ({
+        ...value,
+        id: key
+      }))
+
+      callback(circles)
+    }
+
+    dbOnValue(this.circlesRef, handleChange)
+
+    return () => {
+      dbOff(this.circlesRef, 'value', handleChange)
+    }
+  }
+
+  /**
+   * Update an existing circle
+   * @param circleId - ID of the circle to update
+   * @param updates - Partial circle data to update
+   */
+  async updateCircle(circleId: string, updates: Partial<CircleShape>): Promise<void> {
+    try {
+      const circleRef = dbRef(firebaseDatabase, `/circles/${circleId}`)
+      await dbUpdate(circleRef, updates)
+    } catch (error) {
+      console.error('Error updating circle:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Resize a circle (updates radius and position)
+   * @param circleId - ID of the circle to resize
+   * @param radius - New radius
+   * @param x - New x position (optional)
+   * @param y - New y position (optional)
+   */
+  async resizeCircle(circleId: string, radius: number, x?: number, y?: number): Promise<void> {
+    try {
+      const updates: Partial<CircleShape> = { radius }
+      if (x !== undefined) updates.x = x
+      if (y !== undefined) updates.y = y
+      await this.updateCircle(circleId, updates)
+    } catch (error) {
+      console.error('Error resizing circle:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Delete a circle
+   * @param circleId - ID of the circle to delete
+   */
+  async deleteCircle(circleId: string): Promise<void> {
+    try {
+      const circleRef = dbRef(firebaseDatabase, `/circles/${circleId}`)
+      await dbRemove(circleRef)
+    } catch (error) {
+      console.error('Error deleting circle:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Select a circle (mark as selected by a user)
+   * @param circleId - ID of the circle to select
+   * @param userId - ID of the user selecting the circle
+   * @param username - Username of the user (for display)
+   * @returns true if selection was successful
+   */
+  async selectCircle(circleId: string, userId: string, username: string): Promise<boolean> {
+    try {
+      const circleRef = dbRef(firebaseDatabase, `/circles/${circleId}`)
+      const snapshot = await dbGet(circleRef)
+      
+      if (!snapshot.exists()) {
+        return false
+      }
+      
+      const circle = snapshot.val() as CircleShape
+      if (circle.selectedBy && circle.selectedBy !== userId) {
+        return false
+      }
+      
+      await dbUpdate(circleRef, {
+        selectedBy: userId,
+        selectedByUsername: username,
+        selectedAt: Date.now()
+      })
+      
+      return true
+    } catch (error) {
+      console.error('Error selecting circle:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Deselect a circle (remove user's selection)
+   * @param circleId - ID of the circle to deselect
+   * @param userId - ID of the user deselecting (must match current selectedBy)
+   */
+  async deselectCircle(circleId: string, userId: string): Promise<void> {
+    try {
+      const circleRef = dbRef(firebaseDatabase, `/circles/${circleId}`)
+      const snapshot = await dbGet(circleRef)
+      
+      if (!snapshot.exists()) {
+        return
+      }
+      
+      const circle = snapshot.val() as CircleShape
+      if (circle.selectedBy === userId) {
+        await dbUpdate(circleRef, {
+          selectedBy: null,
+          selectedByUsername: null,
+          selectedAt: null
+        })
+      }
+    } catch (error) {
+      console.error('Error deselecting circle:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Clear all circle selections for a specific user
+   * @param userId - ID of the user whose selections should be cleared
+   */
+  async clearCircleSelection(userId: string): Promise<void> {
+    try {
+      const snapshot = await dbGet(this.circlesRef)
+      
+      if (!snapshot.exists()) {
+        return
+      }
+      
+      const circles = snapshot.val() as Record<string, CircleShape>
+      const updates: Record<string, null | number> = {}
+      
+      Object.entries(circles).forEach(([circleId, circle]) => {
+        if (circle.selectedBy === userId) {
+          updates[`${circleId}/selectedBy`] = null
+          updates[`${circleId}/selectedByUsername`] = null
+          updates[`${circleId}/selectedAt`] = null
+        }
+      })
+      
+      if (Object.keys(updates).length > 0) {
+        await dbUpdate(this.circlesRef, updates)
+      }
+    } catch (error) {
+      console.error('Error clearing circle selections:', error)
     }
   }
 }
