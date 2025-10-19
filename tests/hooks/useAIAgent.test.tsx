@@ -217,16 +217,18 @@ describe('useAIAgent - User Authentication Checks', () => {
 
   it('should reject submission if any condition fails', () => {
     // No user
-    let canSubmit = null !== null && 'Create a rectangle'.trim().length > 0
+    const noUser = null
+    let canSubmit = noUser !== null && 'Create a rectangle'.trim().length > 0
     expect(canSubmit).toBe(false)
     
     // Empty prompt
-    canSubmit = { uid: 'test' } !== null && ''.trim().length > 0
+    const hasUser = { uid: 'test' }
+    canSubmit = hasUser !== null && ''.trim().length > 0
     expect(canSubmit).toBe(false)
     
     // Loading
     const isLoading = true
-    canSubmit = { uid: 'test' } !== null && 'Create'.trim().length > 0 && !isLoading
+    canSubmit = hasUser !== null && 'Create'.trim().length > 0 && !isLoading
     expect(canSubmit).toBe(false)
   })
 })
