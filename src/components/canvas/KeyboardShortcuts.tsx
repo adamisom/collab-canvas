@@ -56,8 +56,16 @@ const KeyboardShortcuts: React.FC = () => {
               <div className="shortcut-desc">Select box</div>
             </div>
             <div className="shortcut-item">
+              <div className="shortcut-key">⇧+L</div>
+              <div className="shortcut-desc">Lasso select</div>
+            </div>
+            <div className="shortcut-item">
               <div className="shortcut-key">⌘/Ctrl+A</div>
               <div className="shortcut-desc">Select all</div>
+            </div>
+            <div className="shortcut-item">
+              <div className="shortcut-key">⌘/Ctrl+⇧+A</div>
+              <div className="shortcut-desc">Select all type</div>
             </div>
             <div className="shortcut-item">
               <div className="shortcut-key">Esc</div>

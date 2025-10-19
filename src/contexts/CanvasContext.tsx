@@ -8,6 +8,8 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../utils/constants'
 import { getShapeBounds, getSelectedShapesFromMap, updateShapeProperty } from '../utils/shapeHelpers'
 import { calculateAlignedPosition, calculateDistributedPositions } from '../utils/alignmentHelpers'
 import type { AlignmentType } from '../components/ui/AlignmentToolbar'
+import { isShapeInLasso } from '../utils/selectionHelpers'
+import { SHAPE_CONSTANTS } from '../utils/constants'
 
 interface CanvasContextType {
   rectangles: Rectangle[]
@@ -85,6 +87,10 @@ interface CanvasContextType {
   
   // Alignment operations (Phase 3D PR #10)
   alignShapes: (alignType: AlignmentType) => Promise<void>
+  
+  // Selection tools (Phase 3D PR #11)
+  selectShapesInLasso: (lassoPoints: number[]) => Promise<void>
+  selectAllOfType: (shapeType: ShapeType) => Promise<void>
   
   // Viewport operations (for AI agent)
   getViewportInfo: () => ViewportInfo | null
@@ -1447,6 +1453,154 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     }
   }, [selectedShapes, rectangles, circles, lines, texts])
 
+  // Select shapes inside lasso (Phase 3D PR #11)
+  const selectShapesInLasso = useCallback(async (lassoPoints: number[]): Promise<void> => {
+    if (selectionLocked) return
+    if (!user || !username) return
+
+    const allShapes: Shape[] = [
+      ...rectangles,
+      ...circles,
+      ...lines,
+      ...texts
+    ]
+
+    const shapesToSelect: Array<{ id: string; type: ShapeType }> = []
+
+    // Check each shape (with selection limit)
+    for (const shape of allShapes) {
+      if (shapesToSelect.length >= SHAPE_CONSTANTS.SELECTION_LIMIT) break
+
+      if (isShapeInLasso(shape, lassoPoints)) {
+        shapesToSelect.push({ id: shape.id, type: shape.type })
+      }
+    }
+
+    if (shapesToSelect.length === 0) return
+
+    // Clear previous selections
+    for (const [prevId, prevType] of selectedShapes.entries()) {
+      switch (prevType) {
+        case 'rectangle':
+          await canvasService.deselectRectangle(prevId, user.uid)
+          break
+        case 'circle':
+          await canvasService.deselectCircle(prevId, user.uid)
+          break
+        case 'line':
+          await canvasService.deselectLine(prevId, user.uid)
+          break
+        case 'text':
+          await canvasService.deselectText(prevId, user.uid)
+          break
+      }
+    }
+
+    // Select new shapes
+    const newSelection = new Map<string, ShapeType>()
+    for (const { id, type } of shapesToSelect) {
+      switch (type) {
+        case 'rectangle':
+          await canvasService.selectRectangle(id, user.uid, username)
+          break
+        case 'circle':
+          await canvasService.selectCircle(id, user.uid, username)
+          break
+        case 'line':
+          await canvasService.selectLine(id, user.uid, username)
+          break
+        case 'text':
+          await canvasService.selectText(id, user.uid, username)
+          break
+      }
+      newSelection.set(id, type)
+    }
+
+    setSelectedShapes(newSelection)
+    setPrimarySelectionId(shapesToSelect[shapesToSelect.length - 1].id)
+    setPrimarySelectionType(shapesToSelect[shapesToSelect.length - 1].type)
+    setToastMessage(`Selected ${shapesToSelect.length} shape${shapesToSelect.length > 1 ? 's' : ''}`)
+  }, [rectangles, circles, lines, texts, selectedShapes, selectionLocked, user, username])
+
+  // Select all shapes of a specific type (Phase 3D PR #11)
+  const selectAllOfType = useCallback(async (shapeType: ShapeType): Promise<void> => {
+    if (selectionLocked) return
+    if (!user || !username) return
+
+    let shapesToSelect: Array<{ id: string; type: ShapeType }> = []
+
+    switch (shapeType) {
+      case 'rectangle':
+        shapesToSelect = rectangles.map(r => ({ id: r.id, type: 'rectangle' as ShapeType }))
+        break
+      case 'circle':
+        shapesToSelect = circles.map(c => ({ id: c.id, type: 'circle' as ShapeType }))
+        break
+      case 'line':
+        shapesToSelect = lines.map(l => ({ id: l.id, type: 'line' as ShapeType }))
+        break
+      case 'text':
+        shapesToSelect = texts.map(t => ({ id: t.id, type: 'text' as ShapeType }))
+        break
+    }
+
+    if (shapesToSelect.length === 0) {
+      setToastMessage(`No ${shapeType}s found`)
+      return
+    }
+
+    // Apply selection limit
+    const originalLength = shapesToSelect.length
+    if (shapesToSelect.length > SHAPE_CONSTANTS.SELECTION_LIMIT) {
+      shapesToSelect = shapesToSelect.slice(0, SHAPE_CONSTANTS.SELECTION_LIMIT)
+      setToastMessage(`Selected ${SHAPE_CONSTANTS.SELECTION_LIMIT} of ${originalLength} (limit reached)`)
+    } else {
+      setToastMessage(`Selected ${shapesToSelect.length} ${shapeType}${shapesToSelect.length > 1 ? 's' : ''}`)
+    }
+
+    // Clear previous selections
+    for (const [prevId, prevType] of selectedShapes.entries()) {
+      switch (prevType) {
+        case 'rectangle':
+          await canvasService.deselectRectangle(prevId, user.uid)
+          break
+        case 'circle':
+          await canvasService.deselectCircle(prevId, user.uid)
+          break
+        case 'line':
+          await canvasService.deselectLine(prevId, user.uid)
+          break
+        case 'text':
+          await canvasService.deselectText(prevId, user.uid)
+          break
+      }
+    }
+
+    // Select new shapes
+    const newSelection = new Map<string, ShapeType>()
+    for (const { id, type } of shapesToSelect) {
+      switch (type) {
+        case 'rectangle':
+          await canvasService.selectRectangle(id, user.uid, username)
+          break
+        case 'circle':
+          await canvasService.selectCircle(id, user.uid, username)
+          break
+        case 'line':
+          await canvasService.selectLine(id, user.uid, username)
+          break
+        case 'text':
+          await canvasService.selectText(id, user.uid, username)
+          break
+      }
+      newSelection.set(id, type)
+    }
+
+    setSelectedShapes(newSelection)
+    setPrimarySelectionId(shapesToSelect[shapesToSelect.length - 1].id)
+    setPrimarySelectionType(shapesToSelect[shapesToSelect.length - 1].type)
+  }, [rectangles, circles, lines, texts, selectedShapes, selectionLocked, user, username])
+
   const value: CanvasContextType = {
     rectangles,
     circles,  // PR #6
@@ -1500,6 +1654,8 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     bringToFront,
     sendToBack,
     alignShapes,
+    selectShapesInLasso,
+    selectAllOfType,
     getViewportInfo,
     updateViewportInfo,
     clearError,

@@ -16,6 +16,8 @@ import ShapeModeSelector from './ShapeModeSelector'  // PR #6
 import ColorPicker from './ColorPicker'
 import TextFormatToolbar from './TextFormatToolbar'  // PR #9
 import AlignmentToolbar from '../ui/AlignmentToolbar'  // Phase 3D PR #10
+import LassoPath from './LassoPath'  // Phase 3D PR #11
+import SelectTypeModal from '../ui/SelectTypeModal'  // Phase 3D PR #11
 import Toast from '../ui/Toast'
 import type { Rectangle as RectangleType } from '../../services/canvasService'
 import './Canvas.css'
@@ -54,6 +56,13 @@ const Canvas: React.FC<CanvasProps> = ({
   // NEW: Keyboard modifier states
   const [isShiftPressed, setIsShiftPressed] = useState(false)
   const [isPanning, setIsPanning] = useState(false)  // Spacebar held
+  
+  // Phase 3D PR #11: Lasso selection state
+  const [isLassoMode, setIsLassoMode] = useState(false)
+  const [lassoPoints, setLassoPoints] = useState<number[]>([])
+  
+  // Phase 3D PR #11: Select-all-type modal state
+  const [showSelectTypeModal, setShowSelectTypeModal] = useState(false)
   
   // Track if user just used AI command (to prevent accidental deselect on first click)
   const justUsedAICommandRef = useRef(false)
@@ -105,6 +114,8 @@ const Canvas: React.FC<CanvasProps> = ({
     bringToFront,
     sendToBack,
     alignShapes,  // Phase 3D PR #10
+    selectShapesInLasso,  // Phase 3D PR #11
+    selectAllOfType,  // Phase 3D PR #11
     selectionLocked,
     toastMessage,
     clearToast,
@@ -178,6 +189,15 @@ const Canvas: React.FC<CanvasProps> = ({
     const pointer = stage.getPointerPosition()
     if (!pointer) return
     
+    // Phase 3D PR #11: Update lasso path if drawing
+    if (isLassoMode && lassoPoints.length > 0) {
+      const canvasCoords = transformToCanvasCoords(pointer.x, pointer.y)
+      if (canvasCoords) {
+        setLassoPoints(prev => [...prev, canvasCoords.x, canvasCoords.y])
+      }
+      return  // Don't broadcast cursor while drawing lasso
+    }
+    
     // PR #7: Update line preview end point if creating a line
     if (lineCreationStart) {
       const canvasCoords = transformToCanvasCoords(pointer.x, pointer.y)
@@ -203,7 +223,7 @@ const Canvas: React.FC<CanvasProps> = ({
     if (canvasCoords) {
       updateCursor(canvasCoords.x, canvasCoords.y)
     }
-  }, [updateCursor, isDragging, isRectangleDragging, isRectangleResizing, selectionBoxStart, lineCreationStart, transformToCanvasCoords])
+  }, [updateCursor, isDragging, isRectangleDragging, isRectangleResizing, selectionBoxStart, lineCreationStart, transformToCanvasCoords, isLassoMode, lassoPoints])
 
   // Handle wheel zoom
   const handleWheel = useCallback((e: KonvaEventObject<WheelEvent>) => {
@@ -274,6 +294,12 @@ const Canvas: React.FC<CanvasProps> = ({
     const canvasCoords = transformToCanvasCoords(pointer.x, pointer.y)
     if (!canvasCoords) return
 
+    // Phase 3D PR #11: If lasso mode, start drawing lasso
+    if (isLassoMode) {
+      setLassoPoints([canvasCoords.x, canvasCoords.y])
+      return
+    }
+
     // If Shift is pressed, start selection box
     if (isShiftPressed) {
       setSelectionBoxStart(canvasCoords)
@@ -300,10 +326,18 @@ const Canvas: React.FC<CanvasProps> = ({
         await createCircle(canvasCoords.x, canvasCoords.y)
       }
     }
-  }, [isShiftPressed, shapeMode, lineCreationStart, transformToCanvasCoords, clearSelection, createRectangle, createCircle, createLine])
+  }, [isShiftPressed, shapeMode, lineCreationStart, transformToCanvasCoords, clearSelection, createRectangle, createCircle, createLine, isLassoMode])
 
   // NEW: Handle stage mouse up (for selection box completion)
   const handleStageMouseUp = useCallback(async () => {
+    // Phase 3D PR #11: Complete lasso selection
+    if (isLassoMode && lassoPoints.length >= 6) {
+      selectShapesInLasso(lassoPoints)
+      setLassoPoints([])
+      setIsLassoMode(false)  // Exit lasso mode after selection
+      return
+    }
+
     if (!selectionBoxStart || !selectionBoxEnd) {
       // No selection box, just clear state
       setSelectionBoxStart(null)
@@ -338,7 +372,7 @@ const Canvas: React.FC<CanvasProps> = ({
     // Clear selection box
     setSelectionBoxStart(null)
     setSelectionBoxEnd(null)
-  }, [selectionBoxStart, selectionBoxEnd, rectangles, selectMultiple])
+  }, [selectionBoxStart, selectionBoxEnd, rectangles, selectMultiple, isLassoMode, lassoPoints, selectShapesInLasso])
 
   // Handle rectangle click (selection/deselection)
   const handleRectangleClick = useCallback(async (rectangle: RectangleType) => {
@@ -629,8 +663,12 @@ const Canvas: React.FC<CanvasProps> = ({
       
       // NEW: Clear selection (Escape)
       if (e.key === 'Escape' && !isTyping) {
+        // Phase 3D PR #11: Cancel lasso mode if active
+        if (isLassoMode) {
+          setIsLassoMode(false)
+          setLassoPoints([])
         // PR #7: Cancel line creation if active
-        if (lineCreationStart) {
+        } else if (lineCreationStart) {
           setLineCreationStart(null)
           setLinePreviewEnd(null)
         } else if (selectionBoxStart) {
@@ -718,6 +756,13 @@ const Canvas: React.FC<CanvasProps> = ({
       
       // Alignment shortcuts (Phase 3D PR #10) - Cmd+Shift+Key
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && !isTyping) {
+        // Select all of type: Cmd+Shift+A (Phase 3D PR #11)
+        if (e.key.toUpperCase() === 'A') {
+          e.preventDefault()
+          setShowSelectTypeModal(true)
+          return
+        }
+        
         if (selectedShapes.size >= 2) {
           e.preventDefault()
           
@@ -742,6 +787,17 @@ const Canvas: React.FC<CanvasProps> = ({
               return
           }
         }
+      }
+      
+      // Lasso select toggle: Shift+L (Phase 3D PR #11)
+      if (e.shiftKey && e.key.toUpperCase() === 'L' && !isTyping && !(e.metaKey || e.ctrlKey)) {
+        e.preventDefault()
+        setIsLassoMode(!isLassoMode)
+        // Clear lasso points when toggling off
+        if (isLassoMode) {
+          setLassoPoints([])
+        }
+        return
       }
       
       // Handle rectangle deletion
@@ -852,7 +908,7 @@ const Canvas: React.FC<CanvasProps> = ({
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)
     }
-  }, [primarySelectionId, rectangles, handleRectangleResize, deleteRectangle, isRectangleDragging, isRectangleResizing, getCurrentStagePosition, selectionLocked, selectedShapes, isShiftPressed, isPanning, selectAll, clearSelection, selectionBoxStart, lineCreationStart, setShapeMode, alignShapes])
+  }, [primarySelectionId, rectangles, handleRectangleResize, deleteRectangle, isRectangleDragging, isRectangleResizing, getCurrentStagePosition, selectionLocked, selectedShapes, isShiftPressed, isPanning, selectAll, clearSelection, selectionBoxStart, lineCreationStart, setShapeMode, alignShapes, isLassoMode])
 
   // Detect when rectangle is selected after AI command (input was focused)
   useEffect(() => {
@@ -974,7 +1030,7 @@ const Canvas: React.FC<CanvasProps> = ({
           }}
           onMouseMove={handleMouseMove}  // CHANGED: Merged cursor broadcasting + selection box
           onMouseUp={handleStageMouseUp}      // NEW: Complete selection box
-          className={isPanning ? 'panning' : (isShiftPressed ? 'selection-mode' : (isDragging ? 'dragging' : ''))}  // NEW: CSS classes for cursor
+          className={isPanning ? 'panning' : (isLassoMode ? 'lasso-cursor' : (isShiftPressed ? 'selection-mode' : (isDragging ? 'dragging' : '')))}  // NEW: CSS classes for cursor
         >
           <Layer>
             {/* Render rectangles (sorted by zIndex) */}
@@ -1085,6 +1141,11 @@ const Canvas: React.FC<CanvasProps> = ({
               />
             )}
             
+            {/* Phase 3D PR #11: Render lasso path */}
+            {isLassoMode && lassoPoints.length > 0 && (
+              <LassoPath points={lassoPoints} />
+            )}
+            
             {/* Render other users' cursors */}
             {Object.values(cursors).map((cursor) => (
               <Cursor
@@ -1104,6 +1165,14 @@ const Canvas: React.FC<CanvasProps> = ({
         <Toast
           message={toastMessage}
           onDismiss={clearToast}
+        />
+      )}
+      
+      {/* Phase 3D PR #11: Select All Type Modal */}
+      {showSelectTypeModal && (
+        <SelectTypeModal
+          onSelect={selectAllOfType}
+          onClose={() => setShowSelectTypeModal(false)}
         />
       )}
     </div>

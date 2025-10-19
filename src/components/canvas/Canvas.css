@@ -75,6 +75,11 @@
   cursor: crosshair;
 }
 
+/* Phase 3D PR #11: Lasso mode cursor */
+.canvas-wrapper canvas.lasso-cursor {
+  cursor: crosshair;
+}
+
 /* Canvas background pattern */
 .canvas-wrapper::before {
   content: '';
