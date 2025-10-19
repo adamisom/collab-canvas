@@ -104,12 +104,14 @@ const Canvas: React.FC<CanvasProps> = ({
     resizeRectangle, 
     resizeCircle,          // PR #6
     deleteRectangle, 
+    deleteSelectedRectangles, // NEW: Delete all selected
     selectRectangle,
     selectShape,           // PR #6, updated PR #7, updated PR #8: Unified selection
     selectMultiple,        // Multi-select operation
     selectAll,             // Select all
     clearSelection,        // Clear selection
     changeShapeColor,      // PR #6, updated PR #7, updated PR #8: Unified color change
+    changeSelectedRectanglesColor, // NEW: Change color of all selected
     copySelectedRectangles,  // Copy selected
     pasteRectangles,         // Paste clipboard
     duplicateRectangle,
@@ -625,10 +627,14 @@ const Canvas: React.FC<CanvasProps> = ({
 
   // Handle color change (unified for all shapes)
   const handleColorChange = useCallback(async (color: string) => {
-    if (primarySelectionId && primarySelectionType) {
+    if (selectedShapes.size > 1) {
+      // Batch change color for all selected rectangles
+      await changeSelectedRectanglesColor(color)
+    } else if (primarySelectionId && primarySelectionType) {
+      // Single selection - change only primary
       await changeShapeColor(primarySelectionId, primarySelectionType, color)
     }
-  }, [primarySelectionId, primarySelectionType, changeShapeColor])
+  }, [primarySelectionId, primarySelectionType, selectedShapes, changeShapeColor, changeSelectedRectanglesColor])
 
   // Get selected shape (primary selection) - check rectangles, circles, lines, and texts
   const selectedRectangle = rectangles.find(r => r.id === primarySelectionId)
@@ -817,11 +823,13 @@ const Canvas: React.FC<CanvasProps> = ({
         return
       }
       
-      // Duplicate: Cmd+D (Mac) or Ctrl+D (Windows/Linux)
+      // Duplicate: Cmd+D (Mac) or Ctrl+D (Windows/Linux) - only works with single selection
       if ((e.metaKey || e.ctrlKey) && e.key === 'd' && !isTyping) {
-        if (primarySelectionId) {
-          e.preventDefault() // Prevent browser bookmark shortcut
+        e.preventDefault() // Prevent browser bookmark shortcut
+        if (selectedShapes.size === 1 && primarySelectionId) {
           duplicateRectangleRef.current?.(primarySelectionId)
+        } else if (selectedShapes.size > 1) {
+          showToast('Duplicate only works with single selection')
         }
         return
       }
@@ -927,15 +935,15 @@ const Canvas: React.FC<CanvasProps> = ({
         return
       }
       
-      // Handle rectangle deletion
-      if ((e.key === 'Delete' || e.key === 'Backspace') && primarySelectionId) {
+      // Handle shape deletion - deletes all selected shapes
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedShapes.size > 0) {
         // Don't delete if user is typing in an input field
         if (isTyping) return
         
         // Prevent deletion during active operations
         if (!isRectangleDragging && !isRectangleResizing) {
           e.preventDefault()
-          deleteRectangle(primarySelectionId)
+          deleteSelectedRectangles()
           return
         }
       }
@@ -1045,7 +1053,7 @@ const Canvas: React.FC<CanvasProps> = ({
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)
     }
-  }, [primarySelectionId, rectangles, circles, lines, texts, primarySelectionType, handleRectangleResize, deleteRectangle, isRectangleDragging, isRectangleResizing, getCurrentStagePosition, selectionLocked, selectedShapes, isShiftPressed, selectAll, clearSelection, selectionBoxStart, lineCreationStart, setShapeMode, alignShapes, isLassoMode, rotateShape, sendViewportInfo])
+  }, [primarySelectionId, rectangles, circles, lines, texts, primarySelectionType, handleRectangleResize, deleteRectangle, deleteSelectedRectangles, isRectangleDragging, isRectangleResizing, getCurrentStagePosition, selectionLocked, selectedShapes, isShiftPressed, selectAll, clearSelection, selectionBoxStart, lineCreationStart, setShapeMode, alignShapes, isLassoMode, rotateShape, sendViewportInfo])
 
   // Detect when rectangle is selected after AI command (input was focused)
   useEffect(() => {
