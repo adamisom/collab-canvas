@@ -3,7 +3,7 @@ import { Text as KonvaText, Group } from 'react-konva'
 import type Konva from 'konva'
 import type { KonvaEventObject } from 'konva/lib/Node'
 import type { TextShape } from '../../shared/shapes'
-import { SELECTION_COLORS } from '../../utils/constants'
+import { getShapeSelectionStyle, isShapeDraggable } from '../../utils/shapeStyleHelpers'
 
 interface TextProps {
   textShape: TextShape
@@ -122,12 +122,18 @@ const Text: React.FC<TextProps> = ({
     }
   }, [isEditing, textShape, onTextChange, onEditingChange])
 
+  // Get selection styling
+  const selectionStyle = getShapeSelectionStyle(textShape.color, isSelected, false)
+
+  // Disable dragging when editing or Shift is pressed
+  const draggable = isShapeDraggable(isSelected, isShiftPressed, isEditing)
+
   return (
     <Group
       ref={groupRef}
       x={textShape.x}
       y={textShape.y}
-      draggable={isSelected && !isEditing && !isShiftPressed}
+      draggable={draggable}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
       onClick={handleClick}
@@ -144,8 +150,8 @@ const Text: React.FC<TextProps> = ({
                    textShape.fontWeight === 'bold' ? 'bold' : 
                    textShape.fontStyle === 'italic' ? 'italic' : 'normal'}  // PR #9: Combined font style
         fill={textShape.color}
-        stroke={isSelected ? SELECTION_COLORS.STROKE : undefined}
-        strokeWidth={isSelected ? 2 : 0}
+        stroke={selectionStyle.stroke}
+        strokeWidth={isSelected ? 1 : 0}  // Subtle stroke for text selection
         listening={!isEditing}
       />
     </Group>

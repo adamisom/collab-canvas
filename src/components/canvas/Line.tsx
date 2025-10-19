@@ -3,6 +3,8 @@ import { Line as KonvaLine, Circle as KonvaCircle, Group, Arrow } from 'react-ko
 import type Konva from 'konva'
 import type { KonvaEventObject } from 'konva/lib/Node'
 import type { LineShape } from '../../shared/shapes'
+import { SHAPE_CONSTANTS } from '../../utils/constants'
+import { getLineSelectionStyle, isShapeDraggable } from '../../utils/shapeStyleHelpers'
 
 interface LineProps {
   line: LineShape
@@ -78,12 +80,11 @@ const Line: React.FC<LineProps> = ({
   // Calculate line points for Konva (relative to group position)
   const points = [0, 0, line.endX - line.x, line.endY - line.y]
 
-  // Selection styling
-  const strokeColor = isSelected ? '#3b82f6' : line.color
-  const strokeWidth = isSelected ? line.strokeWidth + 2 : line.strokeWidth
+  // Get selection styling
+  const selectionStyle = getLineSelectionStyle(line.color, line.strokeWidth, isSelected, false)
 
-  // Disable dragging when Shift is held (for selection box)
-  const draggable = isSelected && !isShiftPressed && !isDraggingHandle
+  // Disable dragging when Shift is held (for selection box) or dragging handle
+  const draggable = isShapeDraggable(isSelected, isShiftPressed, isDraggingHandle)
 
   return (
     <Group
@@ -100,19 +101,19 @@ const Line: React.FC<LineProps> = ({
       {line.hasArrow ? (
         <Arrow
           points={points}
-          stroke={strokeColor}
-          strokeWidth={strokeWidth}
+          stroke={selectionStyle.stroke}
+          strokeWidth={selectionStyle.strokeWidth}
           fill={line.color}
-          pointerLength={10}
-          pointerWidth={10}
+          pointerLength={SHAPE_CONSTANTS.ARROW_POINTER_LENGTH}
+          pointerWidth={SHAPE_CONSTANTS.ARROW_POINTER_WIDTH}
           lineCap="round"
           lineJoin="round"
         />
       ) : (
         <KonvaLine
           points={points}
-          stroke={strokeColor}
-          strokeWidth={strokeWidth}
+          stroke={selectionStyle.stroke}
+          strokeWidth={selectionStyle.strokeWidth}
           lineCap="round"
           lineJoin="round"
         />
@@ -123,7 +124,7 @@ const Line: React.FC<LineProps> = ({
         <KonvaCircle
           x={line.endX - line.x}
           y={line.endY - line.y}
-          radius={6}
+          radius={SHAPE_CONSTANTS.LINE_HANDLE_SIZE}
           fill="white"
           stroke="#3b82f6"
           strokeWidth={2}

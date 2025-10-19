@@ -402,10 +402,44 @@ const Canvas: React.FC<CanvasProps> = ({
   }, [])
 
   // ============================================================================
-  // REFACTORED (Post-3C): Shared drag state for all shapes
-  // All shapes (circle/line/text) reuse setIsRectangleDragging state
-  // Reduces duplication but maintains independent handlers
+  // REFACTORED (Post-3C): Shared drag state and handler factories
+  // All shapes reuse setIsRectangleDragging state and common handler patterns
   // ============================================================================
+
+  /**
+   * Shared drag start handler - all shapes use the same dragging state
+   */
+  const handleShapeDragStart = useCallback(() => {
+    setIsRectangleDragging(true)
+  }, [])
+
+  /**
+   * Factory: Create a click handler that selects a shape by type
+   * (Circle has special toggle behavior, so it uses a custom handler)
+   */
+  const createShapeClickHandler = useCallback((shapeType: 'line' | 'text') => {
+    return (shapeId: string) => {
+      selectShape(shapeId, shapeType)
+    }
+  }, [selectShape])
+
+  /**
+   * Factory: Create a drag end handler with shape-specific update function
+   */
+  const createShapeDragEndHandler = useCallback((
+    updateFn: (id: string, updates: { x: number; y: number }) => Promise<void>,
+    shapeName: string
+  ) => {
+    return async (shapeId: string, newX: number, newY: number) => {
+      try {
+        await updateFn(shapeId, { x: newX, y: newY })
+      } catch (error) {
+        console.error(`Error moving ${shapeName}:`, error)
+      } finally {
+        setIsRectangleDragging(false)
+      }
+    }
+  }, [])
 
   // PR #6: Circle handlers (circle click has special toggle behavior)
   const handleCircleClick = useCallback(async (circleId: string) => {
@@ -424,9 +458,7 @@ const Canvas: React.FC<CanvasProps> = ({
     }
   }, [clearSelection, selectShape, primarySelectionId])
 
-  const handleCircleDragStart = useCallback(() => {
-    setIsRectangleDragging(true)  // Shared state
-  }, [])
+  const handleCircleDragStart = handleShapeDragStart  // Use shared handler
 
   const handleCircleDragEnd = useCallback(async (circleId: string, newX: number, newY: number) => {
     setIsRectangleDragging(false)
@@ -450,24 +482,13 @@ const Canvas: React.FC<CanvasProps> = ({
     }
   }, [resizeCircle])
 
-  // PR #7: LINE HANDLERS
-  const handleLineClick = useCallback((lineId: string) => {
-    selectShape(lineId, 'line')
-  }, [selectShape])
-  
-  const handleLineDragStart = useCallback(() => {
-    setIsRectangleDragging(true)  // Shared state
-  }, [])
-  
-  const handleLineDragEnd = useCallback(async (lineId: string, newX: number, newY: number) => {
-    try {
-      await updateLine(lineId, { x: newX, y: newY })
-    } catch (error) {
-      console.error('Error moving line:', error)
-    } finally {
-      setIsRectangleDragging(false)
-    }
-  }, [updateLine])
+  // PR #7: LINE HANDLERS (use shared factories)
+  const handleLineClick = useMemo(() => createShapeClickHandler('line'), [createShapeClickHandler])
+  const handleLineDragStart = handleShapeDragStart  // Use shared handler
+  const handleLineDragEnd = useMemo(
+    () => createShapeDragEndHandler(updateLine, 'line'),
+    [createShapeDragEndHandler, updateLine]
+  )
 
   const handleLineEndpointsChange = useCallback(async (lineId: string, newEndX: number, newEndY: number) => {
     try {
@@ -477,24 +498,13 @@ const Canvas: React.FC<CanvasProps> = ({
     }
   }, [updateLineEndpoints])
 
-  // PR #8: TEXT HANDLERS
-  const handleTextClick = useCallback((textId: string) => {
-    selectShape(textId, 'text')
-  }, [selectShape])
-
-  const handleTextDragStart = useCallback(() => {
-    setIsRectangleDragging(true)  // Shared state
-  }, [])
-
-  const handleTextDragEnd = useCallback(async (textId: string, newX: number, newY: number) => {
-    try {
-      await updateText(textId, { x: newX, y: newY })
-    } catch (error) {
-      console.error('Error moving text:', error)
-    } finally {
-      setIsRectangleDragging(false)
-    }
-  }, [updateText])
+  // PR #8: TEXT HANDLERS (use shared factories)
+  const handleTextClick = useMemo(() => createShapeClickHandler('text'), [createShapeClickHandler])
+  const handleTextDragStart = handleShapeDragStart  // Use shared handler
+  const handleTextDragEnd = useMemo(
+    () => createShapeDragEndHandler(updateText, 'text'),
+    [createShapeDragEndHandler, updateText]
+  )
 
   const handleTextChange = useCallback(async (textId: string, newText: string) => {
     try {

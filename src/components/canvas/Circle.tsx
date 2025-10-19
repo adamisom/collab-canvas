@@ -3,6 +3,8 @@ import { Circle as KonvaCircle, Transformer } from 'react-konva'
 import type Konva from 'konva'
 import type { KonvaEventObject } from 'konva/lib/Node'
 import type { CircleShape } from '../../shared/shapes'
+import { SHAPE_CONSTANTS } from '../../utils/constants'
+import { getShapeSelectionStyle, isShapeDraggable } from '../../utils/shapeStyleHelpers'
 
 interface CircleProps {
   circle: CircleShape
@@ -77,8 +79,11 @@ const Circle: React.FC<CircleProps> = ({
     onResizeEnd()
   }
 
-  // Disable dragging when Shift is pressed (for selection box)
-  const dragEnabled = isSelected && !isResizing && !isShiftPressed
+  // Disable dragging when Shift is pressed (for selection box) or when resizing
+  const dragEnabled = isShapeDraggable(isSelected, isShiftPressed, isResizing)
+
+  // Get selection styling
+  const selectionStyle = getShapeSelectionStyle(circle.color, isSelected, false)
 
   return (
     <>
@@ -89,8 +94,8 @@ const Circle: React.FC<CircleProps> = ({
         y={circle.y}
         radius={circle.radius}
         fill={circle.color}
-        stroke={isSelected ? '#3b82f6' : undefined}
-        strokeWidth={isSelected ? 2 : 0}
+        stroke={selectionStyle.stroke}
+        strokeWidth={selectionStyle.strokeWidth}
         draggable={dragEnabled}
         onClick={handleClick}
         onTap={handleClick}
@@ -106,8 +111,8 @@ const Circle: React.FC<CircleProps> = ({
           borderStrokeWidth={2}
           anchorStroke="#3b82f6"
           anchorFill="#ffffff"
-          anchorSize={8}
-          anchorCornerRadius={4}
+          anchorSize={SHAPE_CONSTANTS.TRANSFORMER_ANCHOR_SIZE}
+          anchorCornerRadius={SHAPE_CONSTANTS.TRANSFORMER_ANCHOR_RADIUS}
           keepRatio={true}  // Keep circle proportional
           onTransformStart={handleTransformStart}
           onTransformEnd={handleTransformEnd}
