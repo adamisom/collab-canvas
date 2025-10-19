@@ -1,22 +1,32 @@
 # Phase 3D: Advanced Features
 
 **Focus**: Professional design tool features (Alignment, Selection, Rotation)  
-**PRs**: 9-11  
+**PRs**: 10-12  
 **Work Level**: Medium-High  
-**Dependencies**: Phase 3B complete (PRs #9-10 require multi-select; PR #11 uses selection infrastructure)
+**Dependencies**: Phase 3C complete (unified selection state from PR #5, all shape types)
 
 > **⚠️ Before Implementation:** Review this plan and ask questions before proceeding. Consider whether any plans need to change first. Also re-read the sibling file README.md to ensure broader context.
+
+> **📝 Document Updates:** This plan has been updated with:
+> - **PR Renumbering**: PRs are now #10-12 (following Phase 3C's PRs #5-9)
+> - **Unified Selection State**: All code samples use `selectedShapes: Map<string, ShapeType>` from Phase 3C
+> - **Lasso Shortcut Fix**: Changed from `L` (conflicts with Line mode) to `Shift+L`
+> - **Text Bounds**: Use Konva's `getClientRect()` via refs for accurate alignment calculations
+> - **Lasso Exit Paths**: Multiple ways to exit lasso mode (Escape, failed lasso, toggle)
+> - **Rotation Normalization**: Always normalize rotation to 0-360 degrees
+> - **Multi-Select Rotation**: Rotates primary selection only (documented limitation)
+> - **Lasso Selection Logic**: Uses "any corner inside" for more forgiving organic selection
 
 ---
 
 ## Phase Overview
 
-Phase 3D adds professional design tool features that users expect from Figma, Sketch, and other industry-standard tools. Alignment and selection tools require multi-select from Phase 3B, while rotation works with the selection system established in Phase 3B.
+Phase 3D adds professional design tool features that users expect from Figma, Sketch, and other industry-standard tools. These features build on the unified selection state and multi-select capabilities from Phase 3B and 3C.
 
 **Features added:**
-- **PR #9**: Alignment Tools - Align shapes to each other
-- **PR #10**: Selection Tools - Lasso select, select all of type
-- **PR #11**: Rotate Operation - Rotate shapes with handle
+- **PR #10**: Alignment Tools - Align shapes to each other
+- **PR #11**: Selection Tools - Lasso select, select all of type
+- **PR #12**: Rotate Operation - Rotate shapes with handle
 
 **Why these features?**
 - Industry-standard functionality
@@ -26,7 +36,7 @@ Phase 3D adds professional design tool features that users expect from Figma, Sk
 
 ---
 
-## PR #9: Alignment Tools
+## PR #10: Alignment Tools
 
 **Branch**: `feature/alignment-tools`  
 **Work Level**: Medium  
@@ -81,7 +91,11 @@ Phase 3D adds professional design tool features that users expect from Figma, Sk
 - Rectangle: `{x, y, width, height}`
 - Circle: `{x: centerX - radius, y: centerY - radius, width: radius*2, height: radius*2}`
 - Line: `{x: min(x, endX), y: min(y, endY), width: abs(endX-x), height: abs(endY-y)}`
-- Text: Use Konva's `getClientRect()` for actual text bounds
+- Text: Use Konva's `getClientRect()` via refs for accurate bounds (see Phase 3C pattern)
+
+**Edge Cases:**
+- Shapes may be aligned outside visible canvas (user can pan to find them - this is acceptable)
+- Alignment operations are tested with selection limit of 25 shapes (Phase 3B constraint)
 
 ### Files to Create
 
@@ -277,14 +291,16 @@ export const getShapeBounds = (shape: Shape): Bounds => {
       }
     
     case 'text':
-      // For text, we'll estimate bounds based on font size
-      // In actual implementation, use Konva's getClientRect()
-      const textWidth = shape.text.length * shape.fontSize * 0.6
+      // For text, we need actual rendered bounds from Konva
+      // This will be called from Canvas.tsx where we have access to refs
+      // For now, provide a reasonable estimation
+      const estimatedWidth = shape.text.length * shape.fontSize * 0.6
+      const estimatedHeight = shape.fontSize * 1.2
       return {
         x: shape.x,
         y: shape.y,
-        width: textWidth,
-        height: shape.fontSize * 1.2
+        width: estimatedWidth,
+        height: estimatedHeight
       }
     
     default:
@@ -453,21 +469,35 @@ interface CanvasContextType {
 }
 
 const alignShapes = useCallback(async (alignType: AlignmentType) => {
-  // Get all selected shapes
-  const selectedShapes: Shape[] = [
-    ...rectangles.filter(r => selectedRectangleIds.has(r.id)),
-    ...circles.filter(c => selectedCircleIds.has(c.id)),
-    ...lines.filter(l => selectedLineIds.has(l.id)),
-    ...texts.filter(t => selectedTextIds.has(t.id))
-  ]
+  // Get all selected shapes using unified selection state
+  const selectedShapesList: Shape[] = []
   
-  if (selectedShapes.length < 2) {
+  selectedShapes.forEach((shapeType, shapeId) => {
+    let shape: Shape | undefined
+    switch (shapeType) {
+      case 'rectangle':
+        shape = rectangles.find(r => r.id === shapeId)
+        break
+      case 'circle':
+        shape = circles.find(c => c.id === shapeId)
+        break
+      case 'line':
+        shape = lines.find(l => l.id === shapeId)
+        break
+      case 'text':
+        shape = texts.find(t => t.id === shapeId)
+        break
+    }
+    if (shape) selectedShapesList.push(shape)
+  })
+  
+  if (selectedShapesList.length < 2) {
     showToast('Select 2 or more shapes to align')
     return
   }
   
   if ((alignType === 'distribute-horizontal' || alignType === 'distribute-vertical') 
-      && selectedShapes.length < 3) {
+      && selectedShapesList.length < 3) {
     showToast('Select 3 or more shapes to distribute')
     return
   }
@@ -476,10 +506,10 @@ const alignShapes = useCallback(async (alignType: AlignmentType) => {
     if (alignType === 'distribute-horizontal' || alignType === 'distribute-vertical') {
       // Distribution
       const direction = alignType === 'distribute-horizontal' ? 'horizontal' : 'vertical'
-      const positions = calculateDistributedPositions(selectedShapes, direction)
+      const positions = calculateDistributedPositions(selectedShapesList, direction)
       
       // Apply positions
-      for (const shape of selectedShapes) {
+      for (const shape of selectedShapesList) {
         const newPos = positions.get(shape.id)
         if (newPos) {
           await updateShapePosition(shape, newPos)
@@ -487,7 +517,7 @@ const alignShapes = useCallback(async (alignType: AlignmentType) => {
       }
     } else {
       // Alignment
-      const bounds = selectedShapes.map(getShapeBounds)
+      const bounds = selectedShapesList.map(getShapeBounds)
       let targetValue: number
       
       switch (alignType) {
@@ -516,24 +546,18 @@ const alignShapes = useCallback(async (alignType: AlignmentType) => {
       }
       
       // Apply alignment
-      for (const shape of selectedShapes) {
+      for (const shape of selectedShapesList) {
         const newPos = calculateAlignedPosition(shape, targetValue, alignType)
-        if (newPos) {
-          await updateShapePosition(shape, newPos)
-        }
+        await updateShapePosition(shape, newPos)
       }
     }
     
-    showToast(`Aligned ${selectedShapes.length} shapes`)
+    showToast(`Aligned ${selectedShapesList.length} shapes`)
   } catch (err) {
     console.error('Error aligning shapes:', err)
     setError('Failed to align shapes')
   }
-}, [
-  rectangles, circles, lines, texts,
-  selectedRectangleIds, selectedCircleIds, selectedLineIds, selectedTextIds,
-  showToast
-])
+}, [rectangles, circles, lines, texts, selectedShapes, showToast])
 
 // Helper to update any shape's position
 const updateShapePosition = async (shape: Shape, updates: any) => {
@@ -560,13 +584,10 @@ Add alignment toolbar and keyboard shortcuts:
 ```typescript
 import AlignmentToolbar from '../ui/AlignmentToolbar'
 
-const { alignShapes, /* ... */ } = useCanvas()
+const { alignShapes, selectedShapes, /* ... */ } = useCanvas()
 
-const totalSelected = 
-  selectedRectangleIds.size + 
-  selectedCircleIds.size + 
-  selectedLineIds.size + 
-  selectedTextIds.size
+// Total selected count from unified selection state
+const totalSelected = selectedShapes.size
 
 // Keyboard shortcuts for alignment
 const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -654,17 +675,19 @@ When user says "center them" or "align center", use alignShapes with alignType '
 When user says "distribute them evenly" or "space them out", use alignShapes with alignType 'distribute-horizontal' or 'distribute-vertical' based on context.
 ```
 
-#### 5. `/src/components/ui/KeyboardShortcutsModal.tsx`
-Add alignment shortcuts:
+#### 5. `/src/components/canvas/KeyboardShortcuts.tsx`
+Add alignment and selection shortcuts:
 
 ```typescript
-// Add to SHORTCUTS array
+// Add to shortcuts list
 { keys: 'Cmd/Ctrl+Shift+L', description: 'Align left', category: 'Alignment' },
 { keys: 'Cmd/Ctrl+Shift+H', description: 'Align center horizontal', category: 'Alignment' },
 { keys: 'Cmd/Ctrl+Shift+R', description: 'Align right', category: 'Alignment' },
 { keys: 'Cmd/Ctrl+Shift+T', description: 'Align top', category: 'Alignment' },
 { keys: 'Cmd/Ctrl+Shift+V', description: 'Align center vertical', category: 'Alignment' },
 { keys: 'Cmd/Ctrl+Shift+B', description: 'Align bottom', category: 'Alignment' },
+{ keys: 'Shift+L', description: 'Toggle lasso select', category: 'Selection' },
+{ keys: 'Cmd/Ctrl+R', description: 'Rotate 15° clockwise', category: 'Transform' },
 ```
 
 ### Testing Checklist
@@ -713,7 +736,7 @@ Add alignment shortcuts:
 
 ---
 
-## PR #10: Selection Tools
+## PR #11: Selection Tools
 
 **Branch**: `feature/selection-tools`  
 **Work Level**: Medium  
@@ -729,13 +752,14 @@ Add alignment shortcuts:
 ### What This PR Delivers
 
 **Selection Tools:**
-1. **Lasso Select** - Draw freeform path to select shapes
+1. **Lasso Select** - Draw freeform path to select shapes (uses "any corner inside" logic)
 2. **Select All of Type** - Select all rectangles, circles, lines, or text
 3. **Invert Selection** - Select unselected, deselect selected
 
 **UI:**
-- Selection tools toolbar or mode
-- Keyboard shortcuts: `L` for lasso, `Cmd+Shift+A` for select all type
+- Lasso mode activated with `Shift+L` (avoids conflict with Line mode)
+- Exit lasso: Escape key, toggle `Shift+L`, or failed lasso (< 3 points)
+- Keyboard shortcuts: `Cmd+Shift+A` to open shape type menu
 
 **AI Integration:**
 - "Select all circles"
@@ -747,11 +771,12 @@ Add alignment shortcuts:
 - Track mouse path during drag
 - Draw preview path on canvas
 - On mouse up, check each shape for intersection with path
-- Use point-in-polygon algorithm
+- Use point-in-polygon algorithm with "any corner inside" logic (more forgiving than drag box)
+- Multiple exit paths: Escape, Shift+L toggle, or failed lasso
 
 **Select All of Type:**
 - Filter all shapes by type
-- Set selection to filtered shapes
+- Set selection to filtered shapes using unified `selectedShapes` Map
 - Show count in toast
 
 ### Files to Create
@@ -809,10 +834,11 @@ export const isPointInPolygon = (point: {x: number, y: number}, polygon: number[
 }
 
 // Check if shape is within lasso
+// Uses "any corner inside" logic (more forgiving than Phase 3B's drag box)
 export const isShapeInLasso = (shape: Shape, lassoPoints: number[]): boolean => {
   const bounds = getShapeBounds(shape)
   
-  // Check if any corner is inside lasso
+  // Check all four corners
   const corners = [
     { x: bounds.x, y: bounds.y },
     { x: bounds.x + bounds.width, y: bounds.y },
@@ -820,7 +846,7 @@ export const isShapeInLasso = (shape: Shape, lassoPoints: number[]): boolean => 
     { x: bounds.x, y: bounds.y + bounds.height }
   ]
   
-  // Shape is selected if any corner is inside
+  // Shape is selected if ANY corner is inside (organic selection)
   return corners.some(corner => isPointInPolygon(corner, lassoPoints))
 }
 ```
@@ -841,38 +867,29 @@ interface CanvasContextType {
 }
 
 const selectAllOfType = useCallback((shapeType: 'rectangle' | 'circle' | 'line' | 'text') => {
+  const newSelection = new Map<string, ShapeType>()
   let ids: string[] = []
   
   switch (shapeType) {
     case 'rectangle':
       ids = rectangles.map(r => r.id)
-      setSelectedRectangleIds(new Set(ids))
-      setSelectedCircleIds(new Set())
-      setSelectedLineIds(new Set())
-      setSelectedTextIds(new Set())
+      ids.forEach(id => newSelection.set(id, 'rectangle'))
       break
     case 'circle':
       ids = circles.map(c => c.id)
-      setSelectedCircleIds(new Set(ids))
-      setSelectedRectangleIds(new Set())
-      setSelectedLineIds(new Set())
-      setSelectedTextIds(new Set())
+      ids.forEach(id => newSelection.set(id, 'circle'))
       break
     case 'line':
       ids = lines.map(l => l.id)
-      setSelectedLineIds(new Set(ids))
-      setSelectedRectangleIds(new Set())
-      setSelectedCircleIds(new Set())
-      setSelectedTextIds(new Set())
+      ids.forEach(id => newSelection.set(id, 'line'))
       break
     case 'text':
       ids = texts.map(t => t.id)
-      setSelectedTextIds(new Set(ids))
-      setSelectedRectangleIds(new Set())
-      setSelectedCircleIds(new Set())
-      setSelectedLineIds(new Set())
+      ids.forEach(id => newSelection.set(id, 'text'))
       break
   }
+  
+  setSelectedShapes(newSelection)
   
   if (ids.length > 0) {
     setPrimarySelectionId(ids[ids.length - 1])
@@ -884,83 +901,68 @@ const selectAllOfType = useCallback((shapeType: 'rectangle' | 'circle' | 'line' 
 }, [rectangles, circles, lines, texts, showToast])
 
 const selectShapesInLasso = useCallback((lassoPoints: number[]) => {
-  const allShapes = [
+  const allShapes: Array<{ type: ShapeType, shape: Shape }> = [
     ...rectangles.map(r => ({ type: 'rectangle' as const, shape: r })),
     ...circles.map(c => ({ type: 'circle' as const, shape: c })),
     ...lines.map(l => ({ type: 'line' as const, shape: l })),
     ...texts.map(t => ({ type: 'text' as const, shape: t }))
   ]
   
-  const rectIds: string[] = []
-  const circleIds: string[] = []
-  const lineIds: string[] = []
-  const textIds: string[] = []
+  const newSelection = new Map<string, ShapeType>()
+  let lastType: ShapeType | null = null
+  let lastId: string | null = null
   
   for (const { type, shape } of allShapes) {
     if (isShapeInLasso(shape, lassoPoints)) {
-      switch (type) {
-        case 'rectangle': rectIds.push(shape.id); break
-        case 'circle': circleIds.push(shape.id); break
-        case 'line': lineIds.push(shape.id); break
-        case 'text': textIds.push(shape.id); break
-      }
+      newSelection.set(shape.id, type)
+      lastType = type
+      lastId = shape.id
     }
   }
   
-  setSelectedRectangleIds(new Set(rectIds))
-  setSelectedCircleIds(new Set(circleIds))
-  setSelectedLineIds(new Set(lineIds))
-  setSelectedTextIds(new Set(textIds))
+  setSelectedShapes(newSelection)
   
-  const total = rectIds.length + circleIds.length + lineIds.length + textIds.length
-  if (total > 0) {
-    // Set primary to last selected
-    if (textIds.length > 0) {
-      setPrimarySelectionId(textIds[textIds.length - 1])
-      setPrimarySelectionType('text')
-    } else if (lineIds.length > 0) {
-      setPrimarySelectionId(lineIds[lineIds.length - 1])
-      setPrimarySelectionType('line')
-    } else if (circleIds.length > 0) {
-      setPrimarySelectionId(circleIds[circleIds.length - 1])
-      setPrimarySelectionType('circle')
-    } else {
-      setPrimarySelectionId(rectIds[rectIds.length - 1])
-      setPrimarySelectionType('rectangle')
-    }
-    showToast(`Selected ${total} shape${total > 1 ? 's' : ''}`)
+  if (newSelection.size > 0 && lastId && lastType) {
+    setPrimarySelectionId(lastId)
+    setPrimarySelectionType(lastType)
+    showToast(`Selected ${newSelection.size} shape${newSelection.size > 1 ? 's' : ''}`)
   }
 }, [rectangles, circles, lines, texts, showToast])
 
 const invertSelection = useCallback(() => {
-  // Invert each shape type selection
-  const allRectIds = new Set(rectangles.map(r => r.id))
-  const allCircleIds = new Set(circles.map(c => c.id))
-  const allLineIds = new Set(lines.map(l => l.id))
-  const allTextIds = new Set(texts.map(t => t.id))
+  const newSelection = new Map<string, ShapeType>()
   
-  const newRectIds = new Set<string>()
-  const newCircleIds = new Set<string>()
-  const newLineIds = new Set<string>()
-  const newTextIds = new Set<string>()
+  // Add rectangles not currently selected
+  rectangles.forEach(r => {
+    if (!selectedShapes.has(r.id)) {
+      newSelection.set(r.id, 'rectangle')
+    }
+  })
   
-  allRectIds.forEach(id => { if (!selectedRectangleIds.has(id)) newRectIds.add(id) })
-  allCircleIds.forEach(id => { if (!selectedCircleIds.has(id)) newCircleIds.add(id) })
-  allLineIds.forEach(id => { if (!selectedLineIds.has(id)) newLineIds.add(id) })
-  allTextIds.forEach(id => { if (!selectedTextIds.has(id)) newTextIds.add(id) })
+  // Add circles not currently selected
+  circles.forEach(c => {
+    if (!selectedShapes.has(c.id)) {
+      newSelection.set(c.id, 'circle')
+    }
+  })
   
-  setSelectedRectangleIds(newRectIds)
-  setSelectedCircleIds(newCircleIds)
-  setSelectedLineIds(newLineIds)
-  setSelectedTextIds(newTextIds)
+  // Add lines not currently selected
+  lines.forEach(l => {
+    if (!selectedShapes.has(l.id)) {
+      newSelection.set(l.id, 'line')
+    }
+  })
   
-  const total = newRectIds.size + newCircleIds.size + newLineIds.size + newTextIds.size
-  showToast(`Selected ${total} shape${total > 1 ? 's' : ''}`)
-}, [
-  rectangles, circles, lines, texts,
-  selectedRectangleIds, selectedCircleIds, selectedLineIds, selectedTextIds,
-  showToast
-])
+  // Add texts not currently selected
+  texts.forEach(t => {
+    if (!selectedShapes.has(t.id)) {
+      newSelection.set(t.id, 'text')
+    }
+  })
+  
+  setSelectedShapes(newSelection)
+  showToast(`Selected ${newSelection.size} shape${newSelection.size > 1 ? 's' : ''}`)
+}, [rectangles, circles, lines, texts, selectedShapes, showToast])
 ```
 
 #### 2. `/src/components/canvas/Canvas.tsx`
@@ -978,24 +980,28 @@ const handleLassoMouseDown = useCallback((e: KonvaEventObject<MouseEvent>) => {
   
   const pos = e.target.getStage()!.getPointerPosition()
   if (pos) {
-    const canvasPos = transformToCanvasCoords(pos)
+    const canvasPos = transformToCanvasCoords(pos.x, pos.y, e.target.getStage()!)
     setLassoPoints([canvasPos.x, canvasPos.y])
   }
-}, [isLassoMode, transformToCanvasCoords])
+}, [isLassoMode])
 
 const handleLassoMouseMove = useCallback((e: KonvaEventObject<MouseEvent>) => {
   if (!isLassoMode || lassoPoints.length === 0) return
   
   const pos = e.target.getStage()!.getPointerPosition()
   if (pos) {
-    const canvasPos = transformToCanvasCoords(pos)
+    const canvasPos = transformToCanvasCoords(pos.x, pos.y, e.target.getStage()!)
     setLassoPoints(prev => [...prev, canvasPos.x, canvasPos.y])
   }
-}, [isLassoMode, lassoPoints.length, transformToCanvasCoords])
+}, [isLassoMode, lassoPoints.length])
 
 const handleLassoMouseUp = useCallback(() => {
-  if (!isLassoMode || lassoPoints.length < 6) {
+  if (!isLassoMode) return
+  
+  // Exit if failed lasso (< 3 points = 6 coordinates)
+  if (lassoPoints.length < 6) {
     setLassoPoints([])
+    setIsLassoMode(false)
     return
   }
   
@@ -1006,24 +1012,34 @@ const handleLassoMouseUp = useCallback(() => {
 
 // Keyboard shortcuts
 const handleKeyDown = useCallback((e: KeyboardEvent) => {
-  // ... existing
+  // ... existing shortcuts
   
-  // Lasso mode: L
-  if (e.key === 'l' || e.key === 'L') {
+  // Lasso mode: Shift+L (toggle)
+  if (e.shiftKey && (e.key === 'l' || e.key === 'L')) {
     e.preventDefault()
-    setIsLassoMode(true)
+    setIsLassoMode(prev => !prev)
+    setLassoPoints([])  // Clear any in-progress lasso
+    return
+  }
+  
+  // Exit lasso mode: Escape
+  if (e.key === 'Escape' && isLassoMode) {
+    e.preventDefault()
+    setIsLassoMode(false)
+    setLassoPoints([])
     return
   }
   
   // Select all of type menu: Cmd+Shift+A (show menu)
-  // In actual implementation, show a menu to choose type
-}, [])
+  // In actual implementation, show a menu or cycle through types
+}, [isLassoMode])
 
 // Render
 <Stage
   onMouseDown={isLassoMode ? handleLassoMouseDown : handleStageMouseDown}
   onMouseMove={isLassoMode ? handleLassoMouseMove : handleStageMouseMove}
   onMouseUp={isLassoMode ? handleLassoMouseUp : handleStageMouseUp}
+  className={isLassoMode ? 'lasso-cursor' : undefined}
 >
   <Layer>
     {/* Shapes */}
@@ -1039,9 +1055,12 @@ const handleKeyDown = useCallback((e: KeyboardEvent) => {
 ### Testing Checklist
 
 **Manual Testing:**
-- [ ] Lasso select activates with `L` key
+- [ ] Lasso select activates with `Shift+L` key
+- [ ] Lasso mode toggles off with `Shift+L` again
+- [ ] Escape key exits lasso mode
+- [ ] Failed lasso (< 3 points) automatically exits mode
 - [ ] Can draw lasso path
-- [ ] Lasso selects shapes within path
+- [ ] Lasso selects shapes with any corner inside path (organic selection)
 - [ ] Lasso works with all shape types
 - [ ] Can select all rectangles
 - [ ] Can select all circles
@@ -1049,6 +1068,7 @@ const handleKeyDown = useCallback((e: KeyboardEvent) => {
 - [ ] Can select all text
 - [ ] Invert selection works correctly
 - [ ] Selection tools sync to all users
+- [ ] Cursor changes appropriately in lasso mode
 
 **AI Testing:**
 - [ ] AI can select all of specific type
@@ -1058,12 +1078,13 @@ const handleKeyDown = useCallback((e: KeyboardEvent) => {
 - ✅ Lasso select works smoothly
 - ✅ Select-all-of-type works for all types
 - ✅ Invert selection works
+- ✅ Multiple exit paths for lasso mode
 - ✅ AI agent supports selection tools
 - ✅ Real-time sync verified
 
 ---
 
-## PR #11: Rotate Operation
+## PR #12: Rotate Operation
 
 **Branch**: `feature/rotate`  
 **Work Level**: Medium-High  
@@ -1073,7 +1094,7 @@ const handleKeyDown = useCallback((e: KeyboardEvent) => {
 - Essential for professional design work
 - Common in all design tools
 - Natural complement to move/resize
-- Works great with multi-select
+- Works with selection system from Phase 3B/3C
 - Enables complex compositions
 
 ### What This PR Delivers
@@ -1084,11 +1105,13 @@ const handleKeyDown = useCallback((e: KeyboardEvent) => {
 - Snap to 15° intervals (optional, with Shift key)
 - Works with all shape types
 - Preserves shape center during rotation
+- **Limitation**: Only rotates primary selection (multi-select rotates primary only)
 
 **UI:**
 - Rotate handle appears above primary selection
 - Visual feedback during rotation (angle indicator)
 - Keyboard shortcut: `Cmd+R` to rotate 15° clockwise
+- Rotation normalized to 0-360 degrees
 
 **AI Integration:**
 - "Rotate it 45 degrees"
@@ -1098,6 +1121,7 @@ const handleKeyDown = useCallback((e: KeyboardEvent) => {
 
 **Rotation Property:**
 - Add `rotation: number` (degrees, 0-360) to all shape types
+- Always normalize rotation to 0-360 range on every update
 - Use Konva's built-in rotation support
 - Store in Firebase
 
@@ -1105,10 +1129,20 @@ const handleKeyDown = useCallback((e: KeyboardEvent) => {
 - Small circular handle above shape
 - Drag to rotate around shape center
 - Calculate angle from center to mouse position
+- Update rotation in real-time
 
 **Angle Snapping:**
 - Hold Shift while rotating: snap to 15° intervals
 - Show angle indicator during rotation
+- Keyboard rotation (Cmd+R): always 15° increments
+
+**Normalization:**
+```typescript
+const normalizeRotation = (angle: number): number => {
+  angle = angle % 360
+  return angle < 0 ? angle + 360 : angle
+}
+```
 
 ### Files to Create
 
@@ -1188,10 +1222,12 @@ Add `rotation: number` property to all shape types, update Konva Groups to use `
 - [ ] Can rotate shapes with handle
 - [ ] Rotation preserves shape center
 - [ ] Shift key snaps to 15° intervals
-- [ ] Keyboard rotation (Cmd+R) works
+ - [ ] Keyboard rotation (Cmd+R) works (15° increments)
 - [ ] Rotation works with all shape types
 - [ ] Rotation syncs to all users
 - [ ] Rotation works with multi-select (rotates primary only)
+- [ ] Rotation normalized to 0-360 degrees
+- [ ] Angle indicator shows during rotation
 
 **AI Testing:**
 - [ ] AI can rotate shapes with angle specification
@@ -1201,8 +1237,10 @@ Add `rotation: number` property to all shape types, update Konva Groups to use `
 - ✅ Rotation fully functional
 - ✅ Rotate handle works smoothly
 - ✅ Keyboard shortcuts work
+- ✅ Angle normalization works correctly
 - ✅ AI agent supports rotation
 - ✅ Real-time sync verified
+- ✅ Primary-only rotation limitation documented
 
 ---
 
