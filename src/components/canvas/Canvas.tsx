@@ -9,7 +9,7 @@ import { stopEventPropagation } from '../../utils/eventHelpers'
 import Cursor from './Cursor'
 import Rectangle from './Rectangle'
 import SelectionBox from './SelectionBox'  // NEW
-import ColorPicker from './ColorPicker'
+import CanvasInfo from './CanvasInfo'  // NEW: Separate component for info bar
 import Toast from '../ui/Toast'
 import type { Rectangle as RectangleType } from '../../services/canvasService'
 import './Canvas.css'
@@ -85,7 +85,7 @@ const Canvas: React.FC<CanvasProps> = ({
   const { cursors, updateCursor, error: cursorsError } = useCursors()
 
 
-  // Get current stage position and scale (with safer fallbacks)
+  // Get current stage position (for keyboard navigation)
   const getCurrentStagePosition = useCallback(() => {
     // Don't return (0,0) fallback - return null to indicate unavailable
     if (!stageRef.current) return null
@@ -93,11 +93,6 @@ const Canvas: React.FC<CanvasProps> = ({
       x: stageRef.current.x(),
       y: stageRef.current.y()
     }
-  }, [])
-
-  const getCurrentStageScale = useCallback(() => {
-    if (!stageRef.current) return null
-    return stageRef.current.scaleX()
   }, [])
 
   // NEW: Transform screen coordinates to canvas coordinates (accounting for pan/zoom)
@@ -627,6 +622,11 @@ const Canvas: React.FC<CanvasProps> = ({
             stageRef.current.scaleY(1)
             stageRef.current.x(0)
             stageRef.current.y(0)
+            sendViewportInfo() // Update AI agent viewport info
+            // Trigger info bar update
+            if ((window as any).__canvasInfoUpdate) {
+              (window as any).__canvasInfoUpdate()
+            }
             return
           default:
             return
@@ -634,6 +634,11 @@ const Canvas: React.FC<CanvasProps> = ({
         
         stageRef.current.x(newPosition.x)
         stageRef.current.y(newPosition.y)
+        sendViewportInfo() // Update AI agent viewport info
+        // Trigger info bar update
+        if ((window as any).__canvasInfoUpdate) {
+          (window as any).__canvasInfoUpdate()
+        }
       }
     }
 
@@ -655,7 +660,7 @@ const Canvas: React.FC<CanvasProps> = ({
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)
     }
-  }, [primarySelectionId, rectangles, handleRectangleResize, deleteRectangle, isRectangleDragging, isRectangleResizing, getCurrentStagePosition, selectionLocked, selectedRectangleIds, isShiftPressed, isPanning, selectAll, clearSelection, selectionBoxStart])
+  }, [primarySelectionId, rectangles, handleRectangleResize, deleteRectangle, isRectangleDragging, isRectangleResizing, getCurrentStagePosition, selectionLocked, selectedRectangleIds, isShiftPressed, isPanning, selectAll, clearSelection, selectionBoxStart, sendViewportInfo])
 
   // Detect when rectangle is selected after AI command (input was focused)
   useEffect(() => {
@@ -707,39 +712,21 @@ const Canvas: React.FC<CanvasProps> = ({
 
   return (
     <div className="canvas-container">
-      <div className="canvas-info">
-        <div className="canvas-stats">
-          {/* PERFORMANCE NOTE: These calculations run on every render. Consider memoizing
-              with useMemo() and state tracking for stage transforms to reduce DOM queries */}
-          <span>Zoom: {(() => {
-            const scale = getCurrentStageScale()
-            return scale ? Math.round(scale * 100) : 100
-          })()}%</span>
-          <span>Position: ({(() => {
-            const pos = getCurrentStagePosition()
-            return pos ? `${Math.round(pos.x)}, ${Math.round(pos.y)}` : '0, 0'
-          })()})</span>
-          <span>Rectangles: {rectangles.length}</span>
-          <span>Friends: {Object.keys(cursors).length}</span>
-          
-          {/* Color Picker */}
-          {selectedRectangle && (
-            <div className="header-color-picker">
-              <span className="color-label">Color:</span>
-              <ColorPicker
-                selectedColor={displayColor}  // CHANGED: Use displayColor (shows ? for mixed)
-                onColorChange={handleColorChange}
-              />
-            </div>
-          )}
+      {/* Info bar with viewport stats - extracted for performance */}
+      <CanvasInfo
+        stageRef={stageRef}
+        rectangles={rectangles}
+        cursorsCount={Object.keys(cursors).length}
+        selectedRectangle={selectedRectangle}
+        displayColor={displayColor}
+        onColorChange={handleColorChange}
+      />
+      
+      {cursorsError && (
+        <div className="cursor-error">
+          <span>⚠️ Cursor sync: {cursorsError}</span>
         </div>
-        
-        {cursorsError && (
-          <div className="cursor-error">
-            <span>⚠️ Cursor sync: {cursorsError}</span>
-          </div>
-        )}
-      </div>
+      )}
       
       <div className="canvas-wrapper">
         <Stage
