@@ -116,6 +116,40 @@ export const sendToBackTool = tool({
 });
 
 /**
+ * Tool 10: Align selected shapes (Phase 3D)
+ */
+export const alignShapesTool = tool({
+  description: "Align multiple selected shapes (requires 2+ shapes selected). Use for aligning edges or centers, or distributing shapes evenly.",
+  inputSchema: z.object({
+    alignType: z.enum([
+      "left", "center-horizontal", "right",
+      "top", "center-vertical", "bottom",
+      "distribute-horizontal", "distribute-vertical",
+    ]).describe("How to align the shapes. Use 'center-horizontal' for horizontal centering, 'distribute-horizontal' for even spacing left-to-right"),
+  }),
+});
+
+/**
+ * Tool 11: Select all shapes of a type (Phase 3D)
+ */
+export const selectAllOfTypeTool = tool({
+  description: "Select all shapes of a specific type on the canvas (rectangle, circle, line, or text). Useful when user wants to select all instances of a shape type.",
+  inputSchema: z.object({
+    shapeType: z.enum(["rectangle", "circle", "line", "text"]).describe("The type of shape to select"),
+  }),
+});
+
+/**
+ * Tool 12: Rotate shape (Phase 3D)
+ */
+export const rotateShapeTool = tool({
+  description: "Rotate the selected shape by a specified angle in degrees. Requires a shape to be selected. Positive angles rotate clockwise.",
+  inputSchema: z.object({
+    angle: z.number().min(-360).max(360).describe("Rotation angle in degrees (positive = clockwise, negative = counter-clockwise)"),
+  }),
+});
+
+/**
  * Export all tools as an object
  */
 export const tools = {
@@ -128,4 +162,7 @@ export const tools = {
   duplicateRectangle: duplicateRectangleTool,
   bringToFront: bringToFrontTool,
   sendToBack: sendToBackTool,
+  alignShapes: alignShapesTool,
+  selectAllOfType: selectAllOfTypeTool,
+  rotateShape: rotateShapeTool,
 };

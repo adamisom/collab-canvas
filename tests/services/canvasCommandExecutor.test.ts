@@ -437,4 +437,219 @@ describe('CanvasCommandExecutor', () => {
       ).rejects.toThrow('No rectangle ID provided')
     })
   })
+
+  describe('Phase 3D: AI Integration', () => {
+    let mockAlignShapes: Mock
+    let mockSelectAllOfType: Mock
+    let mockRotateShape: Mock
+
+    beforeEach(() => {
+      mockAlignShapes = vi.fn()
+      mockSelectAllOfType = vi.fn()
+      mockRotateShape = vi.fn()
+
+      mockContext = {
+        ...mockContext,
+        primarySelectionType: 'rectangle',
+        selectedShapes: new Map([['rect1', 'rectangle'], ['rect2', 'rectangle']]),
+        alignShapes: mockAlignShapes,
+        selectAllOfType: mockSelectAllOfType,
+        rotateShape: mockRotateShape
+      }
+
+      executor = new CanvasCommandExecutor(mockContext)
+    })
+
+    describe('alignShapes', () => {
+      it('should align shapes to the left', async () => {
+        await executor.executeCommand({
+          tool: 'alignShapes',
+          parameters: { alignType: 'left' }
+        })
+
+        expect(mockAlignShapes).toHaveBeenCalledWith('left')
+      })
+
+      it('should center shapes horizontally', async () => {
+        await executor.executeCommand({
+          tool: 'alignShapes',
+          parameters: { alignType: 'center-horizontal' }
+        })
+
+        expect(mockAlignShapes).toHaveBeenCalledWith('center-horizontal')
+      })
+
+      it('should distribute shapes horizontally', async () => {
+        mockContext.selectedShapes = new Map([
+          ['rect1', 'rectangle'],
+          ['rect2', 'rectangle'],
+          ['rect3', 'rectangle']
+        ])
+
+        await executor.executeCommand({
+          tool: 'alignShapes',
+          parameters: { alignType: 'distribute-horizontal' }
+        })
+
+        expect(mockAlignShapes).toHaveBeenCalledWith('distribute-horizontal')
+      })
+
+      it('should throw error for invalid alignment type', async () => {
+        await expect(
+          executor.executeCommand({
+            tool: 'alignShapes',
+            parameters: { alignType: 'invalid-type' }
+          })
+        ).rejects.toThrow('Invalid alignment type')
+      })
+
+      it('should throw error if less than 2 shapes selected', async () => {
+        mockContext.selectedShapes = new Map([['rect1', 'rectangle']])
+
+        await expect(
+          executor.executeCommand({
+            tool: 'alignShapes',
+            parameters: { alignType: 'left' }
+          })
+        ).rejects.toThrow('Alignment requires at least 2 shapes selected')
+      })
+
+      it('should throw error if distributing with less than 3 shapes', async () => {
+        mockContext.selectedShapes = new Map([
+          ['rect1', 'rectangle'],
+          ['rect2', 'rectangle']
+        ])
+
+        await expect(
+          executor.executeCommand({
+            tool: 'alignShapes',
+            parameters: { alignType: 'distribute-horizontal' }
+          })
+        ).rejects.toThrow('Distribution requires at least 3 shapes selected')
+      })
+    })
+
+    describe('selectAllOfType', () => {
+      it('should select all rectangles', async () => {
+        await executor.executeCommand({
+          tool: 'selectAllOfType',
+          parameters: { shapeType: 'rectangle' }
+        })
+
+        expect(mockSelectAllOfType).toHaveBeenCalledWith('rectangle')
+      })
+
+      it('should select all circles', async () => {
+        await executor.executeCommand({
+          tool: 'selectAllOfType',
+          parameters: { shapeType: 'circle' }
+        })
+
+        expect(mockSelectAllOfType).toHaveBeenCalledWith('circle')
+      })
+
+      it('should select all lines', async () => {
+        await executor.executeCommand({
+          tool: 'selectAllOfType',
+          parameters: { shapeType: 'line' }
+        })
+
+        expect(mockSelectAllOfType).toHaveBeenCalledWith('line')
+      })
+
+      it('should select all text', async () => {
+        await executor.executeCommand({
+          tool: 'selectAllOfType',
+          parameters: { shapeType: 'text' }
+        })
+
+        expect(mockSelectAllOfType).toHaveBeenCalledWith('text')
+      })
+
+      it('should throw error for invalid shape type', async () => {
+        await expect(
+          executor.executeCommand({
+            tool: 'selectAllOfType',
+            parameters: { shapeType: 'invalid-shape' }
+          })
+        ).rejects.toThrow('Invalid shape type')
+      })
+    })
+
+    describe('rotateShape', () => {
+      beforeEach(() => {
+        mockContext.primarySelectionId = 'rect1'
+        mockContext.primarySelectionType = 'rectangle'
+      })
+
+      it('should rotate shape by 45 degrees', async () => {
+        await executor.executeCommand({
+          tool: 'rotateShape',
+          parameters: { angle: 45 }
+        })
+
+        expect(mockRotateShape).toHaveBeenCalledWith('rect1', 'rectangle', 45)
+      })
+
+      it('should rotate shape by 90 degrees', async () => {
+        await executor.executeCommand({
+          tool: 'rotateShape',
+          parameters: { angle: 90 }
+        })
+
+        expect(mockRotateShape).toHaveBeenCalledWith('rect1', 'rectangle', 90)
+      })
+
+      it('should normalize angle greater than 360', async () => {
+        await executor.executeCommand({
+          tool: 'rotateShape',
+          parameters: { angle: 450 }
+        })
+
+        expect(mockRotateShape).toHaveBeenCalledWith('rect1', 'rectangle', 90)
+      })
+
+      it('should normalize negative angle', async () => {
+        await executor.executeCommand({
+          tool: 'rotateShape',
+          parameters: { angle: -45 }
+        })
+
+        expect(mockRotateShape).toHaveBeenCalledWith('rect1', 'rectangle', 315)
+      })
+
+      it('should throw error if no shape selected', async () => {
+        mockContext.primarySelectionId = null
+        mockContext.primarySelectionType = null
+
+        await expect(
+          executor.executeCommand({
+            tool: 'rotateShape',
+            parameters: { angle: 45 }
+          })
+        ).rejects.toThrow('Rotation requires a shape to be selected')
+      })
+
+      it('should throw error for invalid angle (NaN)', async () => {
+        await expect(
+          executor.executeCommand({
+            tool: 'rotateShape',
+            parameters: { angle: NaN }
+          })
+        ).rejects.toThrow('Rotation angle must be a valid number')
+      })
+
+      it('should handle rotation of different shape types', async () => {
+        mockContext.primarySelectionId = 'circle1'
+        mockContext.primarySelectionType = 'circle'
+
+        await executor.executeCommand({
+          tool: 'rotateShape',
+          parameters: { angle: 180 }
+        })
+
+        expect(mockRotateShape).toHaveBeenCalledWith('circle1', 'circle', 180)
+      })
+    })
+  })
 })

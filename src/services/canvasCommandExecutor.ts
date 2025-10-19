@@ -37,6 +37,8 @@ import type { Rectangle } from './canvasService'
 export interface CanvasContextMethods {
   rectangles: Rectangle[]
   primarySelectionId: string | null  // CHANGED: AI operates on primary selection
+  primarySelectionType: 'rectangle' | 'circle' | 'line' | 'text' | null  // Phase 3D
+  selectedShapes: Map<string, 'rectangle' | 'circle' | 'line' | 'text'>  // Phase 3D
   getViewportInfo: () => ViewportInfo | null
   createRectangle: (x: number, y: number) => Promise<Rectangle | null>
   updateRectangle: (rectangleId: string, updates: Partial<Rectangle>) => Promise<void>
@@ -48,6 +50,10 @@ export interface CanvasContextMethods {
   changeRectangleColor: (rectangleId: string, color: string) => Promise<void>
   selectRectangle: (rectangleId: string, additive?: boolean) => Promise<void>  // CHANGED: selectRectangle no longer takes null
   setSelectionLocked: (locked: boolean) => void
+  // Phase 3D: Alignment, Selection, Rotation
+  alignShapes: (alignType: 'left' | 'center-horizontal' | 'right' | 'top' | 'center-vertical' | 'bottom' | 'distribute-horizontal' | 'distribute-vertical') => Promise<void>
+  selectAllOfType: (shapeType: 'rectangle' | 'circle' | 'line' | 'text') => Promise<void>
+  rotateShape: (shapeId: string, shapeType: 'rectangle' | 'circle' | 'line' | 'text', rotation: number) => Promise<void>
 }
 
 export class CanvasCommandExecutor {
@@ -142,6 +148,18 @@ export class CanvasCommandExecutor {
 
       case 'createMultipleRectangles':
         await this.executeCreateMultipleRectangles(parameters as CreateMultipleRectanglesParams)
+        break
+
+      case 'alignShapes':
+        await this.executeAlignShapes(parameters as { alignType: string })
+        break
+
+      case 'selectAllOfType':
+        await this.executeSelectAllOfType(parameters as { shapeType: string })
+        break
+
+      case 'rotateShape':
+        await this.executeRotateShape(parameters as { angle: number })
         break
 
       default:
@@ -436,6 +454,75 @@ export class CanvasCommandExecutor {
    */
   private clampNumber(value: number, min: number, max: number): number {
     return Math.max(min, Math.min(max, value))
+  }
+
+  /**
+   * Phase 3D: Align selected shapes
+   */
+  private async executeAlignShapes(params: { alignType: string }): Promise<void> {
+    const { alignType } = params
+
+    // Validate alignment type
+    const validTypes = ['left', 'center-horizontal', 'right', 'top', 'center-vertical', 'bottom', 'distribute-horizontal', 'distribute-vertical']
+    if (!validTypes.includes(alignType)) {
+      throw new Error(`Invalid alignment type: ${alignType}`)
+    }
+
+    // Require 2+ shapes selected
+    if (this.context.selectedShapes.size < 2) {
+      throw new Error('Alignment requires at least 2 shapes selected')
+    }
+
+    // Distribute requires 3+ shapes
+    if ((alignType === 'distribute-horizontal' || alignType === 'distribute-vertical') && this.context.selectedShapes.size < 3) {
+      throw new Error('Distribution requires at least 3 shapes selected')
+    }
+
+    await this.context.alignShapes(alignType as any)
+  }
+
+  /**
+   * Phase 3D: Select all shapes of a specific type
+   */
+  private async executeSelectAllOfType(params: { shapeType: string }): Promise<void> {
+    const { shapeType } = params
+
+    // Validate shape type
+    const validTypes = ['rectangle', 'circle', 'line', 'text']
+    if (!validTypes.includes(shapeType)) {
+      throw new Error(`Invalid shape type: ${shapeType}`)
+    }
+
+    await this.context.selectAllOfType(shapeType as any)
+  }
+
+  /**
+   * Phase 3D: Rotate the primary selected shape
+   */
+  private async executeRotateShape(params: { angle: number }): Promise<void> {
+    const { angle } = params
+
+    // Require a shape to be selected
+    if (!this.context.primarySelectionId || !this.context.primarySelectionType) {
+      throw new Error('Rotation requires a shape to be selected')
+    }
+
+    // Validate angle is a number
+    if (typeof angle !== 'number' || isNaN(angle)) {
+      throw new Error('Rotation angle must be a valid number')
+    }
+
+    // Normalize angle to 0-360 range
+    let normalizedAngle = angle % 360
+    if (normalizedAngle < 0) {
+      normalizedAngle += 360
+    }
+
+    await this.context.rotateShape(
+      this.context.primarySelectionId,
+      this.context.primarySelectionType,
+      normalizedAngle
+    )
   }
 }
 

@@ -80,6 +80,17 @@ IMPORTANT CONSTRAINTS:
 - When user says "bring to front", "move to top", or similar, use bringToFront tool
 - When user says "send to back", "move to bottom", or similar, use sendToBack tool
 
+PHASE 3D OPERATIONS (Alignment, Selection, Rotation):
+- alignShapes: Align multiple selected shapes (requires 2+ shapes selected)
+  * Alignment types: left, center-horizontal, right, top, center-vertical, bottom
+  * Distribution types: distribute-horizontal, distribute-vertical (requires 3+ shapes)
+  * Examples: "align them to the left", "center them horizontally", "distribute them evenly"
+- selectAllOfType: Select all shapes of a specific type (rectangle, circle, line, text)
+  * Examples: "select all circles", "select all rectangles", "select all text"
+- rotateShape: Rotate the selected shape by an angle in degrees (requires 1 shape selected)
+  * Positive angles = clockwise, negative = counter-clockwise
+  * Examples: "rotate it 45 degrees", "turn it clockwise", "rotate 90 degrees"
+
 When user says "in the center", use viewport center coordinates shown above.
 `;
 };
