@@ -16,6 +16,7 @@ interface BaseShape {
   color: string
   zIndex: number
   createdBy: string
+  createdByUsername?: string  // Optional username for display
   createdAt: number
   selectedBy: string | null
   selectedByUsername?: string | null  // Optional for display purposes

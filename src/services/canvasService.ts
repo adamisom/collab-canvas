@@ -11,22 +11,10 @@ import {
 } from './firebaseService'
 import type { DatabaseReference, DataSnapshot } from './firebaseService'
 import { DB_PATHS, RECTANGLE_COLORS, RECTANGLE_CONSTRAINTS, CANVAS_BOUNDS } from '../utils/constants'
-import type { CircleShape, LineShape, TextShape } from '../shared/shapes'
+import type { Rectangle, CircleShape, LineShape, TextShape } from '../shared/shapes'
 
-export interface Rectangle {
-  id: string
-  x: number
-  y: number
-  width: number
-  height: number
-  color: string
-  zIndex?: number
-  selectedBy?: string | null
-  selectedByUsername?: string | null
-  createdBy: string
-  createdAt: number
-  updatedAt: number
-}
+// Re-export Rectangle for backward compatibility with existing imports
+export type { Rectangle } from '../shared/shapes'
 
 export interface RectangleInput {
   x: number
@@ -35,6 +23,7 @@ export interface RectangleInput {
   height: number
   color?: string
   createdBy: string
+  createdByUsername?: string
 }
 
 export interface CircleInput {
@@ -90,6 +79,7 @@ export class CanvasService {
 
   /**
    * Get the maximum z-index across ALL shape types (rectangles, circles, lines, text)
+   * MIGRATED (Post-3C): Updated to use Rectangle from shapes.ts (zIndex is now required)
    * Used to ensure new shapes appear on top
    * @private
    * @returns Maximum z-index found, or 0 if no shapes exist
@@ -98,11 +88,11 @@ export class CanvasService {
     try {
       let maxZ = 0
 
-      // Check rectangles
+      // Check rectangles - zIndex is now required (not optional)
       const rectSnapshot = await dbGet(this.rectanglesRef)
       if (rectSnapshot.exists()) {
         const rectangles = Object.values(rectSnapshot.val() as Record<string, Rectangle>)
-        const rectMax = Math.max(...rectangles.map(r => r.zIndex ?? 0))
+        const rectMax = Math.max(...rectangles.map(r => r.zIndex))
         maxZ = Math.max(maxZ, rectMax)
       }
 
@@ -110,7 +100,7 @@ export class CanvasService {
       const circleSnapshot = await dbGet(this.circlesRef)
       if (circleSnapshot.exists()) {
         const circles = Object.values(circleSnapshot.val() as Record<string, CircleShape>)
-        const circleMax = Math.max(...circles.map(c => c.zIndex ?? 0))
+        const circleMax = Math.max(...circles.map(c => c.zIndex))
         maxZ = Math.max(maxZ, circleMax)
       }
 
@@ -118,7 +108,7 @@ export class CanvasService {
       const lineSnapshot = await dbGet(this.linesRef)
       if (lineSnapshot.exists()) {
         const lines = Object.values(lineSnapshot.val() as Record<string, LineShape>)
-        const lineMax = Math.max(...lines.map(l => l.zIndex ?? 0))
+        const lineMax = Math.max(...lines.map(l => l.zIndex))
         maxZ = Math.max(maxZ, lineMax)
       }
 
@@ -126,7 +116,7 @@ export class CanvasService {
       const textSnapshot = await dbGet(this.textsRef)
       if (textSnapshot.exists()) {
         const texts = Object.values(textSnapshot.val() as Record<string, TextShape>)
-        const textMax = Math.max(...texts.map(t => t.zIndex ?? 0))
+        const textMax = Math.max(...texts.map(t => t.zIndex))
         maxZ = Math.max(maxZ, textMax)
       }
 
@@ -231,6 +221,7 @@ export class CanvasService {
 
   /**
    * Create a new rectangle in the database
+   * MIGRATED (Post-3C): Now uses shared Rectangle type from shapes.ts
    * @param rectangleData - Rectangle properties (x, y, width, height, color, createdBy)
    * @returns The created rectangle with generated ID
    */
@@ -243,23 +234,22 @@ export class CanvasService {
         throw new Error('Failed to generate rectangle ID')
       }
 
-      // Get all rectangles to find max zIndex (with fallback)
-      let maxZ = 1000 // Default if fetch fails
-      try {
-        const allRectangles = await this.getAllRectangles()
-        maxZ = this.getMaxZIndex(allRectangles)
-      } catch {
-        // If we can't fetch rectangles for zIndex, use default
-        console.warn('Could not fetch rectangles for zIndex calculation, using default')
-      }
+      // Get max zIndex across ALL shape types
+      const maxZ = await this.getMaxZIndexAcrossAllShapes()
 
       const rectangle: Rectangle = {
         id: newRectangleRef.key,
+        type: 'rectangle',  // MIGRATION: Added type field
         ...rectangleData,
         color: rectangleData.color || RECTANGLE_COLORS.BLUE,
-        zIndex: maxZ + 1000, // Default to top with gap
+        zIndex: maxZ + 1000, // Required field, not optional
+        createdBy: rectangleData.createdBy,
+        createdByUsername: rectangleData.createdByUsername || 'Unknown',
         createdAt: now,
-        updatedAt: now
+        selectedBy: null,  // MIGRATION: Required field
+        selectedByUsername: null,
+        selectedAt: null,  // MIGRATION: Required field
+        updatedAt: now  // Keep for backward compatibility
       }
 
       await dbSet(newRectangleRef, rectangle)
