@@ -61,6 +61,20 @@
   cursor: grabbing;
 }
 
+/* NEW: Pan mode cursor (Spacebar held) */
+.canvas-wrapper canvas.panning {
+  cursor: grab;
+}
+
+.canvas-wrapper canvas.panning:active {
+  cursor: grabbing;
+}
+
+/* NEW: Selection mode cursor (Shift held) */
+.canvas-wrapper canvas.selection-mode {
+  cursor: crosshair;
+}
+
 /* Canvas background pattern */
 .canvas-wrapper::before {
   content: '';

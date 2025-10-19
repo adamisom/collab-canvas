@@ -8,6 +8,7 @@ import { VIEWPORT_WIDTH, VIEWPORT_HEIGHT } from '../../utils/constants'
 import { stopEventPropagation } from '../../utils/eventHelpers'
 import Cursor from './Cursor'
 import Rectangle from './Rectangle'
+import SelectionBox from './SelectionBox'  // NEW
 import ColorPicker from './ColorPicker'
 import Toast from '../ui/Toast'
 import type { Rectangle as RectangleType } from '../../services/canvasService'
@@ -33,6 +34,14 @@ const Canvas: React.FC<CanvasProps> = ({
   const [isRectangleDragging, setIsRectangleDragging] = useState(false)
   const [isRectangleResizing, setIsRectangleResizing] = useState(false)
   
+  // NEW: Selection box state (for Shift+Drag multi-select)
+  const [selectionBoxStart, setSelectionBoxStart] = useState<{ x: number; y: number } | null>(null)
+  const [selectionBoxEnd, setSelectionBoxEnd] = useState<{ x: number; y: number } | null>(null)
+  
+  // NEW: Keyboard modifier states
+  const [isShiftPressed, setIsShiftPressed] = useState(false)
+  const [isPanning, setIsPanning] = useState(false)  // Spacebar held
+  
   // Track if user just used AI command (to prevent accidental deselect on first click)
   const justUsedAICommandRef = useRef(false)
   
@@ -55,6 +64,8 @@ const Canvas: React.FC<CanvasProps> = ({
     resizeRectangle, 
     deleteRectangle, 
     selectRectangle,
+    selectMultiple,        // NEW
+    selectAll,             // NEW
     clearSelection,        // NEW
     changeRectangleColor,
     copySelectedRectangles,  // CHANGED
@@ -87,6 +98,20 @@ const Canvas: React.FC<CanvasProps> = ({
     return stageRef.current.scaleX()
   }, [])
 
+  // NEW: Transform screen coordinates to canvas coordinates (accounting for pan/zoom)
+  const transformToCanvasCoords = useCallback((screenX: number, screenY: number) => {
+    if (!stageRef.current) return null
+    
+    const stage = stageRef.current
+    const scale = stage.scaleX()
+    const stagePos = { x: stage.x(), y: stage.y() }
+    
+    return {
+      x: (screenX - stagePos.x) / scale,
+      y: (screenY - stagePos.y) / scale
+    }
+  }, [])
+
   // Calculate and update viewport info (for AI agent)
   const sendViewportInfo = useCallback(() => {
     if (!stageRef.current) return
@@ -115,27 +140,29 @@ const Canvas: React.FC<CanvasProps> = ({
 
   // Handle mouse move for cursor broadcasting
   const handleMouseMove = useCallback((e: KonvaEventObject<MouseEvent>) => {
-    if (isDragging || isRectangleDragging || isRectangleResizing) return // Don't broadcast while panning, dragging, or resizing
-
     const stage = e.target.getStage()
     if (!stage) return
     
     const pointer = stage.getPointerPosition()
+    if (!pointer) return
     
-    if (pointer) {
-      // REFACTORING NOTE: This coordinate transformation logic is duplicated
-      // in handleStageClick. Consider extracting to useCoordinateTransform hook
-      const stagePos = getCurrentStagePosition()
-      const currentScale = getCurrentStageScale()
-      
-      if (stagePos && currentScale) {
-        const canvasX = (pointer.x - stagePos.x) / currentScale
-        const canvasY = (pointer.y - stagePos.y) / currentScale
-        
-        updateCursor(canvasX, canvasY)
+    // Update selection box end point if we're dragging
+    if (selectionBoxStart) {
+      const canvasCoords = transformToCanvasCoords(pointer.x, pointer.y)
+      if (canvasCoords) {
+        setSelectionBoxEnd(canvasCoords)
       }
+      return  // Don't broadcast cursor while drawing selection box
     }
-  }, [updateCursor, getCurrentStagePosition, getCurrentStageScale, isDragging, isRectangleDragging, isRectangleResizing])
+    
+    // Broadcast cursor position (skip if panning, dragging, or resizing)
+    if (isDragging || isRectangleDragging || isRectangleResizing) return // Don't broadcast while panning, dragging, or resizing
+    
+    const canvasCoords = transformToCanvasCoords(pointer.x, pointer.y)
+    if (canvasCoords) {
+      updateCursor(canvasCoords.x, canvasCoords.y)
+    }
+  }, [updateCursor, isDragging, isRectangleDragging, isRectangleResizing, selectionBoxStart, transformToCanvasCoords])
 
   // Handle wheel zoom
   const handleWheel = useCallback((e: KonvaEventObject<WheelEvent>) => {
@@ -194,31 +221,66 @@ const Canvas: React.FC<CanvasProps> = ({
     sendViewportInfo()
   }, [sendViewportInfo])
 
-  // Handle stage click (for rectangle creation and deselection)
-  const handleStageClick = useCallback(async (e: KonvaEventObject<MouseEvent>) => {
+  // NEW: Handle stage mouse down (for selection box start or rectangle creation)
+  const handleStageMouseDown = useCallback(async (e: KonvaEventObject<MouseEvent>) => {
     // Only handle clicks on the stage background (not on shapes)
-    if (e.target === e.target.getStage()) {
-      // Deselect any selected rectangles
+    if (e.target !== e.target.getStage()) return
+
+    const stage = e.target.getStage()
+    const pointer = stage.getPointerPosition()
+    if (!pointer) return
+
+    const canvasCoords = transformToCanvasCoords(pointer.x, pointer.y)
+    if (!canvasCoords) return
+
+    // If Shift is pressed, start selection box
+    if (isShiftPressed) {
+      setSelectionBoxStart(canvasCoords)
+      setSelectionBoxEnd(canvasCoords)
+    } else {
+      // Otherwise, clear selection and create new rectangle
       await clearSelection()
-      
-      // Create new rectangle at click position
-      const stage = e.target.getStage()
-      const pointer = stage.getPointerPosition()
-      
-      if (pointer) {
-        // Convert screen coordinates to canvas coordinates
-        const stagePos = getCurrentStagePosition()
-        const currentScale = getCurrentStageScale()
-        
-        if (stagePos && currentScale) {
-          const canvasX = (pointer.x - stagePos.x) / currentScale
-          const canvasY = (pointer.y - stagePos.y) / currentScale
-          
-          await createRectangle(canvasX, canvasY)
-        }
-      }
+      await createRectangle(canvasCoords.x, canvasCoords.y)
     }
-  }, [createRectangle, clearSelection, getCurrentStagePosition, getCurrentStageScale])
+  }, [isShiftPressed, transformToCanvasCoords, clearSelection, createRectangle])
+
+  // NEW: Handle stage mouse up (for selection box completion)
+  const handleStageMouseUp = useCallback(async () => {
+    if (!selectionBoxStart || !selectionBoxEnd) {
+      // No selection box, just clear state
+      setSelectionBoxStart(null)
+      setSelectionBoxEnd(null)
+      return
+    }
+
+    // Calculate selection box bounds
+    const minX = Math.min(selectionBoxStart.x, selectionBoxEnd.x)
+    const maxX = Math.max(selectionBoxStart.x, selectionBoxEnd.x)
+    const minY = Math.min(selectionBoxStart.y, selectionBoxEnd.y)
+    const maxY = Math.max(selectionBoxStart.y, selectionBoxEnd.y)
+
+    // Find all rectangles fully contained in selection box
+    const selectedIds = rectangles
+      .filter(rect => {
+        const rectLeft = rect.x
+        const rectRight = rect.x + rect.width
+        const rectTop = rect.y
+        const rectBottom = rect.y + rect.height
+
+        return rectLeft >= minX && rectRight <= maxX && 
+               rectTop >= minY && rectBottom <= maxY
+      })
+      .map(rect => rect.id)
+
+    // Select the rectangles
+    if (selectedIds.length > 0) {
+      await selectMultiple(selectedIds)
+    }
+
+    // Clear selection box
+    setSelectionBoxStart(null)
+    setSelectionBoxEnd(null)
+  }, [selectionBoxStart, selectionBoxEnd, rectangles, selectMultiple])
 
   // Handle rectangle click (selection/deselection)
   const handleRectangleClick = useCallback(async (rectangle: RectangleType) => {
@@ -327,6 +389,37 @@ const Canvas: React.FC<CanvasProps> = ({
       
       // Don't handle shortcuts during AI operations
       if (selectionLocked) return
+      
+      // NEW: Track Shift key for selection box mode
+      if (e.key === 'Shift' && !isShiftPressed) {
+        setIsShiftPressed(true)
+      }
+      
+      // NEW: Track Spacebar for pan mode
+      if (e.key === ' ' && !isTyping && !isPanning) {
+        e.preventDefault()  // Prevent page scroll
+        setIsPanning(true)
+      }
+      
+      // NEW: Select All (Cmd/Ctrl+A)
+      if ((e.metaKey || e.ctrlKey) && e.key === 'a' && !isTyping) {
+        e.preventDefault()
+        selectAll()
+        return
+      }
+      
+      // NEW: Clear selection (Escape)
+      if (e.key === 'Escape' && !isTyping) {
+        // Cancel selection box if active
+        if (selectionBoxStart) {
+          setSelectionBoxStart(null)
+          setSelectionBoxEnd(null)
+        } else {
+          // Otherwise clear selection
+          clearSelection()
+        }
+        return
+      }
       
       // Copy: Cmd+C (Mac) or Ctrl+C (Windows/Linux)
       if ((e.metaKey || e.ctrlKey) && e.key === 'c' && !isTyping) {
@@ -465,11 +558,25 @@ const Canvas: React.FC<CanvasProps> = ({
       }
     }
 
+    const handleKeyUp = (e: KeyboardEvent) => {
+      // NEW: Release Shift key
+      if (e.key === 'Shift') {
+        setIsShiftPressed(false)
+      }
+      
+      // NEW: Release Spacebar (pan mode)
+      if (e.key === ' ') {
+        setIsPanning(false)
+      }
+    }
+
     window.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('keyup', handleKeyUp)
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('keyup', handleKeyUp)
     }
-  }, [primarySelectionId, rectangles, handleRectangleResize, deleteRectangle, isRectangleDragging, isRectangleResizing, getCurrentStagePosition, selectionLocked, selectedRectangleIds])
+  }, [primarySelectionId, rectangles, handleRectangleResize, deleteRectangle, isRectangleDragging, isRectangleResizing, getCurrentStagePosition, selectionLocked, selectedRectangleIds, isShiftPressed, isPanning, selectAll, clearSelection, selectionBoxStart])
 
   // Detect when rectangle is selected after AI command (input was focused)
   useEffect(() => {
@@ -546,13 +653,14 @@ const Canvas: React.FC<CanvasProps> = ({
           ref={stageRef}
           width={width}
           height={height}
-          draggable={!isRectangleDragging && !isRectangleResizing}
+          draggable={isPanning && !isRectangleDragging && !isRectangleResizing}  // CHANGED: Only draggable in pan mode
           onWheel={handleWheel}
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
-          onClick={handleStageClick}
-          onMouseMove={handleMouseMove}
-          className={isDragging ? 'dragging' : ''}
+          onMouseDown={handleStageMouseDown}  // CHANGED: Use mousedown for selection box
+          onMouseMove={handleMouseMove}  // CHANGED: Merged cursor broadcasting + selection box
+          onMouseUp={handleStageMouseUp}      // NEW: Complete selection box
+          className={isPanning ? 'panning' : (isShiftPressed ? 'selection-mode' : (isDragging ? 'dragging' : ''))}  // NEW: CSS classes for cursor
         >
           <Layer>
             {/* Render rectangles (sorted by zIndex) */}
@@ -569,6 +677,16 @@ const Canvas: React.FC<CanvasProps> = ({
                 onResizeEnd={handleResizeEnd}
               />
             ))}
+            
+            {/* NEW: Render selection box */}
+            {selectionBoxStart && selectionBoxEnd && (
+              <SelectionBox
+                x={Math.min(selectionBoxStart.x, selectionBoxEnd.x)}
+                y={Math.min(selectionBoxStart.y, selectionBoxEnd.y)}
+                width={Math.abs(selectionBoxEnd.x - selectionBoxStart.x)}
+                height={Math.abs(selectionBoxEnd.y - selectionBoxStart.y)}
+              />
+            )}
             
             {/* Render other users' cursors */}
             {Object.values(cursors).map((cursor) => (
