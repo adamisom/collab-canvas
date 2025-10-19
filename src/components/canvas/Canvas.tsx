@@ -1,5 +1,5 @@
 import React, { useRef, useState, useCallback, useEffect, useMemo } from 'react'
-import { Stage, Layer } from 'react-konva'
+import { Stage, Layer, Text } from 'react-konva'
 import type Konva from 'konva'
 import type { KonvaEventObject } from 'konva/lib/Node'
 import { useCanvas } from '../../contexts/CanvasContext'
@@ -76,6 +76,7 @@ const Canvas: React.FC<CanvasProps> = ({
     selectionLocked,
     toastMessage,
     clearToast,
+    showToast,             // NEW: For first-visit toast
     updateViewportInfo
   } = useCanvas()
   
@@ -221,7 +222,7 @@ const Canvas: React.FC<CanvasProps> = ({
     sendViewportInfo()
   }, [sendViewportInfo])
 
-  // NEW: Handle stage mouse down (for selection box start or rectangle creation)
+  // NEW: Handle stage mouse down (for selection box start only)
   const handleStageMouseDown = useCallback(async (e: KonvaEventObject<MouseEvent>) => {
     // Only handle clicks on the stage background (not on shapes)
     if (e.target !== e.target.getStage()) return
@@ -237,11 +238,28 @@ const Canvas: React.FC<CanvasProps> = ({
     if (isShiftPressed) {
       setSelectionBoxStart(canvasCoords)
       setSelectionBoxEnd(canvasCoords)
-    } else {
-      // Otherwise, clear selection and create new rectangle
-      await clearSelection()
-      await createRectangle(canvasCoords.x, canvasCoords.y)
     }
+    // Note: Rectangle creation moved to double-click (handleStageDoubleClick)
+  }, [isShiftPressed, transformToCanvasCoords])
+
+  // NEW: Handle stage double click (for rectangle creation)
+  const handleStageDoubleClick = useCallback(async (e: KonvaEventObject<MouseEvent>) => {
+    // Only handle clicks on the stage background (not on shapes)
+    if (e.target !== e.target.getStage()) return
+
+    const stage = e.target.getStage()
+    const pointer = stage.getPointerPosition()
+    if (!pointer) return
+
+    const canvasCoords = transformToCanvasCoords(pointer.x, pointer.y)
+    if (!canvasCoords) return
+
+    // Don't create rectangle if in selection box mode
+    if (isShiftPressed) return
+
+    // Clear selection and create new rectangle
+    await clearSelection()
+    await createRectangle(canvasCoords.x, canvasCoords.y)
   }, [isShiftPressed, transformToCanvasCoords, clearSelection, createRectangle])
 
   // NEW: Handle stage mouse up (for selection box completion)
@@ -609,6 +627,20 @@ const Canvas: React.FC<CanvasProps> = ({
     }
   }, [primarySelectionId])
 
+  // NEW: Show first-visit welcome toast
+  useEffect(() => {
+    const hasSeenWelcome = localStorage.getItem('collabcanvas_hasSeenWelcome')
+    if (!hasSeenWelcome) {
+      // Delay toast slightly so it doesn't appear before canvas loads
+      const timeout = setTimeout(() => {
+        showToast('💡 Tip: Double-click anywhere to create a shape!')
+        localStorage.setItem('collabcanvas_hasSeenWelcome', 'true')
+      }, 1000)
+      
+      return () => clearTimeout(timeout)
+    }
+  }, [showToast])
+
   // Update viewport info on mount and window resize
   useEffect(() => {
     // Initial viewport info
@@ -666,14 +698,15 @@ const Canvas: React.FC<CanvasProps> = ({
           ref={stageRef}
           width={width}
           height={height}
-          draggable={isPanning && !isRectangleDragging && !isRectangleResizing}  // CHANGED: Only draggable in pan mode
+          draggable={!isShiftPressed && !isRectangleDragging && !isRectangleResizing}  // CHANGED: Always draggable except when Shift pressed or manipulating rectangles
           onWheel={handleWheel}
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
           onMouseDown={handleStageMouseDown}  // CHANGED: Use mousedown for selection box
           onMouseMove={handleMouseMove}  // CHANGED: Merged cursor broadcasting + selection box
           onMouseUp={handleStageMouseUp}      // NEW: Complete selection box
-          className={isPanning ? 'panning' : (isShiftPressed ? 'selection-mode' : (isDragging ? 'dragging' : ''))}  // NEW: CSS classes for cursor
+          onDblClick={handleStageDoubleClick}  // NEW: Double-click to create shape
+          className={isShiftPressed ? 'selection-mode' : (isDragging ? 'dragging' : '')}  // NEW: CSS classes for cursor (removed isPanning since it's always pannable now)
         >
           <Layer>
             {/* Render rectangles (sorted by zIndex) */}
@@ -692,6 +725,21 @@ const Canvas: React.FC<CanvasProps> = ({
                 onResizeEnd={handleResizeEnd}
               />
             ))}
+            
+            {/* NEW: Empty canvas message */}
+            {rectangles.length === 0 && (
+              <Text
+                x={0}
+                y={VIEWPORT_HEIGHT / 2 - 20}
+                width={VIEWPORT_WIDTH}
+                text="Double-click anywhere to create your first shape!"
+                fontSize={18}
+                fontFamily="Inter, system-ui, sans-serif"
+                fill="#94a3b8"
+                align="center"
+                listening={false}
+              />
+            )}
             
             {/* NEW: Render selection box */}
             {selectionBoxStart && selectionBoxEnd && (
