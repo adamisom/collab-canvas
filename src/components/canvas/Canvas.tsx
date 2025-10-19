@@ -12,6 +12,7 @@ import Circle from './Circle'  // PR #6
 import Line from './Line'  // PR #7
 import TextShape from './Text'  // PR #8
 import SelectionBox from './SelectionBox'
+import MultiSelectGroup from './MultiSelectGroup'  // NEW: Multi-select drag support
 import ShapeModeSelector from './ShapeModeSelector'  // PR #6
 import ColorPicker from './ColorPicker'
 import TextFormatToolbar from './TextFormatToolbar'  // PR #9
@@ -439,6 +440,31 @@ const Canvas: React.FC<CanvasProps> = ({
       console.error('Error updating rectangle position:', error)
     }
   }, [updateRectangle])
+
+  // NEW: Handle multi-select group drag start (currently unused but kept for future use)
+  const handleMultiSelectGroupDragStart = useCallback(() => {
+    // Could use this to disable other interactions during drag
+  }, [])
+
+  // NEW: Handle multi-select group drag end (commit to Firebase)
+  const handleMultiSelectGroupDragEnd = useCallback(async (offset: { x: number; y: number }) => {
+    const selectedIds = Array.from(selectedShapes.keys())
+    const selectedRects = rectangles.filter(r => selectedIds.includes(r.id))
+    
+    try {
+      // Update all selected rectangles with the offset
+      await Promise.all(
+        selectedRects.map(rect => 
+          updateRectangle(rect.id, { 
+            x: rect.x + offset.x, 
+            y: rect.y + offset.y 
+          })
+        )
+      )
+    } catch (error) {
+      console.error('Error updating multi-select group position:', error)
+    }
+  }, [selectedShapes, rectangles, updateRectangle])
 
   // Handle rectangle resize
   const handleRectangleResize = useCallback(async (
@@ -1217,6 +1243,13 @@ const Canvas: React.FC<CanvasProps> = ({
                 onEditingChange={setIsTextEditing}
               />
             ))}
+            
+            {/* NEW: Multi-select group bounding box */}
+            <MultiSelectGroup 
+              rectangles={sortedRectangles.filter(r => selectedShapes.has(r.id))}
+              onGroupDragStart={handleMultiSelectGroupDragStart}
+              onGroupDragEnd={handleMultiSelectGroupDragEnd}
+            />
             
             {/* NEW: Empty canvas message */}
             {rectangles.length === 0 && (

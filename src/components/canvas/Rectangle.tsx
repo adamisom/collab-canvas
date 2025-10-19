@@ -92,7 +92,7 @@ const RectangleComponent: React.FC<RectangleProps> = ({
       }
       
       // Manually start the drag since the draggable prop update won't happen in time
-      if (rectRef.current) {
+      if (rectRef.current && !isShiftPressed) {
         rectRef.current.startDrag()
       }
     }
@@ -221,7 +221,7 @@ const RectangleComponent: React.FC<RectangleProps> = ({
               : DEFAULT_RECT.STROKE_WIDTH
         }
         dash={isSelectedByOther ? [5, 5] : undefined}
-        draggable={isSelected && !isResizing && !isShiftPressed && dragEnabled}  // NEW: Disable dragging during Shift
+        draggable={isSelected && !isResizing && !isShiftPressed && dragEnabled}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
