@@ -130,7 +130,7 @@ const Canvas: React.FC<CanvasProps> = ({
   const { cursors, updateCursor, error: cursorsError } = useCursors()
 
 
-  // Get current stage position and scale (with safer fallbacks)
+  // Get current stage position (for keyboard navigation)
   const getCurrentStagePosition = useCallback(() => {
     // Don't return (0,0) fallback - return null to indicate unavailable
     if (!stageRef.current) return null
@@ -138,11 +138,6 @@ const Canvas: React.FC<CanvasProps> = ({
       x: stageRef.current.x(),
       y: stageRef.current.y()
     }
-  }, [])
-
-  const getCurrentStageScale = useCallback(() => {
-    if (!stageRef.current) return null
-    return stageRef.current.scaleX()
   }, [])
 
   // NEW: Transform screen coordinates to canvas coordinates (accounting for pan/zoom)
@@ -1012,6 +1007,11 @@ const Canvas: React.FC<CanvasProps> = ({
             stageRef.current.scaleY(1)
             stageRef.current.x(0)
             stageRef.current.y(0)
+            sendViewportInfo() // Update AI agent viewport info
+            // Trigger info bar update
+            if ((window as any).__canvasInfoUpdate) {
+              (window as any).__canvasInfoUpdate()
+            }
             return
           default:
             return
@@ -1019,6 +1019,11 @@ const Canvas: React.FC<CanvasProps> = ({
         
         stageRef.current.x(newPosition.x)
         stageRef.current.y(newPosition.y)
+        sendViewportInfo() // Update AI agent viewport info
+        // Trigger info bar update
+        if ((window as any).__canvasInfoUpdate) {
+          (window as any).__canvasInfoUpdate()
+        }
       }
     }
 
@@ -1040,7 +1045,7 @@ const Canvas: React.FC<CanvasProps> = ({
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)
     }
-  }, [primarySelectionId, rectangles, circles, lines, texts, primarySelectionType, handleRectangleResize, deleteRectangle, isRectangleDragging, isRectangleResizing, getCurrentStagePosition, selectionLocked, selectedShapes, isShiftPressed, isPanning, selectAll, clearSelection, selectionBoxStart, lineCreationStart, setShapeMode, alignShapes, isLassoMode, rotateShape])
+  }, [primarySelectionId, rectangles, circles, lines, texts, primarySelectionType, handleRectangleResize, deleteRectangle, isRectangleDragging, isRectangleResizing, getCurrentStagePosition, selectionLocked, selectedShapes, isShiftPressed, selectAll, clearSelection, selectionBoxStart, lineCreationStart, setShapeMode, alignShapes, isLassoMode, rotateShape, sendViewportInfo])
 
   // Detect when rectangle is selected after AI command (input was focused)
   useEffect(() => {
@@ -1103,8 +1108,8 @@ const Canvas: React.FC<CanvasProps> = ({
           {/* PERFORMANCE NOTE: These calculations run on every render. Consider memoizing
               with useMemo() and state tracking for stage transforms to reduce DOM queries */}
           <span>Zoom: {(() => {
-            const scale = getCurrentStageScale()
-            return scale ? Math.round(scale * 100) : 100
+            const scale = stageRef.current?.scaleX() ?? 1
+            return Math.round(scale * 100)
           })()}%</span>
           <span>Position: ({(() => {
             const pos = getCurrentStagePosition()
