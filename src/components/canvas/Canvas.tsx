@@ -1,5 +1,5 @@
 import React, { useRef, useState, useCallback, useEffect, useMemo } from 'react'
-import { Stage, Layer, Text } from 'react-konva'
+import { Stage, Layer, Text, Group, Rect } from 'react-konva'
 import type Konva from 'konva'
 import type { KonvaEventObject } from 'konva/lib/Node'
 import { useCanvas } from '../../contexts/CanvasContext'
@@ -9,7 +9,6 @@ import { stopEventPropagation } from '../../utils/eventHelpers'
 import Cursor from './Cursor'
 import Rectangle from './Rectangle'
 import SelectionBox from './SelectionBox'  // NEW
-import MultiSelectGroup from './MultiSelectGroup'  // NEW
 import ColorPicker from './ColorPicker'
 import Toast from '../ui/Toast'
 import type { Rectangle as RectangleType } from '../../services/canvasService'
@@ -29,6 +28,7 @@ const Canvas: React.FC<CanvasProps> = ({
   height = VIEWPORT_HEIGHT 
 }) => {
   const stageRef = useRef<Konva.Stage | null>(null)
+  const multiSelectGroupRef = useRef<Konva.Group | null>(null)
   
   // Canvas viewport state
   const [isDragging, setIsDragging] = useState(false)
@@ -339,13 +339,17 @@ const Canvas: React.FC<CanvasProps> = ({
     }
   }, [updateRectangle])
 
-  // NEW: Handle multi-select group drag start (currently unused but kept for future use)
-  const handleMultiSelectGroupDragStart = useCallback(() => {
-    // Could use this to disable other interactions during drag
-  }, [])
-
-  // NEW: Handle multi-select group drag end (commit to Firebase)
-  const handleMultiSelectGroupDragEnd = useCallback(async (offset: { x: number; y: number }) => {
+  // NEW: Handle multi-select group drag end (Konva Group approach)
+  const handleMultiSelectGroupDragEnd = useCallback(async (_e: KonvaEventObject<DragEvent>) => {
+    if (!multiSelectGroupRef.current) return
+    
+    const group = multiSelectGroupRef.current
+    const offsetX = group.x()
+    const offsetY = group.y()
+    
+    // Reset group position immediately (rectangles will update via Firebase)
+    group.position({ x: 0, y: 0 })
+    
     const selectedIds = Array.from(selectedRectangleIds)
     const selectedRects = rectangles.filter(r => selectedIds.includes(r.id))
     
@@ -354,8 +358,8 @@ const Canvas: React.FC<CanvasProps> = ({
       await Promise.all(
         selectedRects.map(rect => 
           updateRectangle(rect.id, { 
-            x: rect.x + offset.x, 
-            y: rect.y + offset.y 
+            x: rect.x + offsetX, 
+            y: rect.y + offsetY 
           })
         )
       )
@@ -420,6 +424,23 @@ const Canvas: React.FC<CanvasProps> = ({
       return aZ - bZ
     })
   }, [rectangles])
+
+  // Split rectangles into multi-select group vs individual
+  const { multiSelectRectangles, otherRectangles } = useMemo(() => {
+    const isMultiSelect = selectedRectangleIds.size > 1
+    
+    if (!isMultiSelect) {
+      return {
+        multiSelectRectangles: [],
+        otherRectangles: sortedRectangles
+      }
+    }
+    
+    return {
+      multiSelectRectangles: sortedRectangles.filter(r => selectedRectangleIds.has(r.id)),
+      otherRectangles: sortedRectangles.filter(r => !selectedRectangleIds.has(r.id))
+    }
+  }, [sortedRectangles, selectedRectangleIds])
 
 
   // Keep clipboard operation refs updated
@@ -736,14 +757,14 @@ const Canvas: React.FC<CanvasProps> = ({
           className={isShiftPressed ? 'selection-mode' : (isDragging ? 'dragging' : '')}  // NEW: CSS classes for cursor (removed isPanning since it's always pannable now)
         >
           <Layer>
-            {/* Render rectangles (sorted by zIndex) */}
-            {sortedRectangles.map((rectangle) => (
+            {/* Render non-selected or single-selected rectangles */}
+            {otherRectangles.map((rectangle) => (
               <Rectangle
                 key={rectangle.id}
                 rectangle={rectangle}
                 isSelected={selectedRectangleIds.has(rectangle.id)}
-                isPrimary={rectangle.id === primarySelectionId}  // NEW
-                isShiftPressed={isShiftPressed}  // NEW
+                isPrimary={rectangle.id === primarySelectionId}
+                isShiftPressed={isShiftPressed}
                 onClick={handleRectangleClick}
                 onDragStart={handleRectangleDragStart}
                 onDragEnd={handleRectangleDragEnd}
@@ -753,12 +774,52 @@ const Canvas: React.FC<CanvasProps> = ({
               />
             ))}
             
-            {/* NEW: Multi-select group bounding box */}
-            <MultiSelectGroup 
-              rectangles={sortedRectangles.filter(r => selectedRectangleIds.has(r.id))}
-              onGroupDragStart={handleMultiSelectGroupDragStart}
-              onGroupDragEnd={handleMultiSelectGroupDragEnd}
-            />
+            {/* NEW: Multi-select group (2+ selected) - Konva Group with all selected rectangles */}
+            {multiSelectRectangles.length > 1 && (() => {
+              const MARGIN = 8
+              const minX = Math.min(...multiSelectRectangles.map(r => r.x)) - MARGIN
+              const minY = Math.min(...multiSelectRectangles.map(r => r.y)) - MARGIN
+              const maxX = Math.max(...multiSelectRectangles.map(r => r.x + r.width)) + MARGIN
+              const maxY = Math.max(...multiSelectRectangles.map(r => r.y + r.height)) + MARGIN
+              
+              return (
+                <Group
+                  ref={multiSelectGroupRef}
+                  draggable={true}
+                  onDragEnd={handleMultiSelectGroupDragEnd}
+                >
+                  {/* Render bounding box */}
+                  <Rect
+                    x={minX}
+                    y={minY}
+                    width={maxX - minX}
+                    height={maxY - minY}
+                    stroke="#3b82f6"
+                    strokeWidth={2}
+                    dash={[8, 4]}
+                    fill="transparent"
+                    listening={false}
+                  />
+                  
+                  {/* Render selected rectangles inside group */}
+                  {multiSelectRectangles.map((rectangle) => (
+                    <Rectangle
+                      key={rectangle.id}
+                      rectangle={rectangle}
+                      isSelected={true}
+                      isPrimary={rectangle.id === primarySelectionId}
+                      isShiftPressed={isShiftPressed}
+                      onClick={handleRectangleClick}
+                      onDragStart={handleRectangleDragStart}
+                      onDragEnd={handleRectangleDragEnd}
+                      onResize={handleRectangleResize}
+                      onResizeStart={handleResizeStart}
+                      onResizeEnd={handleResizeEnd}
+                    />
+                  ))}
+                </Group>
+              )
+            })()}
             
             {/* NEW: Empty canvas message */}
             {rectangles.length === 0 && (
