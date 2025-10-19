@@ -37,9 +37,10 @@ Phase 3B introduces the **first breaking change** in Phase 3 - converting the se
 ### Why This PR?
 - Foundation for alignment tools (Phase 3D)
 - Foundation for bulk operations (delete all, color all)
-- Industry-standard interaction pattern
+- Industry-standard interaction pattern (Shift+Drag selection box)
 - Copy/paste/duplicate (from PR #1) automatically work with multiple items
 - Enables professional workflows
+- Pan mode (Spacebar+Drag) for easier canvas navigation
 
 ### Breaking Changes
 
@@ -71,13 +72,18 @@ selectAll(): void
 **Multi-Select Methods:**
 1. **Click on rectangle** - Select single (clear others)
 2. **Cmd/Ctrl+Click on rectangle** - Add/remove from selection (toggle)
-3. **Drag selection box on canvas** - Select all within dragged rectangle
-4. **Cmd/Ctrl+A** - Select all rectangles
+3. **Shift+Drag on canvas** - Draw selection box, select all fully contained rectangles
+4. **Cmd/Ctrl+A** - Select all available rectangles (skip those selected by others)
 5. **Escape** - Clear selection
+
+**Selection Limit:**
+- Maximum 25 rectangles can be selected at once
+- If selection box would select >25 rectangles, show toast: "Selection too large (max 25 rectangles)"
+- Existing selection is cleared, no rectangles selected
 
 **Canvas Interaction Model:**
 - **Click on empty space** - Create new rectangle (unchanged from Phase 3A)
-- **Drag on empty space** - Draw selection box (detect if mouse moves >5px)
+- **Shift+Drag on empty space** - Draw selection box (no ambiguity, no detection needed)
 - **Spacebar + Drag** - Pan canvas (new pan mode)
 - **Scroll wheel** - Zoom in/out (unchanged)
 - **Arrow keys** - Navigate canvas (unchanged)
@@ -101,10 +107,12 @@ selectAll(): void
 - `selectedRectangleIds: Set<string>` - All selected rectangle IDs (local state)
 - `primarySelectionId: string | null` - Last clicked rectangle (shows resize handles)
 - **Firebase**: Use existing `selectedBy` field on each rectangle - no schema changes needed
-  - When selecting rectangles, set `selectedBy: userId` on each
-  - When deselecting, clear `selectedBy` on each
+  - When selecting rectangles, check THEN set `selectedBy: userId` sequentially (one at a time)
+  - **Check before each write** to minimize race conditions with other users
+  - When deselecting, clear `selectedBy` on each rectangle
   - Exclusive selection: Can't select rectangles with `selectedBy !== currentUser`
   - Filter rectangles by `selectedBy === userId` to reconstruct selection
+  - **Selection limit**: Maximum 25 rectangles, enforced before Firebase writes
 
 **Clipboard Updates:**
 - Change `clipboardRectangle` to `clipboardRectangles: Rectangle[]` (plural)
@@ -113,16 +121,28 @@ selectAll(): void
 - Calculate bounding box of clipboard items, apply uniform offset to preserve spatial relationships
 
 **Drag Selection Box:**
-- Detect click vs drag: If mouse moves >5px before mouseup, it's a drag
-- Track mouse down/move/up on stage  
+- **Shift+Drag on empty space** activates selection box
+- **Design Decision**: Using Shift+Drag (vs. regular drag) for simplicity
+  - No click vs drag detection logic needed (no ">5px threshold")
+  - Clear user intent - Shift explicitly activates selection mode
+  - Industry standard (Figma, Adobe XD use Shift+Drag)
+  - Simpler implementation, fewer edge cases
+- **Rectangle dragging disabled while Shift held** to prevent accidental drags
+  - Rectangles: `draggable={isSelected && !isShiftPressed}`
+  - Resize handles hidden during Shift mode
+  - Ensures clean selection box UX
+- Track mouse down/move/up on stage when Shift is held
 - Draw transparent blue rectangle during drag
-- On mouse up, select all rectangles whose bounds are fully within selection box
-- Cancel with Escape key
+- On mouse up, select all rectangles that are **fully contained** within selection box
+- Use intersection detection: rectangle must be completely inside box bounds
+- If >25 rectangles would be selected, show toast and don't select any
+- Cancel with Escape key (cancels box and clears selection)
 
-**Pan Mode (New):**
+**Pan Mode:**
 - Hold Spacebar to enter pan mode (cursor changes to hand icon)
 - Spacebar + Drag moves the canvas viewport
 - Release Spacebar to exit pan mode
+- Stage `draggable` prop must respect pan mode state
 
 ### Files to Create
 
@@ -225,7 +245,7 @@ useEffect(() => {
   primarySelectionIdRef.current = primarySelectionId
 }, [selectedRectangleIds, primarySelectionId])
 
-// UPDATED: selectRectangle now supports additive selection
+// UPDATED: selectRectangle now supports additive selection with Firebase sync
 const selectRectangle = useCallback(async (rectangleId: string, additive: boolean = false) => {
   if (selectionLocked) {
     console.log('Selection locked during AI processing')
@@ -242,23 +262,32 @@ const selectRectangle = useCallback(async (rectangleId: string, additive: boolea
   
   // Check if another user has it selected (exclusive selection per rectangle)
   if (rectangle.selectedBy && rectangle.selectedBy !== user.uid) {
-    const otherUser = rectangle.selectedBy
     showToast(`Rectangle is currently selected by another user`)
     return
   }
   
   if (!additive) {
-    // Clear others, select this one
+    // Clear all previous selections in Firebase first
+    for (const prevId of selectedRectangleIds) {
+      await canvasService.clearSelection(prevId)
+    }
+    
+    // Then select this one
     setSelectedRectangleIds(new Set([rectangleId]))
     setPrimarySelectionId(rectangleId)
     await canvasService.selectRectangle(rectangleId, user.uid, username!)
   } else {
     // Add/remove from selection (toggle)
-    setSelectedRectangleIds(prev => {
-      const next = new Set(prev)
-      if (next.has(rectangleId)) {
-        // Remove from selection
+    const isCurrentlySelected = selectedRectangleIds.has(rectangleId)
+    
+    if (isCurrentlySelected) {
+      // Remove from selection - clear Firebase
+      await canvasService.clearSelection(rectangleId)
+      
+      setSelectedRectangleIds(prev => {
+        const next = new Set(prev)
         next.delete(rectangleId)
+        
         // If removing primary, set new primary
         if (rectangleId === primarySelectionId) {
           if (next.size > 0) {
@@ -268,38 +297,118 @@ const selectRectangle = useCallback(async (rectangleId: string, additive: boolea
             setPrimarySelectionId(null)
           }
         }
-      } else {
-        // Add to selection
-        next.add(rectangleId)
-        setPrimarySelectionId(rectangleId)
-      }
-      return next
-    })
+        return next
+      })
+    } else {
+      // Add to selection - set Firebase
+      await canvasService.selectRectangle(rectangleId, user.uid, username!)
+      
+      setSelectedRectangleIds(prev => new Set(prev).add(rectangleId))
+      setPrimarySelectionId(rectangleId)
+    }
   }
-}, [selectionLocked, user, username, rectangles, primarySelectionId, showToast])
+}, [selectionLocked, user, username, rectangles, selectedRectangleIds, primarySelectionId, showToast])
 
-// NEW: Select multiple rectangles
+// NEW: Select multiple rectangles (used by drag selection box)
 const selectMultiple = useCallback(async (rectangleIds: string[]) => {
   if (selectionLocked) return
+  if (!user) return
   
-  setSelectedRectangleIds(new Set(rectangleIds))
-  setPrimarySelectionId(rectangleIds[rectangleIds.length - 1] || null)
-}, [selectionLocked])
+  // Enforce selection limit
+  if (rectangleIds.length > 25) {
+    showToast('Selection too large (max 25 rectangles)')
+    // Clear selection
+    for (const prevId of selectedRectangleIds) {
+      await canvasService.clearSelection(prevId)
+    }
+    setSelectedRectangleIds(new Set())
+    setPrimarySelectionId(null)
+    return
+  }
+  
+  // Clear previous selections
+  for (const prevId of selectedRectangleIds) {
+    await canvasService.clearSelection(prevId)
+  }
+  
+  // Select new ones sequentially, checking before each write
+  const selected: string[] = []
+  const skipped: string[] = []
+  
+  for (const id of rectangleIds) {
+    const rect = rectangles.find(r => r.id === id)
+    
+    // Check right before writing to minimize race condition
+    if (rect && (!rect.selectedBy || rect.selectedBy === user.uid)) {
+      await canvasService.selectRectangle(id, user.uid, username!)
+      selected.push(id)
+    } else {
+      skipped.push(id)
+    }
+  }
+  
+  setSelectedRectangleIds(new Set(selected))
+  setPrimarySelectionId(selected[selected.length - 1] || null)
+  
+  if (skipped.length > 0) {
+    showToast(`Selected ${selected.length}, ${skipped.length} already taken by other users`)
+  } else {
+    showToast(`Selected ${selected.length} rectangles`)
+  }
+}, [selectionLocked, user, username, rectangles, selectedRectangleIds, showToast])
 
-// NEW: Select all rectangles
+// NEW: Select all available rectangles (skip those selected by others)
 const selectAll = useCallback(async () => {
   if (selectionLocked) return
+  if (!user) return
   
-  const allIds = rectangles.map(r => r.id)
-  setSelectedRectangleIds(new Set(allIds))
-  setPrimarySelectionId(allIds[allIds.length - 1] || null)
-}, [selectionLocked, rectangles])
+  // Filter to only available rectangles
+  const availableIds = rectangles
+    .filter(r => !r.selectedBy || r.selectedBy === user.uid)
+    .map(r => r.id)
+  
+  // Enforce selection limit
+  if (availableIds.length > 25) {
+    showToast(`Too many rectangles (${availableIds.length}). Max selection is 25.`)
+    return
+  }
+  
+  // Clear previous selections
+  for (const prevId of selectedRectangleIds) {
+    await canvasService.clearSelection(prevId)
+  }
+  
+  // Select all available ones
+  for (const id of availableIds) {
+    await canvasService.selectRectangle(id, user.uid, username!)
+  }
+  
+  setSelectedRectangleIds(new Set(availableIds))
+  setPrimarySelectionId(availableIds[availableIds.length - 1] || null)
+  
+  showToast(`Selected all ${availableIds.length} rectangles`)
+}, [selectionLocked, user, username, rectangles, selectedRectangleIds, showToast])
 
-// UPDATED: Clear selection
+// UPDATED: Clear selection (clear Firebase for all selected rectangles)
 const clearSelection = useCallback(async () => {
+  if (!user) return
+  
+  // Clear all selections in Firebase
+  for (const id of selectedRectangleIds) {
+    await canvasService.clearSelection(id)
+  }
+  
   setSelectedRectangleIds(new Set())
   setPrimarySelectionId(null)
-}, [])
+}, [user, selectedRectangleIds])
+
+// NEW: Clear selection on sign-out
+useEffect(() => {
+  if (!user) {
+    setSelectedRectangleIds(new Set())
+    setPrimarySelectionId(null)
+  }
+}, [user])
 
 // NEW: Delete all selected rectangles
 const deleteSelectedRectangles = useCallback(async () => {
@@ -458,8 +567,13 @@ const {
 // Drag selection state
 const [selectionBoxStart, setSelectionBoxStart] = useState<{x: number, y: number} | null>(null)
 const [selectionBoxEnd, setSelectionBoxEnd] = useState<{x: number, y: number} | null>(null)
+const [isShiftPressed, setIsShiftPressed] = useState(false)
+const [isPanning, setIsPanning] = useState(false)
 
-// Transform screen coordinates to canvas coordinates
+// Compute cursor class (for CSS-based cursor styling)
+const cursorClass = isPanning ? 'panning' : (isShiftPressed ? 'selection-mode' : '')
+
+// Transform screen coordinates to canvas coordinates (accounts for zoom/pan)
 const transformToCanvasCoords = useCallback((screenPos: {x: number, y: number}) => {
   if (!stageRef.current) return screenPos
   
@@ -473,33 +587,41 @@ const transformToCanvasCoords = useCallback((screenPos: {x: number, y: number}) 
   }
 }, [])
 
-// Handle stage mouse down (start selection box)
+// Handle stage mouse down - Shift+Drag for selection box, otherwise create rectangle
 const handleStageMouseDown = useCallback((e: KonvaEventObject<MouseEvent>) => {
   // Only if clicking on stage (not on rectangles)
   if (e.target === e.target.getStage()) {
     const pos = e.target.getStage()!.getPointerPosition()
-    if (pos) {
-      const canvasPos = transformToCanvasCoords(pos)
+    if (!pos) return
+    
+    const canvasPos = transformToCanvasCoords(pos)
+    
+    if (isPanning) {
+      // Pan mode is handled by Stage draggable prop
+      return
+    }
+    
+    if (isShiftPressed) {
+      // Start selection box
       setSelectionBoxStart(canvasPos)
-      
-      // Clear selection if not holding modifier key
-      if (!e.evt.metaKey && !e.evt.ctrlKey && !e.evt.shiftKey) {
-        clearSelection()
-      }
+      setSelectionBoxEnd(canvasPos)
+    } else {
+      // Create rectangle
+      createRectangle(e.evt.clientX, e.evt.clientY)
     }
   }
-}, [transformToCanvasCoords, clearSelection])
+}, [transformToCanvasCoords, isShiftPressed, isPanning, createRectangle])
 
 // Handle stage mouse move (draw selection box)
 const handleStageMouseMove = useCallback((e: KonvaEventObject<MouseEvent>) => {
-  if (selectionBoxStart) {
+  if (selectionBoxStart && isShiftPressed) {
     const pos = e.target.getStage()!.getPointerPosition()
     if (pos) {
       const canvasPos = transformToCanvasCoords(pos)
       setSelectionBoxEnd(canvasPos)
     }
   }
-}, [selectionBoxStart, transformToCanvasCoords])
+}, [selectionBoxStart, isShiftPressed, transformToCanvasCoords])
 
 // Handle stage mouse up (complete selection)
 const handleStageMouseUp = useCallback(() => {
@@ -512,7 +634,7 @@ const handleStageMouseUp = useCallback(() => {
       height: Math.abs(selectionBoxEnd.y - selectionBoxStart.y)
     }
     
-    // Find rectangles fully within box
+    // Find rectangles FULLY within box (fully contained)
     const selected = rectangles.filter(rect => {
       return rect.x >= box.x &&
              rect.y >= box.y &&
@@ -532,6 +654,26 @@ const handleStageMouseUp = useCallback(() => {
 
 // Updated keyboard shortcuts
 const handleKeyDown = useCallback((e: KeyboardEvent) => {
+  // Handle Shift key (for selection box)
+  if (e.key === 'Shift') {
+    setIsShiftPressed(true)
+  }
+  
+  // Handle Spacebar (for pan mode)
+  if (e.key === ' ' && !isPanning) {
+    e.preventDefault()
+    setIsPanning(true)
+  }
+  
+  // Escape: Clear selection and cancel selection box
+  if (e.key === 'Escape') {
+    e.preventDefault()
+    clearSelection()
+    setSelectionBoxStart(null)
+    setSelectionBoxEnd(null)
+    return
+  }
+  
   if (selectionLocked) return
   
   // Select All: Cmd+A
@@ -606,15 +748,9 @@ const handleKeyDown = useCallback((e: KeyboardEvent) => {
     return
   }
   
-  // Show shortcuts: ?
-  if (e.key === '?') {
-    e.preventDefault()
-    setShowShortcuts(true)
-    return
-  }
-  
   // ... rest of keyboard handling (arrows, 0, etc.)
 }, [
+  isPanning,
   selectionLocked,
   selectedRectangleIds,
   primarySelectionId,
@@ -627,10 +763,35 @@ const handleKeyDown = useCallback((e: KeyboardEvent) => {
   sendToBack,
   bringForward,
   sendBackward,
+  clearSelection,
   showToast
 ])
 
-// Render with selection box
+const handleKeyUp = useCallback((e: KeyboardEvent) => {
+  // Release Shift key (cancel selection box if active)
+  if (e.key === 'Shift') {
+    setIsShiftPressed(false)
+    setSelectionBoxStart(null)
+    setSelectionBoxEnd(null)
+  }
+  
+  // Release Spacebar (exit pan mode)
+  if (e.key === ' ') {
+    setIsPanning(false)
+  }
+}, [])
+
+useEffect(() => {
+  window.addEventListener('keydown', handleKeyDown)
+  window.addEventListener('keyup', handleKeyUp)
+  
+  return () => {
+    window.removeEventListener('keydown', handleKeyDown)
+    window.removeEventListener('keyup', handleKeyUp)
+  }
+}, [handleKeyDown, handleKeyUp])
+
+// Render with selection box and pan mode
 return (
   <div className="canvas-container">
     {/* Canvas stats, shortcuts modal, etc. */}
@@ -639,9 +800,11 @@ return (
       ref={stageRef}
       width={width}
       height={height}
+      draggable={isPanning} // Only draggable in pan mode
       onMouseDown={handleStageMouseDown}
       onMouseMove={handleStageMouseMove}
       onMouseUp={handleStageMouseUp}
+      className={cursorClass}  // Use CSS class for cursor styling (not style prop)
       // ... other stage props
     >
       <Layer>
@@ -652,6 +815,7 @@ return (
             rectangle={rect}
             isSelected={selectedRectangleIds.has(rect.id)}
             isPrimary={rect.id === primarySelectionId}
+            isShiftPressed={isShiftPressed}  // Pass to Rectangle to disable dragging
             onSelect={(additive) => selectRectangle(rect.id, additive)}
           />
         ))}
@@ -676,15 +840,37 @@ return (
 )
 ```
 
+**Add to `/src/components/canvas/Canvas.css`:**
+
+```css
+/* Pan mode cursor - follows existing dragging pattern */
+.canvas-wrapper canvas.panning,
+.canvas-wrapper .panning canvas {
+  cursor: grab !important;
+}
+
+.canvas-wrapper canvas.panning:active,
+.canvas-wrapper .panning:active canvas {
+  cursor: grabbing !important;
+}
+
+/* Selection box mode cursor */
+.canvas-wrapper canvas.selection-mode,
+.canvas-wrapper .selection-mode canvas {
+  cursor: crosshair !important;
+}
+```
+
 #### 3. `/src/components/canvas/Rectangle.tsx` ⚠️ UPDATED
 
-Update props to support multi-select:
+Update props to support multi-select and disable dragging during selection box mode:
 
 ```typescript
 interface RectangleProps {
   rectangle: RectangleType
-  isSelected: boolean     // NEW: Is this rectangle in selection set?
-  isPrimary: boolean      // NEW: Is this the primary selection?
+  isSelected: boolean      // NEW: Is this rectangle in selection set?
+  isPrimary: boolean       // NEW: Is this the primary selection?
+  isShiftPressed: boolean  // NEW: Is Shift key held (selection box mode)?
   onSelect: (additive: boolean) => void  // NEW: Pass additive flag
 }
 
@@ -692,6 +878,7 @@ const Rectangle: React.FC<RectangleProps> = ({
   rectangle,
   isSelected,
   isPrimary,
+  isShiftPressed,
   onSelect
 }) => {
   const handleClick = useCallback((e: KonvaEventObject<MouseEvent>) => {
@@ -711,12 +898,12 @@ const Rectangle: React.FC<RectangleProps> = ({
         fill={rectangle.color}
         stroke={isSelected ? SELECTION_COLORS.STROKE : borderColor}
         strokeWidth={isSelected ? SELECTION_COLORS.STROKE_WIDTH : DEFAULT_RECT.STROKE_WIDTH}
-        draggable={isSelected}
+        draggable={isSelected && !isShiftPressed}  // Disable dragging in selection box mode
         // ... other props
       />
       
       {/* Only show resize handles on primary selection */}
-      {isPrimary && (
+      {isPrimary && !isShiftPressed && (  // Also hide handles during selection box mode
         <>
           {/* Resize handles components */}
           <ResizeHandle position="tl" ... />
@@ -731,23 +918,56 @@ const Rectangle: React.FC<RectangleProps> = ({
 export default Rectangle
 ```
 
-#### 4. `/src/components/canvas/EnhancedColorPicker.tsx`
+#### 4. `/src/components/canvas/ColorPicker.tsx` ⚠️ UPDATED
 
-Update to work with multi-select:
+Update to work with multi-select and show question mark for mixed colors:
 
 ```typescript
-interface EnhancedColorPickerProps {
+interface ColorPickerProps {
   selectedRectangleIds: Set<string>  // Changed from selectedRectangleId
 }
 
-const EnhancedColorPicker: React.FC<EnhancedColorPickerProps> = ({
+const ColorPicker: React.FC<ColorPickerProps> = ({
   selectedRectangleIds
 }) => {
   const { rectangles, changeSelectedRectanglesColor } = useCanvas()
   const { user } = useAuth()
   const [hexInput, setHexInput] = useState('')
   const [colorHistory, setColorHistory] = useState<string[]>([])
-  const [showHistory, setShowHistory] = useState(false)
+  
+  // Load color history from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('collabcanvas_colorHistory')
+    if (saved) {
+      try {
+        setColorHistory(JSON.parse(saved))
+      } catch {
+        // Ignore parse errors
+      }
+    }
+  }, [])
+  
+  // Save color history to localStorage
+  const saveHistory = useCallback((history: string[]) => {
+    localStorage.setItem('collabcanvas_colorHistory', JSON.stringify(history))
+    setColorHistory(history)
+  }, [])
+  
+  // Add color to history (max 5 recent colors)
+  const addToHistory = useCallback((color: string) => {
+    const MAX_HISTORY = 5
+    setColorHistory(prev => {
+      // Remove if already exists
+      const filtered = prev.filter(c => c !== color)
+      // Add to front
+      const updated = [color, ...filtered]
+      // Limit to MAX_HISTORY
+      const trimmed = updated.slice(0, MAX_HISTORY)
+      // Save to localStorage
+      saveHistory(trimmed)
+      return trimmed
+    })
+  }, [saveHistory])
   
   // Get colors of all selected rectangles
   const selectedColors = Array.from(selectedRectangleIds)
@@ -768,31 +988,6 @@ const EnhancedColorPicker: React.FC<EnhancedColorPickerProps> = ({
     }
   }
   
-  return (
-    <div className="color-picker">
-      {/* Show current color or "?" for mixed */}
-      <div className="current-color">
-        {hasMixedColors ? (
-          <div className="color-preview mixed">?</div>
-        ) : singleColor ? (
-          <div className="color-preview" style={{ backgroundColor: singleColor }} />
-        ) : null}
-      </div>
-      
-      {/* Quick color options */}
-      {/* ... rest of color picker */}
-      
-      {selectedRectangleIds.size > 1 && (
-        <div className="selection-count">
-          {selectedRectangleIds.size} rectangles selected
-        </div>
-      )}
-      
-      {/* ... color history */}
-    </div>
-  )
-}
-
   const handleHexSubmit = async () => {
     if (selectedRectangleIds.size === 0) return
     
@@ -807,61 +1002,109 @@ const EnhancedColorPicker: React.FC<EnhancedColorPickerProps> = ({
     setHexInput('')
   }
   
-  // ... rest of implementation (history loading, etc.)
-  
   const hasSelection = selectedRectangleIds.size > 0
   
   return (
-    <div className="enhanced-color-picker">
+    <div className="color-picker">
+      {/* Show current color or "?" for mixed */}
+      <div className="current-color">
+        {hasMixedColors ? (
+          <div className="color-preview mixed">?</div>
+        ) : singleColor ? (
+          <div className="color-preview" style={{ backgroundColor: singleColor }} />
+        ) : null}
+      </div>
+      
+      {/* Quick color presets */}
       <div className="quick-colors">
-        <button
-          onClick={() => handleQuickColor(RECTANGLE_COLORS.RED)}
-          style={{ background: RECTANGLE_COLORS.RED }}
+        <button 
+          onClick={() => handleQuickColor('#FF5733')}
+          style={{ backgroundColor: '#FF5733' }}
           title="Red"
           disabled={!hasSelection}
         />
-        {/* ... other color buttons */}
+        <button 
+          onClick={() => handleQuickColor('#33FF57')}
+          style={{ backgroundColor: '#33FF57' }}
+          title="Green"
+          disabled={!hasSelection}
+        />
+        <button 
+          onClick={() => handleQuickColor('#3357FF')}
+          style={{ backgroundColor: '#3357FF' }}
+          title="Blue"
+          disabled={!hasSelection}
+        />
+        {/* ... more colors */}
       </div>
-
-      <div className="hex-input-group">
+      
+      {/* Hex input */}
+      <form onSubmit={(e) => { e.preventDefault(); handleHexSubmit(); }}>
         <input
           type="text"
           value={hexInput}
-          onChange={(e) => setHexInput(e.target.value.toUpperCase())}
-          onKeyDown={(e) => e.key === 'Enter' && handleHexSubmit()}
-          placeholder="#FF5733"
-          maxLength={7}
+          onChange={(e) => setHexInput(e.target.value)}
+          placeholder={hasMixedColors ? "Mixed colors" : "HEX (e.g., FF5733)"}
           disabled={!hasSelection}
+          maxLength={7}
         />
-        <button onClick={handleHexSubmit} disabled={!hasSelection}>
-          Apply
-        </button>
-      </div>
+        <button type="submit" disabled={!hasSelection}>Apply</button>
+      </form>
       
-      {/* Optional: Show selection count */}
       {selectedRectangleIds.size > 1 && (
         <div className="selection-count">
           {selectedRectangleIds.size} rectangles selected
         </div>
       )}
       
-      {/* ... color history */}
+      {/* Color history */}
+      {colorHistory.length > 0 && (
+        <div className="color-history">
+          <span>Recent:</span>
+          {colorHistory.map((color, i) => (
+            <button
+              key={i}
+              onClick={() => handleQuickColor(color)}
+              style={{ backgroundColor: color }}
+              title={color}
+              disabled={!hasSelection}
+            />
+          ))}
+        </div>
+      )}
     </div>
   )
 }
+
+export default ColorPicker
 ```
 
-#### 5. `/src/components/layout/Header.tsx`
+**New CSS for mixed color indicator:**
 
-Update to pass new props:
+```css
+.color-preview.mixed {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  font-weight: bold;
+  color: #64748b;
+  background: linear-gradient(135deg, #f1f5f9 25%, #e2e8f0 25%, #e2e8f0 50%, #f1f5f9 50%, #f1f5f9 75%, #e2e8f0 75%);
+  background-size: 8px 8px;
+}
+```
+
+#### 5. `/src/components/layout/Header.tsx` ⚠️ UPDATED
+
+Update to pass new props to ColorPicker:
 
 ```typescript
-<EnhancedColorPicker selectedRectangleIds={selectedRectangleIds} />
+<ColorPicker selectedRectangleIds={selectedRectangleIds} />
 ```
 
-#### 6. `/src/components/ui/KeyboardShortcutsModal.tsx`
+#### 6. `/src/components/canvas/KeyboardShortcuts.tsx` ⚠️ UPDATED
 
-Add multi-select shortcuts:
+Add multi-select shortcuts (component already exists in sidebar, update text):
 
 ```typescript
 const SHORTCUTS: Shortcut[] = [
@@ -870,12 +1113,13 @@ const SHORTCUTS: Shortcut[] = [
   // Selection (NEW category)
   { keys: 'Click', description: 'Select single rectangle', category: 'Selection' },
   { keys: 'Cmd/Ctrl+Click', description: 'Add/remove from selection', category: 'Selection' },
-  { keys: 'Drag on canvas', description: 'Select multiple (box)', category: 'Selection' },
+  { keys: 'Shift+Drag', description: 'Select multiple (box)', category: 'Selection' },
   { keys: 'Cmd/Ctrl+A', description: 'Select all', category: 'Selection' },
   { keys: 'Escape', description: 'Clear selection', category: 'Selection' },
+  { keys: 'Delete/Backspace', description: 'Delete selected', category: 'Selection' },
   
   // Canvas Navigation (NEW category)
-  { keys: 'Space+Drag', description: 'Pan canvas', category: 'Navigation' },
+  { keys: 'Spacebar+Drag', description: 'Pan canvas', category: 'Navigation' },
   { keys: 'Scroll wheel', description: 'Zoom in/out', category: 'Navigation' },
   { keys: 'Arrow keys', description: 'Navigate canvas', category: 'Navigation' },
   { keys: '0', description: 'Reset zoom', category: 'Navigation' },
@@ -884,6 +1128,12 @@ const SHORTCUTS: Shortcut[] = [
   { keys: 'Cmd/Ctrl+C', description: 'Copy selected (works with multiple)', category: 'Clipboard' },
   { keys: 'Cmd/Ctrl+V', description: 'Paste (works with multiple)', category: 'Clipboard' },
   { keys: 'Cmd/Ctrl+D', description: 'Duplicate (single selection only)', category: 'Clipboard' },
+  
+  // Update layer operations (single selection only from Phase 3A)
+  { keys: 'Cmd/Ctrl+]', description: 'Bring to front (single only)', category: 'Layering' },
+  { keys: 'Cmd/Ctrl+[', description: 'Send to back (single only)', category: 'Layering' },
+  { keys: 'Cmd/Ctrl+Shift+]', description: 'Bring forward (single only)', category: 'Layering' },
+  { keys: 'Cmd/Ctrl+Shift+[', description: 'Send backward (single only)', category: 'Layering' },
   
   // ... rest
 ]
@@ -917,12 +1167,17 @@ const captureSnapshot = useCallback((): CommandSnapshot => {
 - [ ] Cmd/Ctrl+Click adds rectangle to selection
 - [ ] Cmd/Ctrl+Click removes rectangle from selection (toggle)
 - [ ] Click on empty space (no drag) creates new rectangle
-- [ ] Drag on empty space creates selection box (detect >5px movement)
-- [ ] Drag selection box selects all rectangles fully within bounds
-- [ ] Cmd/Ctrl+A selects all rectangles
-- [ ] Escape clears selection
-- [ ] Spacebar+Drag pans the canvas (cursor shows hand icon)
+- [ ] Shift+Drag on empty space creates selection box
+- [ ] Drag selection box selects all rectangles **fully contained** within bounds (not partially overlapping)
+- [ ] Rectangles are not draggable while Shift is held (prevents accidental drags during selection box)
+- [ ] Selection box limited to 25 rectangles (toast shown if exceeded)
+- [ ] Cmd/Ctrl+A selects all available rectangles (skips those selected by others)
+- [ ] Cmd/Ctrl+A with >25 rectangles shows toast and doesn't select
+- [ ] Escape clears selection and cancels active selection box
+- [ ] Spacebar+Drag pans the canvas (cursor shows grab/hand icon)
 - [ ] Release Spacebar exits pan mode
+- [ ] Cursor changes to crosshair when Shift is held
+- [ ] Cursor changes to grab when Spacebar is held
 
 **Manual Testing - Visual Feedback:**
 - [ ] All selected rectangles show red border (3px)
@@ -964,6 +1219,12 @@ const captureSnapshot = useCallback((): CommandSnapshot => {
 - [ ] Delete 50+ rectangles at once works
 - [ ] Selection state cleared when rectangles are deleted by others
 - [ ] Primary selection updates correctly when primary is deleted
+- [ ] **Zoom/Pan Interaction**: Selection box coordinates adjust correctly when canvas is zoomed
+- [ ] **Zoom/Pan Interaction**: Selection box coordinates adjust correctly when canvas is panned
+- [ ] **Zoom/Pan Interaction**: Drag selection box while zoomed in (2x) selects correct rectangles
+- [ ] **Zoom/Pan Interaction**: Drag selection box while zoomed out (0.5x) selects correct rectangles
+- [ ] **Zoom/Pan Interaction**: Pan canvas (Spacebar+Drag), then drag selection box - coordinates are correct
+- [ ] **Shift + Spacebar Priority**: Holding both Shift and Spacebar activates pan mode (Spacebar takes priority)
 
 **AI Testing:**
 - [ ] AI commands still work with single rectangle selected
@@ -1032,6 +1293,54 @@ Before moving to Phase 3C, verify:
 - [ ] AI operates on primary selection when multiple selected
 - [ ] All Phase 3A AI features still work
 - [ ] AI gives clear feedback about selection state
+
+---
+
+## Implementation Decisions Summary
+
+This section documents key implementation decisions made during planning:
+
+### **Selection Box Trigger: Shift+Drag**
+- **Decision**: Use Shift+Drag to activate selection box (not regular drag)
+- **Rationale**: 
+  - Simpler implementation (no click vs drag detection logic)
+  - Industry standard (Figma, Adobe XD)
+  - Clear user intent - Shift explicitly signals selection mode
+  - Fewer edge cases to handle
+- **Alternative considered**: Regular drag with ">5px detection" (used by Sketch)
+
+### **Firebase Write Pattern: Sequential Check-Then-Write**
+- **Decision**: Check `selectedBy` immediately before each write (sequential, not batched)
+- **Rationale**:
+  - Minimizes race condition window (~10-20ms per rectangle vs ~100-500ms for batch)
+  - If another user selects a rectangle during multi-select, we skip it gracefully
+  - Better UX: Shows "Selected 8, 2 already taken" instead of overwriting
+- **Alternative considered**: Batch all writes together (faster but higher collision risk)
+
+### **Rectangle Dragging During Selection Mode**
+- **Decision**: Disable rectangle dragging while Shift is held
+- **Implementation**: `draggable={isSelected && !isShiftPressed}`
+- **Rationale**:
+  - Prevents accidental rectangle drags when trying to draw selection box
+  - Clean UX - selection box always activates when dragging over rectangles
+  - Minimal complexity (one prop passed down)
+
+### **Cursor Styling: CSS Classes**
+- **Decision**: Use `className` prop on Stage (not `style` prop)
+- **Rationale**:
+  - Matches existing codebase pattern (`.dragging` class)
+  - Konva-compatible approach
+  - Follows existing CSS: `.canvas-wrapper canvas.panning { cursor: grab !important; }`
+- **Alternative**: Direct `style` prop might not work reliably with Konva
+
+### **Escape Key Behavior**
+- **Decision**: Escape clears selection AND cancels active selection box
+- **Rationale**: Standard behavior, matches user expectations
+
+### **Shift + Spacebar Priority**
+- **Decision**: Spacebar takes priority when both keys held
+- **Implementation**: `if (isPanning) return` check comes first
+- **Rationale**: Pan mode is less common, so prioritize it when user explicitly activates
 
 ---
 
