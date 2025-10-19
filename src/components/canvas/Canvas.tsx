@@ -64,11 +64,13 @@ const Canvas: React.FC<CanvasProps> = ({
     updateRectangle, 
     resizeRectangle, 
     deleteRectangle, 
+    deleteSelectedRectangles, // NEW: Delete all selected
     selectRectangle,
     selectMultiple,        // NEW
     selectAll,             // NEW
     clearSelection,        // NEW
     changeRectangleColor,
+    changeSelectedRectanglesColor, // NEW: Change color of all selected
     copySelectedRectangles,  // CHANGED
     pasteRectangles,         // CHANGED
     duplicateRectangle,
@@ -390,10 +392,14 @@ const Canvas: React.FC<CanvasProps> = ({
 
   // Handle color change
   const handleColorChange = useCallback(async (color: string) => {
-    if (primarySelectionId) {
+    if (selectedRectangleIds.size > 1) {
+      // Change color for all selected rectangles
+      await changeSelectedRectanglesColor(color)
+    } else if (primarySelectionId) {
+      // Single selection - change only primary
       await changeRectangleColor(primarySelectionId, color)
     }
-  }, [primarySelectionId, changeRectangleColor])
+  }, [primarySelectionId, selectedRectangleIds, changeRectangleColor, changeSelectedRectanglesColor])
 
   // Get selected rectangle (primary selection)
   const selectedRectangle = rectangles.find(r => r.id === primarySelectionId)
@@ -515,11 +521,13 @@ const Canvas: React.FC<CanvasProps> = ({
         return
       }
       
-      // Duplicate: Cmd+D (Mac) or Ctrl+D (Windows/Linux)
+      // Duplicate: Cmd+D (Mac) or Ctrl+D (Windows/Linux) - only works with single selection
       if ((e.metaKey || e.ctrlKey) && e.key === 'd' && !isTyping) {
-        if (primarySelectionId) {
-          e.preventDefault() // Prevent browser bookmark shortcut
+        e.preventDefault() // Prevent browser bookmark shortcut
+        if (selectedRectangleIds.size === 1 && primarySelectionId) {
           duplicateRectangleRef.current?.(primarySelectionId)
+        } else if (selectedRectangleIds.size > 1) {
+          showToast('Duplicate only works with single selection')
         }
         return
       }
@@ -542,15 +550,15 @@ const Canvas: React.FC<CanvasProps> = ({
         return
       }
       
-      // Handle rectangle deletion
-      if ((e.key === 'Delete' || e.key === 'Backspace') && primarySelectionId) {
+      // Handle rectangle deletion - deletes all selected
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedRectangleIds.size > 0) {
         // Don't delete if user is typing in an input field
         if (isTyping) return
         
         // Prevent deletion during active operations
         if (!isRectangleDragging && !isRectangleResizing) {
           e.preventDefault()
-          deleteRectangle(primarySelectionId)
+          deleteSelectedRectangles()
           return
         }
       }
@@ -660,7 +668,7 @@ const Canvas: React.FC<CanvasProps> = ({
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)
     }
-  }, [primarySelectionId, rectangles, handleRectangleResize, deleteRectangle, isRectangleDragging, isRectangleResizing, getCurrentStagePosition, selectionLocked, selectedRectangleIds, isShiftPressed, isPanning, selectAll, clearSelection, selectionBoxStart, sendViewportInfo])
+  }, [primarySelectionId, rectangles, handleRectangleResize, deleteRectangle, deleteSelectedRectangles, isRectangleDragging, isRectangleResizing, getCurrentStagePosition, selectionLocked, selectedRectangleIds, isShiftPressed, isPanning, selectAll, clearSelection, selectionBoxStart, sendViewportInfo, showToast])
 
   // Detect when rectangle is selected after AI command (input was focused)
   useEffect(() => {
