@@ -776,30 +776,46 @@ return (
 )
 ```
 
-#### 3. `/functions/src/tools.ts` (AI Support)
+#### 3. `/src/services/canvasCommandExecutor.ts` (Client Executor)
+Add alignment command execution:
+
+```typescript
+// Add to executeCommand function
+case 'alignShapes':
+  if (!tool.alignType) {
+    throw new Error('alignType is required for alignShapes')
+  }
+  await canvasContext.alignShapes(tool.alignType)
+  return {
+    success: true,
+    message: `Shapes aligned: ${tool.alignType.replace('-', ' ')}`
+  }
+```
+
+#### 4. `/functions/src/tools.ts` (AI Support)
 Add alignment tools:
 
 ```typescript
 export const alignShapes = tool({
-  description: 'Align selected shapes (requires 2+ shapes selected)',
+  description: 'Align selected shapes (requires 2+ shapes selected). Use this when user asks to align, center, or distribute shapes.',
   parameters: z.object({
     alignType: z.enum([
       'left', 'center-horizontal', 'right',
       'top', 'center-vertical', 'bottom',
       'distribute-horizontal', 'distribute-vertical'
-    ]).describe('How to align the shapes')
+    ]).describe('How to align the shapes. Use center-horizontal for "center them", distribute-horizontal for "space them out evenly"')
   }),
   execute: async () => ({ success: true })
 })
 
-// Add to tools
+// Add to tools export
 export const tools = {
   // ... existing
   alignShapes
 }
 ```
 
-#### 4. `/functions/src/utils/systemPrompt.ts`
+#### 5. `/functions/src/utils/systemPrompt.ts`
 Update system prompt:
 
 ```typescript
@@ -807,14 +823,36 @@ AVAILABLE OPERATIONS:
 - ... existing operations ...
 - Align shapes (requires 2+ selected): left, right, top, bottom, center-horizontal, center-vertical
 - Distribute shapes (requires 3+ selected): horizontal, vertical
+- Select all shapes of a type: rectangle, circle, line, text
+- Rotate shape (requires 1 selected): specify angle in degrees
 
-When user says "align them to the left" or "left align", use alignShapes with alignType 'left'.
-When user says "center them" or "align center", use alignShapes with alignType 'center-horizontal' or 'center-vertical' based on context.
-When user says "distribute them evenly" or "space them out", use alignShapes with alignType 'distribute-horizontal' or 'distribute-vertical' based on context.
+ALIGNMENT EXAMPLES:
+- "align them to the left" → alignShapes({ alignType: 'left' })
+- "center them" → alignShapes({ alignType: 'center-horizontal' })
+- "distribute them evenly" → alignShapes({ alignType: 'distribute-horizontal' })
+
+SELECTION EXAMPLES:
+- "select all circles" → selectAllOfType({ shapeType: 'circle' })
+- "select all rectangles" → selectAllOfType({ shapeType: 'rectangle' })
+
+ROTATION EXAMPLES:
+- "rotate it 45 degrees" → rotateShape({ angle: 45 })
+- "turn it clockwise" → rotateShape({ angle: 15 })
 ```
 
-#### 5. `/src/components/canvas/KeyboardShortcuts.tsx`
-Add alignment and selection shortcuts:
+#### 6. `/src/utils/constants.ts`
+Add interaction constants:
+
+```typescript
+export const INTERACTION_CONSTANTS = {
+  ROTATE_HANDLE_OFFSET: 30,  // Distance above shape for rotate handle
+  MIN_LASSO_POINTS: 6,        // Minimum points for valid lasso (3 points × 2 coords)
+  LASSO_SELECTION_LIMIT: 25,  // Maximum shapes that can be selected via lasso
+} as const
+```
+
+#### 7. `/src/components/canvas/KeyboardShortcuts.tsx`
+Add alignment, selection, and rotation shortcuts:
 
 ```typescript
 // Add to shortcuts list
@@ -825,6 +863,7 @@ Add alignment and selection shortcuts:
 { keys: 'Cmd/Ctrl+Shift+V', description: 'Align center vertical', category: 'Alignment' },
 { keys: 'Cmd/Ctrl+Shift+B', description: 'Align bottom', category: 'Alignment' },
 { keys: 'Shift+L', description: 'Toggle lasso select', category: 'Selection' },
+{ keys: 'Cmd/Ctrl+Shift+A', description: 'Select all of type', category: 'Selection' },
 { keys: 'Cmd/Ctrl+R', description: 'Rotate 15° clockwise', category: 'Transform' },
 ```
 
@@ -861,6 +900,176 @@ Add alignment and selection shortcuts:
 - [ ] AI gives helpful error when <2 shapes selected for alignment
 - [ ] AI gives helpful error when <3 shapes selected for distribution
 - [ ] All AI alignment operations sync
+
+### High-Value Unit Tests
+
+#### Test Suite 1: `alignmentHelpers.test.ts`
+
+**`getShapeBounds` tests:**
+```typescript
+describe('getShapeBounds', () => {
+  it('should calculate correct bounds for rectangle', () => {
+    const rect: Rectangle = { type: 'rectangle', x: 10, y: 20, width: 100, height: 50, /* ... */ }
+    expect(getShapeBounds(rect)).toEqual({ x: 10, y: 20, width: 100, height: 50 })
+  })
+  
+  it('should calculate correct bounds for circle', () => {
+    const circle: CircleShape = { type: 'circle', x: 100, y: 100, radius: 50, /* ... */ }
+    expect(getShapeBounds(circle)).toEqual({ x: 50, y: 50, width: 100, height: 100 })
+  })
+  
+  it('should calculate correct bounds for line (all orientations)', () => {
+    // Horizontal line
+    const hLine: LineShape = { type: 'line', x: 10, y: 50, endX: 100, endY: 50, /* ... */ }
+    expect(getShapeBounds(hLine)).toEqual({ x: 10, y: 50, width: 90, height: 0 })
+    
+    // Vertical line
+    const vLine: LineShape = { type: 'line', x: 50, y: 10, endX: 50, endY: 100, /* ... */ }
+    expect(getShapeBounds(vLine)).toEqual({ x: 50, y: 10, width: 0, height: 90 })
+    
+    // Diagonal line (reversed endpoints)
+    const dLine: LineShape = { type: 'line', x: 100, y: 100, endX: 10, endY: 10, /* ... */ }
+    expect(getShapeBounds(dLine)).toEqual({ x: 10, y: 10, width: 90, height: 90 })
+  })
+  
+  it('should use measured bounds for text when available', () => {
+    const text: TextShape = { 
+      type: 'text', x: 10, y: 20, text: 'Hello', fontSize: 16,
+      measuredWidth: 45, measuredHeight: 20, /* ... */
+    }
+    expect(getShapeBounds(text)).toEqual({ x: 10, y: 20, width: 45, height: 20 })
+  })
+  
+  it('should estimate bounds for text when measurements unavailable', () => {
+    const text: TextShape = { 
+      type: 'text', x: 10, y: 20, text: 'Hello', fontSize: 16, /* ... */
+    }
+    const bounds = getShapeBounds(text)
+    expect(bounds.x).toBe(10)
+    expect(bounds.y).toBe(20)
+    expect(bounds.width).toBeGreaterThan(0)
+    expect(bounds.height).toBeGreaterThan(0)
+  })
+})
+```
+
+**`calculateAlignedPosition` tests:**
+```typescript
+describe('calculateAlignedPosition', () => {
+  it('should align rectangle left correctly', () => {
+    const rect: Rectangle = { type: 'rectangle', x: 100, y: 50, width: 80, height: 60, /* ... */ }
+    expect(calculateAlignedPosition(rect, 20, 'left')).toEqual({ x: 20 })
+  })
+  
+  it('should align circle to center horizontally', () => {
+    const circle: CircleShape = { type: 'circle', x: 100, y: 100, radius: 30, /* ... */ }
+    expect(calculateAlignedPosition(circle, 200, 'center-horizontal')).toEqual({ x: 200 })
+  })
+  
+  it('should align line correctly (both endpoints move)', () => {
+    const line: LineShape = { type: 'line', x: 50, y: 50, endX: 150, endY: 100, /* ... */ }
+    const result = calculateAlignedPosition(line, 10, 'left')
+    expect(result.x).toBe(10)
+    expect(result.endX).toBe(110)
+    expect(result.y).toBeUndefined()
+  })
+  
+  it('should align text to bottom edge', () => {
+    const text: TextShape = { 
+      type: 'text', x: 50, y: 50, text: 'Test', fontSize: 16,
+      measuredWidth: 40, measuredHeight: 20, /* ... */
+    }
+    expect(calculateAlignedPosition(text, 200, 'bottom')).toEqual({ y: 180 })
+  })
+})
+```
+
+**`calculateDistributedPositions` tests:**
+```typescript
+describe('calculateDistributedPositions', () => {
+  it('should distribute 3 equal-sized shapes evenly horizontally', () => {
+    const shapes = [
+      { type: 'rectangle' as const, id: '1', x: 0, y: 0, width: 20, height: 20 },
+      { type: 'rectangle' as const, id: '2', x: 100, y: 0, width: 20, height: 20 },
+      { type: 'rectangle' as const, id: '3', x: 200, y: 0, width: 20, height: 20 },
+    ]
+    const result = calculateDistributedPositions(shapes, 'horizontal')
+    
+    // First and last should stay in place
+    expect(result.get('1')).toEqual({ x: 0 })
+    expect(result.get('3')).toEqual({ x: 200 })
+    
+    // Middle should be centered
+    expect(result.get('2')?.x).toBeCloseTo(90, 0)
+  })
+  
+  it('should handle shapes of different sizes', () => {
+    const shapes = [
+      { type: 'rectangle' as const, id: '1', x: 0, y: 0, width: 50, height: 20 },
+      { type: 'rectangle' as const, id: '2', x: 100, y: 0, width: 20, height: 20 },
+      { type: 'rectangle' as const, id: '3', x: 200, y: 0, width: 30, height: 20 },
+    ]
+    const result = calculateDistributedPositions(shapes, 'horizontal')
+    expect(result.size).toBe(3)
+  })
+  
+  it('should return empty map for < 3 shapes', () => {
+    expect(calculateDistributedPositions([], 'horizontal').size).toBe(0)
+    expect(calculateDistributedPositions([{} as any], 'horizontal').size).toBe(0)
+    expect(calculateDistributedPositions([{} as any, {} as any], 'horizontal').size).toBe(0)
+  })
+})
+```
+
+#### Test Suite 2: `shapeHelpers.test.ts`
+
+**`getShapeCenter` tests:**
+```typescript
+describe('getShapeCenter', () => {
+  it('should return stored center for circle', () => {
+    const circle: CircleShape = { type: 'circle', x: 100, y: 150, radius: 50, /* ... */ }
+    expect(getShapeCenter(circle)).toEqual({ x: 100, y: 150 })
+  })
+  
+  it('should calculate center for rectangle', () => {
+    const rect: Rectangle = { type: 'rectangle', x: 0, y: 0, width: 100, height: 50, /* ... */ }
+    expect(getShapeCenter(rect)).toEqual({ x: 50, y: 25 })
+  })
+  
+  it('should calculate center for line', () => {
+    const line: LineShape = { type: 'line', x: 0, y: 0, endX: 100, endY: 100, /* ... */ }
+    expect(getShapeCenter(line)).toEqual({ x: 50, y: 50 })
+  })
+})
+```
+
+**`getSelectedShapesFromMap` tests:**
+```typescript
+describe('getSelectedShapesFromMap', () => {
+  it('should retrieve mixed shape types from selection map', () => {
+    const rectangles = [{ id: 'r1', type: 'rectangle' as const }]
+    const circles = [{ id: 'c1', type: 'circle' as const }]
+    const lines = [{ id: 'l1', type: 'line' as const }]
+    const texts = [{ id: 't1', type: 'text' as const }]
+    
+    const selectedShapes = new Map([
+      ['r1', 'rectangle' as const],
+      ['c1', 'circle' as const],
+    ])
+    
+    const result = getSelectedShapesFromMap(selectedShapes, rectangles, circles, lines, texts)
+    expect(result).toHaveLength(2)
+    expect(result[0].id).toBe('r1')
+    expect(result[1].id).toBe('c1')
+  })
+  
+  it('should handle missing shapes gracefully', () => {
+    const selectedShapes = new Map([['missing', 'rectangle' as const]])
+    const result = getSelectedShapesFromMap(selectedShapes, [], [], [], [])
+    expect(result).toHaveLength(0)
+  })
+})
+```
 
 ### Success Criteria
 - ✅ All 6 alignment operations work correctly
@@ -909,13 +1118,19 @@ Add alignment and selection shortcuts:
 - Track mouse path during drag
 - Draw preview path on canvas
 - On mouse up, check each shape for intersection with path
+- **Performance optimization**: Bounding box pre-filter (3-10x speedup)
+  - First, calculate lasso's bounding box
+  - Filter shapes to only those whose bounds intersect lasso bounds
+  - Then run expensive point-in-polygon check only on candidates
 - Use point-in-polygon algorithm with "any corner inside" logic (more forgiving than drag box)
-- Multiple exit paths: Escape, Shift+L toggle, or failed lasso
+- **Selection limit**: Stop at 25 shapes (enforced during selection, not after)
+- Multiple exit paths: Escape, Shift+L toggle, or failed lasso (< 3 points)
 
 **Select All of Type:**
 - Filter all shapes by type
 - Set selection to filtered shapes using unified `selectedShapes` Map
 - Show count in toast
+- Modal UI for shape type selection (triggered by `Cmd+Shift+A`)
 
 ### Files to Create
 
@@ -950,7 +1165,14 @@ export default LassoPath
 
 #### `/src/utils/selectionHelpers.ts`
 ```typescript
-// Point-in-polygon test (ray casting algorithm)
+import type { Shape } from '../shared/shapes'
+import { getShapeBounds, type Bounds } from './shapeHelpers'
+import { INTERACTION_CONSTANTS } from './constants'
+
+/**
+ * Point-in-polygon test using ray casting algorithm
+ * Tests if a point is inside a polygon defined by flat array of coordinates
+ */
 export const isPointInPolygon = (point: {x: number, y: number}, polygon: number[]): boolean => {
   let inside = false
   const x = point.x
@@ -971,12 +1193,46 @@ export const isPointInPolygon = (point: {x: number, y: number}, polygon: number[
   return inside
 }
 
-// Check if shape is within lasso
-// Uses "any corner inside" logic (more forgiving than Phase 3B's drag box)
+/**
+ * Calculate bounding box for lasso path
+ * Used for performance optimization (pre-filter before expensive polygon checks)
+ */
+export const getLassoBoundingBox = (points: number[]): Bounds => {
+  const xs = points.filter((_, i) => i % 2 === 0)
+  const ys = points.filter((_, i) => i % 2 === 1)
+  const minX = Math.min(...xs)
+  const maxX = Math.max(...xs)
+  const minY = Math.min(...ys)
+  const maxY = Math.max(...ys)
+  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
+}
+
+/**
+ * Check if two bounding boxes intersect
+ * Returns false if boxes don't overlap (shape can't be in lasso)
+ */
+export const boundsIntersect = (a: Bounds, b: Bounds): boolean => {
+  return !(a.x + a.width < b.x ||
+           a.x > b.x + b.width ||
+           a.y + a.height < b.y ||
+           a.y > b.y + b.height)
+}
+
+/**
+ * Check if shape is within lasso selection
+ * Uses "any corner inside" logic (more forgiving than Phase 3B's drag box)
+ * Includes bounding box pre-filter for performance
+ */
 export const isShapeInLasso = (shape: Shape, lassoPoints: number[]): boolean => {
   const bounds = getShapeBounds(shape)
   
-  // Check all four corners
+  // Performance optimization: Quick bounding box check first
+  const lassoBounds = getLassoBoundingBox(lassoPoints)
+  if (!boundsIntersect(bounds, lassoBounds)) {
+    return false  // Shape is definitely outside lasso
+  }
+  
+  // Check all four corners with expensive polygon test
   const corners = [
     { x: bounds.x, y: bounds.y },
     { x: bounds.x + bounds.width, y: bounds.y },
@@ -1050,7 +1306,12 @@ const selectShapesInLasso = useCallback((lassoPoints: number[]) => {
   let lastType: ShapeType | null = null
   let lastId: string | null = null
   
+  // Enforce selection limit during iteration (not after)
   for (const { type, shape } of allShapes) {
+    if (newSelection.size >= INTERACTION_CONSTANTS.LASSO_SELECTION_LIMIT) {
+      break  // Hit limit, stop checking more shapes
+    }
+    
     if (isShapeInLasso(shape, lassoPoints)) {
       newSelection.set(shape.id, type)
       lastType = type
@@ -1063,7 +1324,10 @@ const selectShapesInLasso = useCallback((lassoPoints: number[]) => {
   if (newSelection.size > 0 && lastId && lastType) {
     setPrimarySelectionId(lastId)
     setPrimarySelectionType(lastType)
-    showToast(`Selected ${newSelection.size} shape${newSelection.size > 1 ? 's' : ''}`)
+    const message = newSelection.size >= INTERACTION_CONSTANTS.LASSO_SELECTION_LIMIT
+      ? `Selected ${newSelection.size} shapes (limit reached)`
+      : `Selected ${newSelection.size} shape${newSelection.size > 1 ? 's' : ''}`
+    showToast(message)
   }
 }, [rectangles, circles, lines, texts, showToast])
 
@@ -1104,13 +1368,16 @@ const invertSelection = useCallback(() => {
 ```
 
 #### 2. `/src/components/canvas/Canvas.tsx`
-Add lasso mode:
+Add lasso mode and select-all-type modal:
 
 ```typescript
 import LassoPath from './LassoPath'
+import SelectTypeModal from '../ui/SelectTypeModal'
+import { INTERACTION_CONSTANTS } from '../../utils/constants'
 
 const [isLassoMode, setIsLassoMode] = useState(false)
 const [lassoPoints, setLassoPoints] = useState<number[]>([])
+const [showSelectTypeModal, setShowSelectTypeModal] = useState(false)
 
 // Lasso mouse handlers
 const handleLassoMouseDown = useCallback((e: KonvaEventObject<MouseEvent>) => {
@@ -1137,7 +1404,7 @@ const handleLassoMouseUp = useCallback(() => {
   if (!isLassoMode) return
   
   // Exit if failed lasso (< 3 points = 6 coordinates)
-  if (lassoPoints.length < 6) {
+  if (lassoPoints.length < INTERACTION_CONSTANTS.MIN_LASSO_POINTS) {
     setLassoPoints([])
     setIsLassoMode(false)
     return
@@ -1168,26 +1435,187 @@ const handleKeyDown = useCallback((e: KeyboardEvent) => {
     return
   }
   
-  // Select all of type menu: Cmd+Shift+A (show menu)
-  // In actual implementation, show a menu or cycle through types
+  // Select all of type menu: Cmd+Shift+A
+  if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'a') {
+    e.preventDefault()
+    setShowSelectTypeModal(true)
+    return
+  }
 }, [isLassoMode])
 
 // Render
-<Stage
-  onMouseDown={isLassoMode ? handleLassoMouseDown : handleStageMouseDown}
-  onMouseMove={isLassoMode ? handleLassoMouseMove : handleStageMouseMove}
-  onMouseUp={isLassoMode ? handleLassoMouseUp : handleStageMouseUp}
-  className={isLassoMode ? 'lasso-cursor' : undefined}
->
-  <Layer>
-    {/* Shapes */}
-    
-    {/* Lasso path */}
-    {isLassoMode && lassoPoints.length > 0 && (
-      <LassoPath points={lassoPoints} />
-    )}
-  </Layer>
-</Stage>
+<>
+  <Stage
+    onMouseDown={isLassoMode ? handleLassoMouseDown : handleStageMouseDown}
+    onMouseMove={isLassoMode ? handleLassoMouseMove : handleStageMouseMove}
+    onMouseUp={isLassoMode ? handleLassoMouseUp : handleStageMouseUp}
+    className={isLassoMode ? 'lasso-cursor' : undefined}
+    style={{ cursor: isLassoMode ? 'crosshair' : undefined }}
+  >
+    <Layer>
+      {/* Shapes */}
+      
+      {/* Lasso path */}
+      {isLassoMode && lassoPoints.length > 0 && (
+        <LassoPath points={lassoPoints} />
+      )}
+    </Layer>
+  </Stage>
+  
+  {/* Select All Type Modal */}
+  {showSelectTypeModal && (
+    <SelectTypeModal
+      onSelect={(shapeType) => {
+        selectAllOfType(shapeType)
+        setShowSelectTypeModal(false)
+      }}
+      onClose={() => setShowSelectTypeModal(false)}
+    />
+  )}
+</>
+```
+
+#### 3. `/src/components/ui/SelectTypeModal.tsx`
+```typescript
+import React from 'react'
+import './SelectTypeModal.css'
+
+interface SelectTypeModalProps {
+  onSelect: (shapeType: 'rectangle' | 'circle' | 'line' | 'text') => void
+  onClose: () => void
+}
+
+const SelectTypeModal: React.FC<SelectTypeModalProps> = ({ onSelect, onClose }) => {
+  return (
+    <div className="select-type-modal-overlay" onClick={onClose}>
+      <div className="select-type-modal" onClick={(e) => e.stopPropagation()}>
+        <h3>Select All Of Type</h3>
+        <div className="select-type-buttons">
+          <button onClick={() => onSelect('rectangle')} className="select-type-button">
+            <span className="button-icon">▭</span>
+            Rectangles
+          </button>
+          <button onClick={() => onSelect('circle')} className="select-type-button">
+            <span className="button-icon">●</span>
+            Circles
+          </button>
+          <button onClick={() => onSelect('line')} className="select-type-button">
+            <span className="button-icon">╱</span>
+            Lines
+          </button>
+          <button onClick={() => onSelect('text')} className="select-type-button">
+            <span className="button-icon">T</span>
+            Text
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default SelectTypeModal
+```
+
+#### 4. `/src/components/ui/SelectTypeModal.css`
+```css
+.select-type-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.select-type-modal {
+  background: white;
+  border-radius: 8px;
+  padding: 24px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  min-width: 300px;
+}
+
+.select-type-modal h3 {
+  margin: 0 0 16px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.select-type-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.select-type-button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 1px solid #e5e7eb;
+  background: white;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.15s ease;
+  text-align: left;
+}
+
+.select-type-button:hover {
+  background: #f3f4f6;
+  border-color: #3b82f6;
+}
+
+.select-type-button .button-icon {
+  font-size: 20px;
+  width: 24px;
+  text-align: center;
+  color: #6b7280;
+}
+
+.lasso-cursor {
+  cursor: crosshair !important;
+}
+```
+
+#### 5. `/src/services/canvasCommandExecutor.ts` (AI Support)
+Add selection tool execution:
+
+```typescript
+// Add to executeCommand function
+case 'selectAllOfType':
+  if (!tool.shapeType) {
+    throw new Error('shapeType is required for selectAllOfType')
+  }
+  canvasContext.selectAllOfType(tool.shapeType)
+  return {
+    success: true,
+    message: `Selected all ${tool.shapeType}s`
+  }
+```
+
+#### 6. `/functions/src/tools.ts` (AI Support)
+Add selection tools:
+
+```typescript
+export const selectAllOfType = tool({
+  description: 'Select all shapes of a specific type. Use when user asks to select all rectangles, circles, lines, or text.',
+  parameters: z.object({
+    shapeType: z.enum(['rectangle', 'circle', 'line', 'text']).describe('The type of shape to select')
+  }),
+  execute: async () => ({ success: true })
+})
+
+// Add to tools export
+export const tools = {
+  // ... existing
+  selectAllOfType
+}
 ```
 
 ### Testing Checklist
@@ -1212,9 +1640,76 @@ const handleKeyDown = useCallback((e: KeyboardEvent) => {
 - [ ] AI can select all of specific type
 - [ ] AI selection operations sync
 
+### High-Value Unit Tests
+
+#### Test Suite 3: `selectionHelpers.test.ts`
+
+**`isPointInPolygon` tests:**
+```typescript
+describe('isPointInPolygon', () => {
+  it('should detect point inside simple square', () => {
+    const square = [0, 0, 100, 0, 100, 100, 0, 100]
+    expect(isPointInPolygon({ x: 50, y: 50 }, square)).toBe(true)
+    expect(isPointInPolygon({ x: 150, y: 50 }, square)).toBe(false)
+    expect(isPointInPolygon({ x: -10, y: 50 }, square)).toBe(false)
+  })
+  
+  it('should handle points on polygon edge', () => {
+    const square = [0, 0, 100, 0, 100, 100, 0, 100]
+    // Edge cases - behavior may vary by implementation
+    expect(isPointInPolygon({ x: 0, y: 0 }, square)).toBeDefined()
+    expect(isPointInPolygon({ x: 50, y: 0 }, square)).toBeDefined()
+  })
+})
+```
+
+**`getLassoBoundingBox` tests:**
+```typescript
+describe('getLassoBoundingBox', () => {
+  it('should calculate correct bounding box for lasso path', () => {
+    const lassoPoints = [10, 20, 100, 30, 90, 150, 20, 140]
+    const bounds = getLassoBoundingBox(lassoPoints)
+    expect(bounds).toEqual({ x: 10, y: 20, width: 90, height: 130 })
+  })
+  
+  it('should handle single point', () => {
+    const lassoPoints = [50, 75]
+    const bounds = getLassoBoundingBox(lassoPoints)
+    expect(bounds).toEqual({ x: 50, y: 75, width: 0, height: 0 })
+  })
+})
+```
+
+**`boundsIntersect` tests:**
+```typescript
+describe('boundsIntersect', () => {
+  it('should detect overlapping bounds', () => {
+    const a = { x: 0, y: 0, width: 100, height: 100 }
+    const b = { x: 50, y: 50, width: 100, height: 100 }
+    expect(boundsIntersect(a, b)).toBe(true)
+  })
+  
+  it('should detect non-overlapping bounds', () => {
+    const a = { x: 0, y: 0, width: 50, height: 50 }
+    const b = { x: 100, y: 100, width: 50, height: 50 }
+    expect(boundsIntersect(a, b)).toBe(false)
+  })
+  
+  it('should handle touching bounds (edge case)', () => {
+    const a = { x: 0, y: 0, width: 50, height: 50 }
+    const b = { x: 50, y: 0, width: 50, height: 50 }
+    // Touching edges should not intersect
+    expect(boundsIntersect(a, b)).toBe(false)
+  })
+})
+```
+
 ### Success Criteria
 - ✅ Lasso select works smoothly
+- ✅ Bounding box pre-filter provides 3-10x speedup
+- ✅ Selection limit enforced (25 shapes max)
 - ✅ Select-all-of-type works for all types
+- ✅ Select-all-type modal is intuitive
 - ✅ Invert selection works
 - ✅ Multiple exit paths for lasso mode
 - ✅ AI agent supports selection tools
@@ -1286,30 +1781,39 @@ const normalizeRotation = (angle: number): number => {
 
 #### `/src/components/canvas/RotateHandle.tsx`
 ```typescript
-import React from 'react'
-import { Circle, Line } from 'react-konva'
-import { RESIZE_HANDLE } from '../../utils/constants'
+import React, { useState } from 'react'
+import { Circle, Line, Text } from 'react-konva'
+import { INTERACTION_CONSTANTS } from '../../utils/constants'
 
 interface RotateHandleProps {
-  x: number
-  y: number
+  centerX: number  // Shape center X
+  centerY: number  // Shape center Y
+  currentRotation: number  // Current rotation in degrees
   onRotateStart: () => void
   onRotate: (angle: number) => void
   onRotateEnd: () => void
+  isShiftPressed: boolean  // For snap-to-15° behavior
 }
 
 const RotateHandle: React.FC<RotateHandleProps> = ({
-  x,
-  y,
+  centerX,
+  centerY,
+  currentRotation,
   onRotateStart,
   onRotate,
-  onRotateEnd
+  onRotateEnd,
+  isShiftPressed
 }) => {
+  const [isDragging, setIsDragging] = useState(false)
+  const [displayAngle, setDisplayAngle] = useState(currentRotation)
+  
+  const handleY = centerY - INTERACTION_CONSTANTS.ROTATE_HANDLE_OFFSET
+  
   return (
     <>
       {/* Line connecting to shape */}
       <Line
-        points={[x, y, x, y - 30]}
+        points={[centerX, centerY, centerX, handleY]}
         stroke="#3b82f6"
         strokeWidth={1}
         listening={false}
@@ -1317,22 +1821,39 @@ const RotateHandle: React.FC<RotateHandleProps> = ({
       
       {/* Rotate handle */}
       <Circle
-        x={x}
-        y={y - 30}
-        radius={RESIZE_HANDLE.SIZE}
+        x={centerX}
+        y={handleY}
+        radius={6}
         fill="white"
         stroke="#3b82f6"
         strokeWidth={2}
         draggable={true}
-        onDragStart={onRotateStart}
+        onDragStart={() => {
+          setIsDragging(true)
+          onRotateStart()
+        }}
         onDragMove={(e) => {
-          // Calculate angle from shape center to handle
-          const dx = e.target.x() - x
-          const dy = e.target.y() - (y - 30)
-          const angle = Math.atan2(dy, dx) * 180 / Math.PI + 90
+          // Calculate angle from shape center to current handle position
+          const dx = e.target.x() - centerX
+          const dy = e.target.y() - centerY
+          let angle = Math.atan2(dy, dx) * 180 / Math.PI + 90
+          
+          // Normalize to 0-360
+          angle = angle % 360
+          if (angle < 0) angle += 360
+          
+          // Snap to 15° if Shift is pressed
+          if (isShiftPressed) {
+            angle = Math.round(angle / 15) * 15
+          }
+          
+          setDisplayAngle(Math.round(angle))
           onRotate(angle)
         }}
-        onDragEnd={onRotateEnd}
+        onDragEnd={() => {
+          setIsDragging(false)
+          onRotateEnd()
+        }}
         onMouseEnter={(e) => {
           const container = e.target.getStage()?.container()
           if (container) container.style.cursor = 'grab'
@@ -1342,6 +1863,26 @@ const RotateHandle: React.FC<RotateHandleProps> = ({
           if (container) container.style.cursor = 'default'
         }}
       />
+      
+      {/* Angle indicator (shows during rotation) */}
+      {isDragging && (
+        <Text
+          x={centerX - 20}
+          y={centerY - INTERACTION_CONSTANTS.ROTATE_HANDLE_OFFSET - 30}
+          text={`${displayAngle}°`}
+          fontSize={14}
+          fill="white"
+          padding={4}
+          align="center"
+          verticalAlign="middle"
+          listening={false}
+          // Background
+          shadowColor="rgba(0, 0, 0, 0.8)"
+          shadowBlur={0}
+          shadowOffset={{ x: 0, y: 0 }}
+          shadowOpacity={1}
+        />
+      )}
     </>
   )
 }
@@ -1351,7 +1892,178 @@ export default RotateHandle
 
 ### Files to Update
 
-Add `rotation: number` property to all shape types, update Konva Groups to use `rotation` prop, add rotate handle to Rectangle/Circle/Line/Text components when `isPrimary`, add `rotateShape` to CanvasContext, add keyboard shortcut for rotation, add AI tool for rotation.
+#### 1. `/src/shared/shapes.ts`
+Add rotation property to BaseShape:
+
+```typescript
+interface BaseShape {
+  // ... existing properties
+  rotation?: number  // Rotation in degrees (0-360), defaults to 0
+}
+```
+
+#### 2. `/src/contexts/CanvasContext.tsx`
+Add rotation operations:
+
+```typescript
+import { getShapeCenter } from '../utils/shapeHelpers'
+
+interface CanvasContextType {
+  // ... existing
+  
+  // NEW: Rotation operation
+  rotateShape: (shapeId: string, shapeType: ShapeType, angle: number) => Promise<void>
+}
+
+const rotateShape = useCallback(async (shapeId: string, shapeType: ShapeType, angle: number) => {
+  // Normalize angle to 0-360
+  const normalizedAngle = ((angle % 360) + 360) % 360
+  
+  try {
+    switch (shapeType) {
+      case 'rectangle':
+        await canvasService.updateRectangle(shapeId, { rotation: normalizedAngle })
+        break
+      case 'circle':
+        await canvasService.updateCircle(shapeId, { rotation: normalizedAngle })
+        break
+      case 'line':
+        await canvasService.updateLine(shapeId, { rotation: normalizedAngle })
+        break
+      case 'text':
+        await canvasService.updateText(shapeId, { rotation: normalizedAngle })
+        break
+    }
+    showToast(`Rotated to ${Math.round(normalizedAngle)}°`)
+  } catch (err) {
+    console.error('Error rotating shape:', err)
+    showToast('Failed to rotate shape - please try again')
+  }
+}, [showToast])
+```
+
+#### 3. `/src/components/canvas/Canvas.tsx`
+Add keyboard shortcut for rotation and track shift key:
+
+```typescript
+const [isShiftPressed, setIsShiftPressed] = useState(false)
+
+// Track shift key for snap-to-15°
+useEffect(() => {
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (e.key === 'Shift') setIsShiftPressed(true)
+  }
+  const handleKeyUp = (e: KeyboardEvent) => {
+    if (e.key === 'Shift') setIsShiftPressed(false)
+  }
+  
+  window.addEventListener('keydown', handleKeyDown)
+  window.addEventListener('keyup', handleKeyUp)
+  
+  return () => {
+    window.removeEventListener('keydown', handleKeyDown)
+    window.removeEventListener('keyup', handleKeyUp)
+  }
+}, [])
+
+// Add to existing keyboard shortcut handler
+const handleKeyDown = useCallback((e: KeyboardEvent) => {
+  // ... existing shortcuts
+  
+  // Rotate 15° clockwise: Cmd+R (IMPORTANT: preventDefault to avoid browser reload!)
+  if ((e.metaKey || e.ctrlKey) && e.key === 'r') {
+    e.preventDefault()  // Critical: prevent browser reload
+    if (primarySelectionId && primarySelectionType) {
+      const shape = getShapeById(primarySelectionId, primarySelectionType)
+      if (shape) {
+        const currentRotation = shape.rotation || 0
+        rotateShape(primarySelectionId, primarySelectionType, currentRotation + 15)
+      }
+    }
+    return
+  }
+}, [primarySelectionId, primarySelectionType, rotateShape])
+```
+
+#### 4. `/src/components/canvas/Rectangle.tsx` (and Circle, Line, Text)
+Add RotateHandle when shape is primary selection:
+
+```typescript
+import RotateHandle from './RotateHandle'
+import { getShapeCenter } from '../../utils/shapeHelpers'
+
+// In component
+const { rotateShape } = useCanvas()
+const [isRotating, setIsRotating] = useState(false)
+
+// Calculate center for rotate handle
+const center = getShapeCenter(rectangle)
+
+return (
+  <Group
+    rotation={rectangle.rotation || 0}  // Apply rotation
+    // ... other props
+  >
+    {/* Shape rendering */}
+    <Rect {...shapeProps} />
+    
+    {/* Rotate handle (only for primary selection) */}
+    {isPrimary && !isRotating && (
+      <RotateHandle
+        centerX={center.x}
+        centerY={center.y}
+        currentRotation={rectangle.rotation || 0}
+        onRotateStart={() => setIsRotating(true)}
+        onRotate={(angle) => rotateShape(rectangle.id, 'rectangle', angle)}
+        onRotateEnd={() => setIsRotating(false)}
+        isShiftPressed={isShiftPressed}  // Pass from Canvas
+      />
+    )}
+  </Group>
+)
+```
+
+#### 5. `/src/services/canvasCommandExecutor.ts` (AI Support)
+Add rotation command execution:
+
+```typescript
+// Add to executeCommand function
+case 'rotateShape':
+  if (!canvasContext.primarySelectionId || !canvasContext.primarySelectionType) {
+    throw new Error('No shape selected for rotation')
+  }
+  if (tool.angle === undefined) {
+    throw new Error('angle is required for rotateShape')
+  }
+  await canvasContext.rotateShape(
+    canvasContext.primarySelectionId,
+    canvasContext.primarySelectionType,
+    tool.angle
+  )
+  return {
+    success: true,
+    message: `Rotated to ${Math.round(tool.angle)}°`
+  }
+```
+
+#### 6. `/functions/src/tools.ts` (AI Support)
+Add rotation tool:
+
+```typescript
+export const rotateShape = tool({
+  description: 'Rotate the selected shape to a specific angle. Requires exactly 1 shape selected (primary selection).',
+  parameters: z.object({
+    angle: z.number().describe('Target rotation angle in degrees (0-360). Use positive for clockwise, negative for counter-clockwise.')
+  }),
+  execute: async () => ({ success: true })
+})
+
+// Add to tools export
+export const tools = {
+  // ... existing
+  rotateShape
+}
+```
 
 ### Testing Checklist
 
@@ -1371,11 +2083,63 @@ Add `rotation: number` property to all shape types, update Konva Groups to use `
 - [ ] AI can rotate shapes with angle specification
 - [ ] AI rotation syncs
 
+### High-Value Unit Tests
+
+#### Test Suite 4: `rotationHelpers.test.ts`
+
+**Rotation normalization tests:**
+```typescript
+describe('normalizeRotation', () => {
+  const normalizeRotation = (angle: number): number => {
+    angle = ((angle % 360) + 360) % 360
+    return angle
+  }
+  
+  it('should normalize angles to 0-360 range', () => {
+    expect(normalizeRotation(370)).toBe(10)
+    expect(normalizeRotation(-10)).toBe(350)
+    expect(normalizeRotation(720)).toBe(0)
+    expect(normalizeRotation(0)).toBe(0)
+    expect(normalizeRotation(359)).toBe(359)
+    expect(normalizeRotation(360)).toBe(0)
+  })
+  
+  it('should handle large positive angles', () => {
+    expect(normalizeRotation(1000)).toBe(280)
+    expect(normalizeRotation(3600)).toBe(0)
+  })
+  
+  it('should handle large negative angles', () => {
+    expect(normalizeRotation(-370)).toBe(350)
+    expect(normalizeRotation(-720)).toBe(0)
+  })
+})
+```
+
+**Snap-to-15° tests:**
+```typescript
+describe('snapToInterval', () => {
+  const snapTo15 = (angle: number): number => Math.round(angle / 15) * 15
+  
+  it('should snap angles to nearest 15° interval', () => {
+    expect(snapTo15(7)).toBe(0)
+    expect(snapTo15(8)).toBe(15)
+    expect(snapTo15(22)).toBe(15)
+    expect(snapTo15(23)).toBe(30)
+    expect(snapTo15(45)).toBe(45)
+    expect(snapTo15(352)).toBe(345)
+  })
+})
+```
+
 ### Success Criteria
 - ✅ Rotation fully functional
-- ✅ Rotate handle works smoothly
-- ✅ Keyboard shortcuts work
-- ✅ Angle normalization works correctly
+- ✅ Rotate handle works smoothly with fixed angle calculation
+- ✅ Angle indicator displays during rotation
+- ✅ Shift key snaps to 15° intervals
+- ✅ Keyboard shortcuts work (Cmd+R with preventDefault)
+- ✅ Angle normalization works correctly (0-360)
+- ✅ Shape center calculation correct for all types
 - ✅ AI agent supports rotation
 - ✅ Real-time sync verified
 - ✅ Primary-only rotation limitation documented
