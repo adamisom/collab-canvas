@@ -42,7 +42,7 @@ Phase 3F adds the final polish features that elevate CollabCanvas from a solid c
 
 **Enhanced AI Capabilities:**
 1. **AI Suggestions** - Proactive suggestions based on context
-2. **AI Command History** - Review past AI commands (read-only)
+2. **AI Command History** - Review past AI commands (read-only, no undo/redo)
 3. **Voice Input** (BONUS) - Speak commands to AI
 
 **Improved UX:**
@@ -69,7 +69,7 @@ Phase 3F adds the final polish features that elevate CollabCanvas from a solid c
 **Command History:**
 - Simple read-only list of past commands
 - Store user input and AI response
-- No state snapshots (too complex)
+- No state snapshots or undo/redo (out of scope)
 - Just for reference/learning
 
 **Voice Input:**
@@ -483,44 +483,7 @@ BEST PRACTICES:
 - Suggest alternative approaches when user request is ambiguous
 ```
 
-#### 4. Add keyboard shortcuts for undo/redo
-In `/src/components/canvas/Canvas.tsx`:
-
-```typescript
-const { undoLastCommand, redoLastUndo, canUndo, canRedo } = useAIHistory()
-
-const handleKeyDown = useCallback((e: KeyboardEvent) => {
-  // ... existing shortcuts
-  
-  // Undo AI command: Cmd+Z (when AI history has items)
-  if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
-    if (canUndo) {
-      e.preventDefault()
-      undoLastCommand()
-      return
-    }
-  }
-  
-  // Redo AI command: Cmd+Shift+Z
-  if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'z') {
-    if (canRedo) {
-      e.preventDefault()
-      redoLastUndo()
-      return
-    }
-  }
-}, [undoLastCommand, redoLastUndo, canUndo, canRedo])
-```
-
 ### Testing Checklist
-
-**Manual Testing - Undo/Redo:**
-- [ ] Can undo AI commands with Cmd+Z
-- [ ] Can redo undone commands with Cmd+Shift+Z
-- [ ] Undo restores canvas to previous state
-- [ ] Undo/redo stack managed correctly
-- [ ] Cannot undo when stack is empty
-- [ ] New command clears redo stack
 
 **Manual Testing - Command History:**
 - [ ] Command history shows all AI commands
@@ -555,8 +518,7 @@ const handleKeyDown = useCallback((e: KeyboardEvent) => {
 - [ ] All enhancements sync to all users
 
 ### Success Criteria
-- ✅ Undo/redo AI commands works perfectly
-- ✅ Command history is comprehensive
+- ✅ Command history is comprehensive (read-only)
 - ✅ AI suggestions are helpful
 - ✅ Voice input works (if implemented)
 - ✅ Advanced AI features work
@@ -583,9 +545,10 @@ const handleKeyDown = useCallback((e: KeyboardEvent) => {
 **Comments System:**
 1. **Shape Comments** - Attach comments to specific shapes
 2. **Canvas Comments** - Place comments anywhere on canvas
-3. **Comment Threads** - Reply to comments
-4. **@Mentions** - Notify specific users
-5. **Comment Resolution** - Mark comments as resolved
+3. **@Mentions** - Notify specific users
+4. **Comment Resolution** - Mark comments as resolved
+
+> **Note**: Threading/replies are out of scope for this phase. Each comment stands alone.
 
 **Annotations:**
 1. **Sticky Notes** - Add notes to canvas
@@ -615,10 +578,11 @@ interface Comment {
   createdAt: number
   updatedAt: number
   resolved: boolean
-  parentId: string | null  // for replies
   mentions: string[]  // user IDs
 }
 ```
+
+> **Note**: No `parentId` field - threading is not supported.
 
 **Firebase Structure:**
 ```
@@ -632,7 +596,7 @@ interface Comment {
     - authorId
     - createdAt
     - resolved
-    - parentId
+    - mentions
 ```
 
 **Real-Time Sync:**
@@ -650,7 +614,6 @@ import './CommentBubble.css'
 
 interface CommentBubbleProps {
   comment: Comment
-  onReply: (text: string) => void
   onResolve: () => void
   onDelete: () => void
   isOwner: boolean
@@ -658,13 +621,11 @@ interface CommentBubbleProps {
 
 const CommentBubble: React.FC<CommentBubbleProps> = ({
   comment,
-  onReply,
   onResolve,
   onDelete,
   isOwner
 }) => {
   const [isExpanded, setIsExpanded] = useState(false)
-  const [replyText, setReplyText] = useState('')
 
   return (
     <div className={`comment-bubble ${comment.resolved ? 'resolved' : ''}`}>
@@ -691,31 +652,6 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
               <button onClick={onDelete} className="danger">Delete</button>
             )}
           </div>
-
-          <div className="reply-section">
-            <input
-              type="text"
-              placeholder="Reply..."
-              value={replyText}
-              onChange={(e) => setReplyText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && replyText.trim()) {
-                  onReply(replyText)
-                  setReplyText('')
-                }
-              }}
-            />
-            <button
-              onClick={() => {
-                if (replyText.trim()) {
-                  onReply(replyText)
-                  setReplyText('')
-                }
-              }}
-            >
-              Reply
-            </button>
-          </div>
         </div>
       )}
     </div>
@@ -736,7 +672,6 @@ const CommentsPanel: React.FC = () => {
   const {
     comments,
     addComment,
-    replyToComment,
     resolveComment,
     deleteComment,
     unresolvedCount
@@ -748,14 +683,6 @@ const CommentsPanel: React.FC = () => {
     if (filter === 'resolved') return comment.resolved
     return true
   })
-
-  // Group comments by thread (parent comments with replies)
-  const threads = filteredComments
-    .filter(c => !c.parentId)
-    .map(parent => ({
-      parent,
-      replies: filteredComments.filter(c => c.parentId === parent.id)
-    }))
 
   return (
     <div className="comments-panel">
@@ -790,33 +717,19 @@ const CommentsPanel: React.FC = () => {
       </div>
 
       <div className="comments-list">
-        {threads.length === 0 ? (
+        {filteredComments.length === 0 ? (
           <div className="empty-state">
             No comments yet. Click on a shape to add a comment!
           </div>
         ) : (
-          threads.map(thread => (
-            <div key={thread.parent.id} className="comment-thread">
-              <CommentBubble
-                comment={thread.parent}
-                onReply={(text) => replyToComment(thread.parent.id, text)}
-                onResolve={() => resolveComment(thread.parent.id)}
-                onDelete={() => deleteComment(thread.parent.id)}
-                isOwner={thread.parent.authorId === currentUserId}
-              />
-              
-              {thread.replies.map(reply => (
-                <div key={reply.id} className="reply-comment">
-                  <CommentBubble
-                    comment={reply}
-                    onReply={(text) => replyToComment(reply.id, text)}
-                    onResolve={() => resolveComment(reply.id)}
-                    onDelete={() => deleteComment(reply.id)}
-                    isOwner={reply.authorId === currentUserId}
-                  />
-                </div>
-              ))}
-            </div>
+          filteredComments.map(comment => (
+            <CommentBubble
+              key={comment.id}
+              comment={comment}
+              onResolve={() => resolveComment(comment.id)}
+              onDelete={() => deleteComment(comment.id)}
+              isOwner={comment.authorId === currentUserId}
+            />
           ))
         )}
       </div>
@@ -846,7 +759,6 @@ interface Comment {
   createdAt: number
   updatedAt: number
   resolved: boolean
-  parentId: string | null
   mentions: string[]
 }
 
@@ -854,7 +766,6 @@ interface CommentsContextType {
   comments: Comment[]
   unresolvedCount: number
   addComment: (shapeId: string | null, x: number, y: number, text: string) => Promise<void>
-  replyToComment: (parentId: string, text: string) => Promise<void>
   resolveComment: (commentId: string) => Promise<void>
   deleteComment: (commentId: string) => Promise<void>
   getCommentsForShape: (shapeId: string) => Comment[]
@@ -903,7 +814,6 @@ export const CommentsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       createdAt: Date.now(),
       updatedAt: Date.now(),
       resolved: false,
-      parentId: null,
       mentions
     })
 
@@ -912,35 +822,6 @@ export const CommentsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       await commentsService.sendMentionNotifications(mentions, text)
     }
   }, [user])
-
-  const replyToComment = useCallback(async (parentId: string, text: string) => {
-    if (!user) return
-
-    const parent = comments.find(c => c.id === parentId)
-    if (!parent) return
-
-    const mentions = extractMentions(text)
-
-    await commentsService.createComment({
-      canvasId: parent.canvasId,
-      shapeId: parent.shapeId,
-      x: parent.x,
-      y: parent.y,
-      text,
-      authorId: user.uid,
-      authorName: user.displayName || 'User',
-      authorAvatar: user.photoURL || '',
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      resolved: false,
-      parentId,
-      mentions
-    })
-
-    if (mentions.length > 0) {
-      await commentsService.sendMentionNotifications(mentions, text)
-    }
-  }, [user, comments])
 
   const resolveComment = useCallback(async (commentId: string) => {
     await commentsService.updateComment(commentId, {
@@ -954,17 +835,16 @@ export const CommentsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, [])
 
   const getCommentsForShape = useCallback((shapeId: string) => {
-    return comments.filter(c => c.shapeId === shapeId && !c.parentId)
+    return comments.filter(c => c.shapeId === shapeId)
   }, [comments])
 
-  const unresolvedCount = comments.filter(c => !c.resolved && !c.parentId).length
+  const unresolvedCount = comments.filter(c => !c.resolved).length
 
   return (
     <CommentsContext.Provider value={{
       comments,
       unresolvedCount,
       addComment,
-      replyToComment,
       resolveComment,
       deleteComment,
       getCommentsForShape
@@ -1022,26 +902,9 @@ export const updateComment = async (
 }
 
 export const deleteComment = async (commentId: string): Promise<void> => {
-  // Delete comment and all replies
-  const commentsRef = dbRef('comments')
-  const snapshot = await dbGet(commentsRef)
-  
-  if (snapshot.exists()) {
-    const toDelete: string[] = [commentId]
-    
-    // Find all replies
-    snapshot.forEach((child) => {
-      const comment = child.val()
-      if (comment.parentId === commentId) {
-        toDelete.push(comment.id)
-      }
-    })
-    
-    // Delete all
-    for (const id of toDelete) {
-      await dbRemove(dbRef(`comments/${id}`))
-    }
-  }
+  // Delete single comment (no threading, so no replies to worry about)
+  const commentRef = dbRef(`comments/${commentId}`)
+  await dbRemove(commentRef)
 }
 
 export const onCommentsChange = (callback: (comments: Comment[]) => void): (() => void) => {
@@ -1143,19 +1006,12 @@ In `/database.rules.json`:
 **Manual Testing - Comments:**
 - [ ] Can add comment to shape
 - [ ] Can add comment to canvas
-- [ ] Can reply to comment
 - [ ] Can resolve comment
 - [ ] Can delete own comment
 - [ ] Cannot delete others' comments
 - [ ] Comment count badge shows on shapes
 - [ ] Comments panel shows all comments
 - [ ] Filter buttons work (all/unresolved/resolved)
-
-**Manual Testing - Threads:**
-- [ ] Replies grouped with parent comment
-- [ ] Thread structure maintained
-- [ ] Deleting parent deletes all replies
-- [ ] Threading works correctly
 
 **Manual Testing - @Mentions:**
 - [ ] Can @mention users in comments
@@ -1175,7 +1031,6 @@ In `/database.rules.json`:
 
 ### Success Criteria
 - ✅ Comments system fully functional
-- ✅ Threading works correctly
 - ✅ Real-time sync verified
 - ✅ UI is intuitive
 - ✅ Performance acceptable
