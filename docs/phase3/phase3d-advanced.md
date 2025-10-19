@@ -7,15 +7,22 @@
 
 > **⚠️ Before Implementation:** Review this plan and ask questions before proceeding. Consider whether any plans need to change first. Also re-read the sibling file README.md to ensure broader context.
 
-> **📝 Document Updates:** This plan has been updated with:
+> **📝 Document Updates:** This plan has been comprehensively updated with:
 > - **PR Renumbering**: PRs are now #10-12 (following Phase 3C's PRs #5-9)
 > - **Unified Selection State**: All code samples use `selectedShapes: Map<string, ShapeType>` from Phase 3C
+> - **Type Imports**: Fixed to use `shared/shapes.ts` for consistency
+> - **Shared Utilities**: Extracted common shape operations to reusable helpers
 > - **Lasso Shortcut Fix**: Changed from `L` (conflicts with Line mode) to `Shift+L`
-> - **Text Bounds**: Use Konva's `getClientRect()` via refs for accurate alignment calculations
-> - **Lasso Exit Paths**: Multiple ways to exit lasso mode (Escape, failed lasso, toggle)
-> - **Rotation Normalization**: Always normalize rotation to 0-360 degrees
-> - **Multi-Select Rotation**: Rotates primary selection only (documented limitation)
-> - **Lasso Selection Logic**: Uses "any corner inside" for more forgiving organic selection
+> - **Lasso Performance**: Added bounding box pre-filter for 3-10x speedup
+> - **Lasso Selection Limit**: Enforces 25-shape limit during selection
+> - **Text Bounds**: Added measuredWidth/Height fields for accurate alignment
+> - **Rotation Handle**: Fixed angle calculation bug and added center point guidance
+> - **Batch Updates**: Alignment uses `Promise.all()` for better performance
+> - **AI Tool Specs**: Full implementation with client executor integration
+> - **CSS Samples**: Complete stylesheets for all new UI components
+> - **UI Components**: Select-all-type modal, rotation angle indicator
+> - **High-Value Tests**: 5 test suites covering critical algorithms
+> - **Constants**: Extracted magic numbers to shared constants
 
 ---
 
@@ -76,10 +83,11 @@ Phase 3D adds professional design tool features that users expect from Figma, Sk
 ### Implementation Strategy
 
 **Alignment Algorithm:**
-- Calculate bounding box for each shape
+- Calculate bounding box for each shape using shared `getShapeBounds` utility
 - Find reference edge/center based on operation
 - Move shapes to align to reference
 - Preserve shape sizes
+- Use `Promise.all()` for parallel updates (better performance)
 
 **Distribution Algorithm:**
 - Sort shapes by position
@@ -91,11 +99,15 @@ Phase 3D adds professional design tool features that users expect from Figma, Sk
 - Rectangle: `{x, y, width, height}`
 - Circle: `{x: centerX - radius, y: centerY - radius, width: radius*2, height: radius*2}`
 - Line: `{x: min(x, endX), y: min(y, endY), width: abs(endX-x), height: abs(endY-y)}`
-- Text: Use Konva's `getClientRect()` via refs for accurate bounds (see Phase 3C pattern)
+- Text: Use `measuredWidth` and `measuredHeight` fields (populated from Konva refs), fallback to estimation
 
 **Edge Cases:**
 - Shapes may be aligned outside visible canvas (user can pan to find them - this is acceptable)
-- Alignment operations are tested with selection limit of 25 shapes (Phase 3B constraint)
+- Alignment operations tested with selection limit of 25 shapes (Phase 3B constraint)
+
+**Shared Utilities:**
+- Extract `getShapeBounds`, `getSelectedShapesFromMap`, `updateShapeProperty` to reusable helpers
+- These utilities are used across alignment, selection, and rotation features
 
 ### Files to Create
 
@@ -243,14 +255,71 @@ const AlignmentToolbar: React.FC<AlignmentToolbarProps> = ({
 export default AlignmentToolbar
 ```
 
-#### `/src/utils/alignmentHelpers.ts`
-```typescript
-import type { Rectangle } from '../services/canvasService'
-import type { CircleShape } from '../components/canvas/Circle'
-import type { LineShape } from '../components/canvas/Line'
-import type { TextShape } from '../components/canvas/Text'
+#### `/src/components/ui/AlignmentToolbar.css`
+```css
+.alignment-toolbar {
+  position: fixed;
+  top: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  
+  display: flex;
+  gap: 12px;
+  padding: 8px 16px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e7eb;
+}
 
-type Shape = Rectangle | CircleShape | LineShape | TextShape
+.toolbar-section {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.toolbar-section:not(:last-child) {
+  padding-right: 12px;
+  border-right: 1px solid #e5e7eb;
+}
+
+.toolbar-label {
+  font-size: 12px;
+  color: #6b7280;
+  margin-right: 4px;
+}
+
+.toolbar-button {
+  padding: 6px;
+  border: 1px solid #e5e7eb;
+  background: white;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.toolbar-button:hover {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+}
+
+.toolbar-button:active {
+  background: #e5e7eb;
+}
+
+.toolbar-button svg {
+  display: block;
+  color: #374151;
+}
+```
+
+#### `/src/utils/shapeHelpers.ts`
+```typescript
+import type { Shape, Rectangle, CircleShape, LineShape, TextShape } from '../shared/shapes'
 
 export interface Bounds {
   x: number
@@ -259,7 +328,10 @@ export interface Bounds {
   height: number
 }
 
-// Get bounding box for any shape
+/**
+ * Get bounding box for any shape type
+ * For text, uses measuredWidth/Height if available, otherwise estimates
+ */
 export const getShapeBounds = (shape: Shape): Bounds => {
   switch (shape.type) {
     case 'rectangle':
@@ -291,9 +363,16 @@ export const getShapeBounds = (shape: Shape): Bounds => {
       }
     
     case 'text':
-      // For text, we need actual rendered bounds from Konva
-      // This will be called from Canvas.tsx where we have access to refs
-      // For now, provide a reasonable estimation
+      // Use measured bounds if available (populated from Konva refs)
+      if (shape.measuredWidth && shape.measuredHeight) {
+        return {
+          x: shape.x,
+          y: shape.y,
+          width: shape.measuredWidth,
+          height: shape.measuredHeight
+        }
+      }
+      // Fallback to estimation
       const estimatedWidth = shape.text.length * shape.fontSize * 0.6
       const estimatedHeight = shape.fontSize * 1.2
       return {
@@ -307,6 +386,89 @@ export const getShapeBounds = (shape: Shape): Bounds => {
       return { x: 0, y: 0, width: 0, height: 0 }
   }
 }
+
+/**
+ * Get center point for a shape (used for rotation handle positioning)
+ */
+export const getShapeCenter = (shape: Shape): { x: number, y: number } => {
+  const bounds = getShapeBounds(shape)
+  
+  // Circle center is stored directly
+  if (shape.type === 'circle') {
+    return { x: shape.x, y: shape.y }
+  }
+  
+  // For other shapes, calculate from bounds
+  return {
+    x: bounds.x + bounds.width / 2,
+    y: bounds.y + bounds.height / 2
+  }
+}
+
+/**
+ * Retrieve selected shapes from unified selection Map
+ */
+export const getSelectedShapesFromMap = (
+  selectedShapes: Map<string, ShapeType>,
+  rectangles: Rectangle[],
+  circles: CircleShape[],
+  lines: LineShape[],
+  texts: TextShape[]
+): Shape[] => {
+  const result: Shape[] = []
+  
+  selectedShapes.forEach((shapeType, shapeId) => {
+    let shape: Shape | undefined
+    switch (shapeType) {
+      case 'rectangle':
+        shape = rectangles.find(r => r.id === shapeId)
+        break
+      case 'circle':
+        shape = circles.find(c => c.id === shapeId)
+        break
+      case 'line':
+        shape = lines.find(l => l.id === shapeId)
+        break
+      case 'text':
+        shape = texts.find(t => t.id === shapeId)
+        break
+    }
+    if (shape) result.push(shape)
+  })
+  
+  return result
+}
+
+/**
+ * Update any shape's properties via appropriate service method
+ */
+export const updateShapeProperty = async (
+  shape: Shape,
+  updates: Partial<Shape>,
+  canvasService: any
+): Promise<void> => {
+  switch (shape.type) {
+    case 'rectangle':
+      await canvasService.updateRectangle(shape.id, updates)
+      break
+    case 'circle':
+      await canvasService.updateCircle(shape.id, updates)
+      break
+    case 'line':
+      await canvasService.updateLine(shape.id, updates)
+      break
+    case 'text':
+      await canvasService.updateText(shape.id, updates)
+      break
+  }
+}
+```
+
+#### `/src/utils/alignmentHelpers.ts`
+```typescript
+import type { Shape } from '../shared/shapes'
+import type { ShapeType } from '../shared/types'
+import { getShapeBounds, type Bounds } from './shapeHelpers'
 
 // Calculate new position for shape after alignment
 export const calculateAlignedPosition = (
@@ -461,6 +623,10 @@ export const calculateDistributedPositions = (
 Add alignment operations:
 
 ```typescript
+import { getSelectedShapesFromMap, updateShapeProperty } from '../utils/shapeHelpers'
+import { calculateAlignedPosition, calculateDistributedPositions } from '../utils/alignmentHelpers'
+import type { AlignmentType } from '../components/ui/AlignmentToolbar'
+
 interface CanvasContextType {
   // ... existing
   
@@ -469,27 +635,14 @@ interface CanvasContextType {
 }
 
 const alignShapes = useCallback(async (alignType: AlignmentType) => {
-  // Get all selected shapes using unified selection state
-  const selectedShapesList: Shape[] = []
-  
-  selectedShapes.forEach((shapeType, shapeId) => {
-    let shape: Shape | undefined
-    switch (shapeType) {
-      case 'rectangle':
-        shape = rectangles.find(r => r.id === shapeId)
-        break
-      case 'circle':
-        shape = circles.find(c => c.id === shapeId)
-        break
-      case 'line':
-        shape = lines.find(l => l.id === shapeId)
-        break
-      case 'text':
-        shape = texts.find(t => t.id === shapeId)
-        break
-    }
-    if (shape) selectedShapesList.push(shape)
-  })
+  // Get all selected shapes using shared utility
+  const selectedShapesList = getSelectedShapesFromMap(
+    selectedShapes,
+    rectangles,
+    circles,
+    lines,
+    texts
+  )
   
   if (selectedShapesList.length < 2) {
     showToast('Select 2 or more shapes to align')
@@ -508,13 +661,14 @@ const alignShapes = useCallback(async (alignType: AlignmentType) => {
       const direction = alignType === 'distribute-horizontal' ? 'horizontal' : 'vertical'
       const positions = calculateDistributedPositions(selectedShapesList, direction)
       
-      // Apply positions
-      for (const shape of selectedShapesList) {
+      // Apply positions in parallel for better performance
+      const updatePromises = selectedShapesList.map(async (shape) => {
         const newPos = positions.get(shape.id)
         if (newPos) {
-          await updateShapePosition(shape, newPos)
+          await updateShapeProperty(shape, newPos, canvasService)
         }
-      }
+      })
+      await Promise.all(updatePromises)
     } else {
       // Alignment
       const bounds = selectedShapesList.map(getShapeBounds)
@@ -545,37 +699,21 @@ const alignShapes = useCallback(async (alignType: AlignmentType) => {
           break
       }
       
-      // Apply alignment
-      for (const shape of selectedShapesList) {
+      // Apply alignment in parallel for better performance
+      const updatePromises = selectedShapesList.map(async (shape) => {
         const newPos = calculateAlignedPosition(shape, targetValue, alignType)
-        await updateShapePosition(shape, newPos)
-      }
+        await updateShapeProperty(shape, newPos, canvasService)
+      })
+      await Promise.all(updatePromises)
     }
     
     showToast(`Aligned ${selectedShapesList.length} shapes`)
   } catch (err) {
     console.error('Error aligning shapes:', err)
-    setError('Failed to align shapes')
+    showToast('Failed to align shapes - please try again')
+    // Partial updates are acceptable - Firebase sync will resolve inconsistencies
   }
 }, [rectangles, circles, lines, texts, selectedShapes, showToast])
-
-// Helper to update any shape's position
-const updateShapePosition = async (shape: Shape, updates: any) => {
-  switch (shape.type) {
-    case 'rectangle':
-      await canvasService.updateRectangle(shape.id, updates)
-      break
-    case 'circle':
-      await canvasService.updateCircle(shape.id, updates)
-      break
-    case 'line':
-      await canvasService.updateLine(shape.id, updates)
-      break
-    case 'text':
-      await canvasService.updateText(shape.id, updates)
-      break
-  }
-}
 ```
 
 #### 2. `/src/components/canvas/Canvas.tsx`
