@@ -20,7 +20,7 @@ interface TextProps {
 const Text: React.FC<TextProps> = ({
   textShape,
   isSelected,
-  isPrimary: _isPrimary,  // Unused for now, but keeping for consistency with other shape components
+  // isPrimary - not used yet, but kept in interface for consistency
   isShiftPressed,
   onClick,
   onDragStart,
