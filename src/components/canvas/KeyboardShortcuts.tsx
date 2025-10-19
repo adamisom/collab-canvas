@@ -100,6 +100,10 @@ const KeyboardShortcuts: React.FC = () => {
               <div className="shortcut-desc">Resize</div>
             </div>
             <div className="shortcut-item">
+              <div className="shortcut-key">⌘/Ctrl+R</div>
+              <div className="shortcut-desc">Rotate 15°</div>
+            </div>
+            <div className="shortcut-item">
               <div className="shortcut-key">⌘/Ctrl+C</div>
               <div className="shortcut-desc">Copy</div>
             </div>

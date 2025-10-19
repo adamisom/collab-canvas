@@ -92,6 +92,9 @@ interface CanvasContextType {
   selectShapesInLasso: (lassoPoints: number[]) => Promise<void>
   selectAllOfType: (shapeType: ShapeType) => Promise<void>
   
+  // Rotation operations (Phase 3D PR #12)
+  rotateShape: (shapeId: string, shapeType: ShapeType, rotation: number) => Promise<void>
+  
   // Viewport operations (for AI agent)
   getViewportInfo: () => ViewportInfo | null
   updateViewportInfo: (info: ViewportInfo) => void
@@ -1601,6 +1604,29 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     setPrimarySelectionType(shapesToSelect[shapesToSelect.length - 1].type)
   }, [rectangles, circles, lines, texts, selectedShapes, selectionLocked, user, username])
 
+  // Rotate shape (Phase 3D PR #12)
+  const rotateShape = useCallback(async (shapeId: string, shapeType: ShapeType, rotation: number): Promise<void> => {
+    try {
+      switch (shapeType) {
+        case 'rectangle':
+          await canvasService.updateRectangle(shapeId, { rotation })
+          break
+        case 'circle':
+          await canvasService.updateCircle(shapeId, { rotation })
+          break
+        case 'line':
+          await canvasService.updateLine(shapeId, { rotation })
+          break
+        case 'text':
+          await canvasService.updateText(shapeId, { rotation })
+          break
+      }
+    } catch (error) {
+      console.error('Error rotating shape:', error)
+      setToastMessage('Failed to rotate shape')
+    }
+  }, [])
+
   const value: CanvasContextType = {
     rectangles,
     circles,  // PR #6
@@ -1656,6 +1682,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     alignShapes,
     selectShapesInLasso,
     selectAllOfType,
+    rotateShape,
     getViewportInfo,
     updateViewportInfo,
     clearError,

@@ -8,6 +8,7 @@ import { calculateResizeHandlePositions, calculateResizeUpdate } from '../../uti
 import { useAuth } from '../../contexts/AuthContext'
 import { stopEventPropagation, setStageCursor } from '../../utils/eventHelpers'
 import ResizeHandle from './ResizeHandle'
+import RotateHandle from './RotateHandle'  // Phase 3D PR #12
 
 interface RectangleProps {
   rectangle: Rectangle
@@ -20,6 +21,7 @@ interface RectangleProps {
   onResize?: (rectangle: Rectangle, newWidth: number, newHeight: number, newX?: number, newY?: number) => void
   onResizeStart?: () => void
   onResizeEnd?: () => void
+  onRotate?: (shapeId: string, rotation: number) => void  // Phase 3D PR #12
 }
 
 const RectangleComponent: React.FC<RectangleProps> = ({ 
@@ -32,7 +34,8 @@ const RectangleComponent: React.FC<RectangleProps> = ({
   onDragEnd,
   onResize,
   onResizeStart,
-  onResizeEnd
+  onResizeEnd,
+  onRotate  // Phase 3D PR #12
 }) => {
   const [isResizing, setIsResizing] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
@@ -199,6 +202,9 @@ const RectangleComponent: React.FC<RectangleProps> = ({
         y={rectangle.y}
         width={rectangle.width}
         height={rectangle.height}
+        offsetX={rectangle.width / 2}  // Phase 3D PR #12: Set rotation origin to center
+        offsetY={rectangle.height / 2}
+        rotation={rectangle.rotation || 0}  // Phase 3D PR #12
         fill={rectangle.color}
         stroke={
           isSelected 
@@ -256,6 +262,18 @@ const RectangleComponent: React.FC<RectangleProps> = ({
               />
             )
           })}
+          
+          {/* Phase 3D PR #12: Rotate handle */}
+          {onRotate && (
+            <RotateHandle
+              shapeId={rectangle.id}
+              centerX={rectangle.x}
+              centerY={rectangle.y}
+              currentRotation={rectangle.rotation || 0}
+              isShiftPressed={isShiftPressed}
+              onRotate={onRotate}
+            />
+          )}
         </>
       )}
     </Group>

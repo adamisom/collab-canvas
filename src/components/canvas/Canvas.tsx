@@ -20,6 +20,7 @@ import LassoPath from './LassoPath'  // Phase 3D PR #11
 import SelectTypeModal from '../ui/SelectTypeModal'  // Phase 3D PR #11
 import Toast from '../ui/Toast'
 import type { Rectangle as RectangleType } from '../../services/canvasService'
+import type { ShapeType } from '../../shared/shapes'  // Phase 3D PR #12
 import './Canvas.css'
 
 interface CanvasProps {
@@ -116,6 +117,7 @@ const Canvas: React.FC<CanvasProps> = ({
     alignShapes,  // Phase 3D PR #10
     selectShapesInLasso,  // Phase 3D PR #11
     selectAllOfType,  // Phase 3D PR #11
+    rotateShape,  // Phase 3D PR #12
     selectionLocked,
     toastMessage,
     clearToast,
@@ -436,6 +438,26 @@ const Canvas: React.FC<CanvasProps> = ({
   const handleResizeEnd = useCallback(() => {
     setIsRectangleResizing(false)
   }, [])
+
+  // Handle rotate (Phase 3D PR #12)
+  const handleRotate = useCallback((shapeId: string, rotation: number) => {
+    // Determine shape type from primarySelectionType or search all shapes
+    let shapeType: ShapeType | null = null
+    
+    if (primarySelectionId === shapeId && primarySelectionType) {
+      shapeType = primarySelectionType
+    } else {
+      // Fallback: search all shapes
+      if (rectangles.find(r => r.id === shapeId)) shapeType = 'rectangle'
+      else if (circles.find(c => c.id === shapeId)) shapeType = 'circle'
+      else if (lines.find(l => l.id === shapeId)) shapeType = 'line'
+      else if (texts.find(t => t.id === shapeId)) shapeType = 'text'
+    }
+    
+    if (shapeType) {
+      rotateShape(shapeId, shapeType, rotation)
+    }
+  }, [primarySelectionId, primarySelectionType, rectangles, circles, lines, texts, rotateShape])
 
   // ============================================================================
   // REFACTORED (Post-3C): Shared drag state and handler factories
@@ -800,6 +822,43 @@ const Canvas: React.FC<CanvasProps> = ({
         return
       }
       
+      // Rotate 15° clockwise: Cmd+R (Phase 3D PR #12)
+      // IMPORTANT: preventDefault to avoid browser reload!
+      if ((e.metaKey || e.ctrlKey) && e.key === 'r' && !isTyping) {
+        e.preventDefault()  // Critical: prevent browser reload
+
+        if (primarySelectionId && primarySelectionType) {
+          // Get current rotation from the selected shape
+          let currentRotation = 0
+
+          switch (primarySelectionType) {
+            case 'rectangle': {
+              const rect = rectangles.find(r => r.id === primarySelectionId)
+              if (rect) currentRotation = rect.rotation || 0
+              break
+            }
+            case 'circle': {
+              const circle = circles.find(c => c.id === primarySelectionId)
+              if (circle) currentRotation = circle.rotation || 0
+              break
+            }
+            case 'line': {
+              const line = lines.find(l => l.id === primarySelectionId)
+              if (line) currentRotation = line.rotation || 0
+              break
+            }
+            case 'text': {
+              const textShape = texts.find(t => t.id === primarySelectionId)
+              if (textShape) currentRotation = textShape.rotation || 0
+              break
+            }
+          }
+
+          rotateShape(primarySelectionId, primarySelectionType, currentRotation + 15)
+        }
+        return
+      }
+      
       // Handle rectangle deletion
       if ((e.key === 'Delete' || e.key === 'Backspace') && primarySelectionId) {
         // Don't delete if user is typing in an input field
@@ -908,7 +967,7 @@ const Canvas: React.FC<CanvasProps> = ({
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)
     }
-  }, [primarySelectionId, rectangles, handleRectangleResize, deleteRectangle, isRectangleDragging, isRectangleResizing, getCurrentStagePosition, selectionLocked, selectedShapes, isShiftPressed, isPanning, selectAll, clearSelection, selectionBoxStart, lineCreationStart, setShapeMode, alignShapes, isLassoMode])
+  }, [primarySelectionId, rectangles, circles, lines, texts, primarySelectionType, handleRectangleResize, deleteRectangle, isRectangleDragging, isRectangleResizing, getCurrentStagePosition, selectionLocked, selectedShapes, isShiftPressed, isPanning, selectAll, clearSelection, selectionBoxStart, lineCreationStart, setShapeMode, alignShapes, isLassoMode, rotateShape])
 
   // Detect when rectangle is selected after AI command (input was focused)
   useEffect(() => {
@@ -1047,6 +1106,7 @@ const Canvas: React.FC<CanvasProps> = ({
                 onResize={handleRectangleResize}
                 onResizeStart={handleResizeStart}
                 onResizeEnd={handleResizeEnd}
+                onRotate={handleRotate}
               />
             ))}
             
