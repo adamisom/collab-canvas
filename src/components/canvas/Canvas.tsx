@@ -9,6 +9,7 @@ import { stopEventPropagation } from '../../utils/eventHelpers'
 import Cursor from './Cursor'
 import Rectangle from './Rectangle'
 import SelectionBox from './SelectionBox'  // NEW
+import MultiSelectGroup from './MultiSelectGroup'  // NEW
 import ColorPicker from './ColorPicker'
 import Toast from '../ui/Toast'
 import type { Rectangle as RectangleType } from '../../services/canvasService'
@@ -338,6 +339,31 @@ const Canvas: React.FC<CanvasProps> = ({
     }
   }, [updateRectangle])
 
+  // NEW: Handle multi-select group drag start (currently unused but kept for future use)
+  const handleMultiSelectGroupDragStart = useCallback(() => {
+    // Could use this to disable other interactions during drag
+  }, [])
+
+  // NEW: Handle multi-select group drag end (commit to Firebase)
+  const handleMultiSelectGroupDragEnd = useCallback(async (offset: { x: number; y: number }) => {
+    const selectedIds = Array.from(selectedRectangleIds)
+    const selectedRects = rectangles.filter(r => selectedIds.includes(r.id))
+    
+    try {
+      // Update all selected rectangles with the offset
+      await Promise.all(
+        selectedRects.map(rect => 
+          updateRectangle(rect.id, { 
+            x: rect.x + offset.x, 
+            y: rect.y + offset.y 
+          })
+        )
+      )
+    } catch (error) {
+      console.error('Error updating multi-select group position:', error)
+    }
+  }, [selectedRectangleIds, rectangles, updateRectangle])
+
   // Handle rectangle resize
   const handleRectangleResize = useCallback(async (
     rectangle: RectangleType, 
@@ -394,6 +420,7 @@ const Canvas: React.FC<CanvasProps> = ({
       return aZ - bZ
     })
   }, [rectangles])
+
 
   // Keep clipboard operation refs updated
   useEffect(() => {
@@ -725,6 +752,13 @@ const Canvas: React.FC<CanvasProps> = ({
                 onResizeEnd={handleResizeEnd}
               />
             ))}
+            
+            {/* NEW: Multi-select group bounding box */}
+            <MultiSelectGroup 
+              rectangles={sortedRectangles.filter(r => selectedRectangleIds.has(r.id))}
+              onGroupDragStart={handleMultiSelectGroupDragStart}
+              onGroupDragEnd={handleMultiSelectGroupDragEnd}
+            />
             
             {/* NEW: Empty canvas message */}
             {rectangles.length === 0 && (
