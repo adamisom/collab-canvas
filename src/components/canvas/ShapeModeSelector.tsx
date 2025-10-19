@@ -2,8 +2,8 @@ import React from 'react'
 import './Canvas.css'
 
 interface ShapeModeSelectorProps {
-  mode: 'rectangle' | 'circle' | 'line'
-  onModeChange: (mode: 'rectangle' | 'circle' | 'line') => void
+  mode: 'rectangle' | 'circle' | 'line' | 'text'  // PR #8: Added 'text'
+  onModeChange: (mode: 'rectangle' | 'circle' | 'line' | 'text') => void  // PR #8: Added 'text'
 }
 
 const ShapeModeSelector: React.FC<ShapeModeSelectorProps> = ({ mode, onModeChange }) => {
@@ -37,6 +37,16 @@ const ShapeModeSelector: React.FC<ShapeModeSelectorProps> = ({ mode, onModeChang
       >
         <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
           <line x1="3" y1="15" x2="17" y2="5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      </button>
+      <button
+        className={`shape-mode-btn ${mode === 'text' ? 'active' : ''}`}
+        onClick={() => onModeChange('text')}
+        title="Text mode (T)"
+        aria-label="Text mode"
+      >
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <text x="10" y="15" textAnchor="middle" fontSize="14" fontWeight="bold" fill="currentColor">T</text>
         </svg>
       </button>
     </div>

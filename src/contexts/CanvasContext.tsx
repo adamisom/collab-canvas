@@ -1,16 +1,17 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react'
 import { canvasService } from '../services/canvasService'
-import type { Rectangle, RectangleInput, CircleInput, LineInput } from '../services/canvasService'
+import type { Rectangle, RectangleInput, CircleInput, LineInput, TextInput } from '../services/canvasService'
 import { useAuth } from './AuthContext'
 import type { ViewportInfo } from '../shared/types'
-import type { Shape, ShapeType, CircleShape, LineShape } from '../shared/shapes'
+import type { Shape, ShapeType, CircleShape, LineShape, TextShape } from '../shared/shapes'
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../utils/constants'
 
 interface CanvasContextType {
   rectangles: Rectangle[]
   circles: CircleShape[]  // PR #6
   lines: LineShape[]  // PR #7
-  shapeMode: 'rectangle' | 'circle' | 'line'  // PR #7: Added 'line'
+  texts: TextShape[]  // PR #8
+  shapeMode: 'rectangle' | 'circle' | 'line' | 'text'  // PR #8: Added 'text'
   selectedShapes: Map<string, ShapeType> // REFACTORED: Phase 3C PR #5 - unified selection
   primarySelectionId: string | null  // Last clicked shape
   primarySelectionType: ShapeType | null  // NEW: Type of primary selection
@@ -19,8 +20,8 @@ interface CanvasContextType {
   toastMessage: string | null
   selectionLocked: boolean
   
-  // Shape mode operations (PR #6)
-  setShapeMode: (mode: 'rectangle' | 'circle' | 'line') => void  // PR #7: Added 'line'
+  // Shape mode operations (PR #6, updated PR #8)
+  setShapeMode: (mode: 'rectangle' | 'circle' | 'line' | 'text') => void  // PR #8: Added 'text'
   
   // Rectangle operations
   createRectangle: (x: number, y: number) => Promise<Rectangle | null>
@@ -43,7 +44,13 @@ interface CanvasContextType {
   deleteLine: (lineId: string) => Promise<void>
   changeLineColor: (lineId: string, color: string) => Promise<void>
   
-  // Unified shape operations (PR #6)
+  // Text operations (PR #8)
+  createText: (x: number, y: number, text?: string) => Promise<TextShape | null>
+  updateText: (textId: string, updates: Partial<TextShape>) => Promise<void>
+  deleteText: (textId: string) => Promise<void>
+  changeTextColor: (textId: string, color: string) => Promise<void>
+  
+  // Unified shape operations (PR #6, updated PR #8)
   selectShape: (shapeId: string, shapeType: ShapeType, additive?: boolean) => Promise<void>
   deleteShape: (shapeId: string, shapeType: ShapeType) => Promise<void>
   changeShapeColor: (shapeId: string, shapeType: ShapeType, color: string) => Promise<void>
@@ -100,7 +107,8 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
   const [rectangles, setRectangles] = useState<Rectangle[]>([])
   const [circles, setCircles] = useState<CircleShape[]>([])  // PR #6
   const [lines, setLines] = useState<LineShape[]>([])  // PR #7
-  const [shapeMode, setShapeMode] = useState<'rectangle' | 'circle' | 'line'>('rectangle')  // PR #7: Added 'line'
+  const [texts, setTexts] = useState<TextShape[]>([])  // PR #8
+  const [shapeMode, setShapeMode] = useState<'rectangle' | 'circle' | 'line' | 'text'>('rectangle')  // PR #8: Added 'text'
   const [selectedShapes, setSelectedShapes] = useState<Map<string, ShapeType>>(new Map())  // REFACTORED: PR #5
   const [primarySelectionId, setPrimarySelectionId] = useState<string | null>(null)
   const [primarySelectionType, setPrimarySelectionType] = useState<ShapeType | null>(null)  // NEW: PR #5
@@ -136,6 +144,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       setRectangles([])
       setCircles([])  // PR #6
       setLines([])  // PR #7
+      setTexts([])  // PR #8
       setSelectedShapes(new Map())
       setPrimarySelectionId(null)
       setPrimarySelectionType(null)
@@ -248,10 +257,44 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       }
     })
 
+    // PR #8: Set up real-time listener for texts
+    const unsubscribeTexts = canvasService.onTextsChange((newTexts) => {
+      setTexts(newTexts)
+      
+      // Similar cleanup logic for texts
+      const currentSelectedShapes = selectedShapesRef.current
+      const currentPrimaryId = primarySelectionIdRef.current
+      
+      if (currentSelectedShapes.size > 0) {
+        const existingTextIds = new Set(newTexts.map(t => t.id))
+        const updatedSelection = new Map<string, ShapeType>()
+        
+        for (const [id, type] of currentSelectedShapes) {
+          if (type === 'text' && existingTextIds.has(id)) {
+            updatedSelection.set(id, type)
+          } else if (type !== 'text') {
+            updatedSelection.set(id, type)
+          }
+        }
+        
+        if (updatedSelection.size !== currentSelectedShapes.size) {
+          setSelectedShapes(updatedSelection)
+        }
+        
+        // Clear primary if it no longer exists and was text
+        if (currentPrimaryId && primarySelectionTypeRef.current === 'text' && !existingTextIds.has(currentPrimaryId)) {
+          const firstId = updatedSelection.size > 0 ? Array.from(updatedSelection.keys())[0] : null
+          setPrimarySelectionId(firstId)
+          setPrimarySelectionType(firstId ? updatedSelection.get(firstId) || null : null)
+        }
+      }
+    })
+
     return () => {
       unsubscribeRectangles()
       unsubscribeCircles()  // PR #6
       unsubscribeLines()  // PR #7
+      unsubscribeTexts()  // PR #8
     }
   }, [user])
 
@@ -831,6 +874,95 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
   }, [])
 
   // ============================================================================
+  // PR #8: TEXT OPERATIONS
+  // ============================================================================
+
+  // Create a new text
+  const createText = useCallback(async (
+    x: number,
+    y: number,
+    text?: string
+  ): Promise<TextShape | null> => {
+    if (!user) {
+      setError('Must be logged in to create text')
+      return null
+    }
+
+    try {
+      const textInput: TextInput = {
+        x,
+        y,
+        text: text || 'New Text',
+        createdBy: user.uid
+      }
+
+      const newText = await canvasService.createText(textInput)
+      
+      // Select the newly created text (single selection)
+      const newSelection = new Map<string, ShapeType>()
+      newSelection.set(newText.id, 'text')
+      setSelectedShapes(newSelection)
+      setPrimarySelectionId(newText.id)
+      setPrimarySelectionType('text')
+      
+      return newText
+    } catch (error) {
+      console.error('Error creating text:', error)
+      setError('Failed to create text')
+      return null
+    }
+  }, [user])
+
+  // Update an existing text
+  const updateText = useCallback(async (
+    textId: string, 
+    updates: Partial<TextShape>
+  ): Promise<void> => {
+    try {
+      await canvasService.updateText(textId, updates)
+    } catch (error) {
+      console.error('Error updating text:', error)
+      setError('Failed to update text')
+    }
+  }, [])
+
+  // Delete a text
+  const deleteText = useCallback(async (textId: string): Promise<void> => {
+    try {
+      await canvasService.deleteText(textId)
+      
+      // Remove from selection if deleted
+      if (selectedShapes.has(textId)) {
+        setSelectedShapes(prev => {
+          const next = new Map(prev)
+          next.delete(textId)
+          return next
+        })
+        
+        // Update primary if it was deleted
+        if (primarySelectionId === textId) {
+          const remaining = Array.from(selectedShapes.keys()).filter(id => id !== textId)
+          setPrimarySelectionId(remaining.length > 0 ? remaining[0] : null)
+          setPrimarySelectionType(remaining.length > 0 ? selectedShapes.get(remaining[0]) || null : null)
+        }
+      }
+    } catch (error) {
+      console.error('Error deleting text:', error)
+      setError('Failed to delete text')
+    }
+  }, [selectedShapes, primarySelectionId])
+
+  // Change text color
+  const changeTextColor = useCallback(async (textId: string, color: string) => {
+    try {
+      await canvasService.updateText(textId, { color })
+    } catch (error) {
+      console.error('Error changing text color:', error)
+      setError('Failed to change text color')
+    }
+  }, [])
+
+  // ============================================================================
   // PR #6: UNIFIED SHAPE OPERATIONS (type-discriminated)
   // ============================================================================
 
@@ -982,10 +1114,79 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
           setPrimarySelectionType('line')
         }
       }
-    }
-  }, [user, username, circles, lines, selectedShapes, primarySelectionId, selectionLocked, showToast, selectRectangle])
+    } else if (shapeType === 'text') {
+      // PR #8: Text selection logic (similar to circle/line)
+      const text = texts.find(t => t.id === shapeId)
+      if (!text) {
+        showToast('Text not found')
+        return
+      }
 
-  // Unified deleteShape (handles rectangles, circles, lines, etc.)
+      if (text.selectedBy && text.selectedBy !== user.uid) {
+        showToast(`Text is currently selected by ${text.selectedByUsername || 'another user'}`)
+        return
+      }
+
+      if (!additive) {
+        // Clear all previous selections
+        for (const [prevId, prevType] of selectedShapes) {
+          if (prevType === 'rectangle') {
+            await canvasService.deselectRectangle(prevId, user.uid)
+          } else if (prevType === 'circle') {
+            await canvasService.deselectCircle(prevId, user.uid)
+          } else if (prevType === 'line') {
+            await canvasService.deselectLine(prevId, user.uid)
+          } else if (prevType === 'text') {
+            await canvasService.deselectText(prevId, user.uid)
+          }
+        }
+
+        // Select this one
+        const newSelection = new Map<string, ShapeType>()
+        newSelection.set(shapeId, 'text')
+        setSelectedShapes(newSelection)
+        setPrimarySelectionId(shapeId)
+        setPrimarySelectionType('text')
+        await canvasService.selectText(shapeId, user.uid, username)
+      } else {
+        // Additive selection toggle
+        if (selectedShapes.has(shapeId)) {
+          // Deselect
+          await canvasService.deselectText(shapeId, user.uid)
+
+          setSelectedShapes(prev => {
+            const next = new Map(prev)
+            next.delete(shapeId)
+
+            if (shapeId === primarySelectionId) {
+              if (next.size > 0) {
+                const newPrimary = Array.from(next.keys())[0]
+                setPrimarySelectionId(newPrimary)
+                setPrimarySelectionType(next.get(newPrimary) || null)
+              } else {
+                setPrimarySelectionId(null)
+                setPrimarySelectionType(null)
+              }
+            }
+            return next
+          })
+        } else {
+          // Add to selection
+          await canvasService.selectText(shapeId, user.uid, username)
+
+          setSelectedShapes(prev => {
+            const next = new Map(prev)
+            next.set(shapeId, 'text')
+            return next
+          })
+          setPrimarySelectionId(shapeId)
+          setPrimarySelectionType('text')
+        }
+      }
+    }
+  }, [user, username, circles, lines, texts, selectedShapes, primarySelectionId, selectionLocked, showToast, selectRectangle])
+
+  // Unified deleteShape (handles rectangles, circles, lines, text)
   const deleteShape = useCallback(async (shapeId: string, shapeType: ShapeType) => {
     if (shapeType === 'rectangle') {
       await deleteRectangle(shapeId)
@@ -993,10 +1194,12 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       await deleteCircle(shapeId)
     } else if (shapeType === 'line') {
       await deleteLine(shapeId)
+    } else if (shapeType === 'text') {
+      await deleteText(shapeId)
     }
-  }, [deleteRectangle, deleteCircle, deleteLine])
+  }, [deleteRectangle, deleteCircle, deleteLine, deleteText])
 
-  // Unified changeShapeColor (handles rectangles, circles, lines, etc.)
+  // Unified changeShapeColor (handles rectangles, circles, lines, text)
   const changeShapeColor = useCallback(async (shapeId: string, shapeType: ShapeType, color: string) => {
     if (shapeType === 'rectangle') {
       await changeRectangleColor(shapeId, color)
@@ -1004,8 +1207,10 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       await changeCircleColor(shapeId, color)
     } else if (shapeType === 'line') {
       await changeLineColor(shapeId, color)
+    } else if (shapeType === 'text') {
+      await changeTextColor(shapeId, color)
     }
-  }, [changeRectangleColor, changeCircleColor, changeLineColor])
+  }, [changeRectangleColor, changeCircleColor, changeLineColor, changeTextColor])
 
   // REFACTORED PR #5: Copy all selected shapes to clipboard (currently only rectangles)
   const copySelectedRectangles = useCallback(() => {
@@ -1182,7 +1387,8 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     rectangles,
     circles,  // PR #6
     lines,  // PR #7
-    shapeMode,  // PR #6, updated PR #7
+    texts,  // PR #8
+    shapeMode,  // PR #6, updated PR #7, updated PR #8
     selectedShapes,
     primarySelectionId,
     primarySelectionType,
@@ -1190,7 +1396,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     error,
     toastMessage,
     selectionLocked,
-    setShapeMode,  // PR #6, updated PR #7
+    setShapeMode,  // PR #6, updated PR #7, updated PR #8
     createRectangle,
     updateRectangle,
     resizeRectangle,
@@ -1206,9 +1412,13 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     updateLineEndpoints,  // PR #7
     deleteLine,  // PR #7
     changeLineColor,  // PR #7
-    selectShape,  // PR #6, updated PR #7
-    deleteShape,  // PR #6, updated PR #7
-    changeShapeColor,  // PR #6, updated PR #7
+    createText,  // PR #8
+    updateText,  // PR #8
+    deleteText,  // PR #8
+    changeTextColor,  // PR #8
+    selectShape,  // PR #6, updated PR #7, updated PR #8
+    deleteShape,  // PR #6, updated PR #7, updated PR #8
+    changeShapeColor,  // PR #6, updated PR #7, updated PR #8
     selectRectangle,
     selectMultiple,
     selectAll,
