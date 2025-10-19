@@ -272,8 +272,8 @@ const RectangleComponent: React.FC<RectangleProps> = ({
           {onRotate && (
             <RotateHandle
               shapeId={rectangle.id}
-              centerX={rectangle.x}
-              centerY={rectangle.y}
+              centerX={visualX + rectForHandles.width / 2}
+              centerY={visualY + rectForHandles.height / 2}
               currentRotation={rectangle.rotation || 0}
               isShiftPressed={isShiftPressed}
               onRotate={onRotate}
