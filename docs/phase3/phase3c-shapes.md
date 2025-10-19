@@ -7,6 +7,18 @@
 
 > **⚠️ Before Implementation:** Review this plan and ask questions before proceeding. Consider whether any plans need to change first. Also re-read the sibling file README.md to ensure broader context.
 
+> **📝 Document Updates:** This plan has been comprehensively updated with:
+> - **Shared Type Definitions**: Created `/src/shared/shapes.ts` with discriminated union types
+> - **Unified Selection State**: Refactored to use `Map<string, ShapeType>` in all code samples
+> - **Text Editing**: Updated to use Konva's `getAbsolutePosition()` (Option C) with `onEditingChange` callback
+> - **Font Scaling**: Text input font now scales with zoom (`16 * scale`) for better UX
+> - **Z-Index Helper**: Added `getMaxZIndexAcrossAllShapes()` method to query all collections
+> - **Keyboard Shortcuts**: Added `isTextEditing` check to prevent shortcuts during text input
+> - **Missing Methods**: Added `clearCircleSelection()` to canvasService
+> - **AI Tools**: Expanded with shape-specific tools for Circle, Line, and Text
+> - **Coordinate Transform**: Fixed `transformToCanvasCoords` signature to `(x, y, stage)`
+> - **Keyboard Shortcuts Testing**: Added comprehensive testing checklist for shape mode shortcuts
+
 ---
 
 ## Key Architectural Decisions
@@ -22,6 +34,7 @@
 - **Change**: `clipboardShapes: Shape[]` instead of `clipboardRectangles: Rectangle[]`
 - **Why**: Enables copy/paste across different shape types
 - **Impact**: Update clipboard logic in PR #5
+- **Type Definitions**: Create `/src/shared/shapes.ts` with discriminated union (see Implementation Notes)
 
 ### **3. Shape Mode Selector - Design for All 4 Shapes Upfront**
 - **Change**: Design UI for Rectangle, Circle, Line, Text in PR #5 (disable Line/Text initially)
@@ -44,6 +57,357 @@
 - **Later**: Consider migrating to unified `/shapes` collection in Phase 3E for cleaner architecture
 - **Why not now**: Avoid migration complexity, each PR stays independent
 - **When**: After all shapes work, write migration script (see Phase 3E planning)
+
+###  **6. High-Value Unit Tests (4 Critical Tests)**
+Based on complexity analysis, these are the must-have tests:
+
+1. **Circle Radial Resize Calculation** - Test that drag distance correctly maps to radius change
+2. **Line Angle/Arrowhead Rotation** - Test angle calculation and arrow orientation
+3. **Text Input Coordinate Transformation** - Test screen position calculation with zoom/pan
+4. **Mixed Shapes Z-Index Ordering** - Test that all shapes render in correct zIndex order
+
+See detailed test specs at end of each PR section.
+
+---
+
+## Implementation Notes
+
+### **Shared Type Definitions (All PRs)**
+
+Create `/src/shared/shapes.ts` for discriminated union types:
+
+```typescript
+/**
+ * Base properties shared by all shapes
+ */
+interface BaseShape {
+  id: string
+  type: 'rectangle' | 'circle' | 'line' | 'text'
+  x: number
+  y: number
+  color: string
+  zIndex: number
+  createdBy: string
+  createdAt: number
+  selectedBy: string | null
+  selectedAt: number | null
+}
+
+export interface Rectangle extends BaseShape {
+  type: 'rectangle'
+  width: number
+  height: number
+  updatedAt: number
+}
+
+export interface CircleShape extends BaseShape {
+  type: 'circle'
+  radius: number
+}
+
+export interface LineShape extends BaseShape {
+  type: 'line'
+  startX: number
+  startY: number
+  endX: number
+  endY: number
+  hasArrow: boolean
+}
+
+export interface TextShape extends BaseShape {
+  type: 'text'
+  text: string
+  fontSize: number
+  fontFamily: string
+  fontWeight?: 'normal' | 'bold'  // PR #8
+  fontStyle?: 'normal' | 'italic'  // PR #8
+}
+
+// Discriminated union
+export type Shape = Rectangle | CircleShape | LineShape | TextShape
+export type ShapeType = Shape['type']
+
+// Type guards
+export function isRectangle(shape: Shape): shape is Rectangle {
+  return shape.type === 'rectangle'
+}
+// ... (similar for isCircle, isLine, isText)
+```
+
+---
+
+### **Selection State Refactor (PR #5)**
+
+When implementing PR #5, **refactor selection state** from Phase 3B's approach:
+
+**Phase 3B (Old)**:
+```typescript
+selectedRectangleIds: Set<string>
+primarySelectionId: string | null
+```
+
+**Phase 3C (New)**:
+```typescript
+selectedShapeIds: Map<string, ShapeType>  // shapeId -> type
+primarySelectionId: string | null
+primarySelectionType: ShapeType | null
+```
+
+**Why**: Simplifies multi-select across shape types, cleaner clipboard logic.
+
+**Migration**: Update all components that check `selectedRectangleIds.has(id)` to use `selectedShapeIds.has(id)`.
+
+---
+
+### **Clipboard Refactor (PR #5)**
+
+Update clipboard to support discriminated union:
+
+**Phase 3B (Old)**:
+```typescript
+clipboardRectangles: Rectangle[]
+```
+
+**Phase 3C (New)**:
+```typescript
+type Shape = Rectangle | CircleShape | LineShape | TextShape
+clipboardShapes: Shape[]
+```
+
+**Paste Logic**:
+```typescript
+for (const shape of clipboardShapes) {
+  switch (shape.type) {
+    case 'rectangle':
+      await createRectangle(shape.x + OFFSET, shape.y + OFFSET, ...)
+      break
+    case 'circle':
+      await createCircle(shape.x + OFFSET, shape.y + OFFSET, ...)
+      break
+    // ... other types
+  }
+}
+```
+
+---
+
+### **Text Editing Implementation (PR #7)**
+
+**Simplified DOM Overlay Approach (Option C: Konva getAbsolutePosition):**
+
+```typescript
+// In Text component
+interface TextProps {
+  textShape: TextShape
+  isSelected: boolean
+  isPrimary: boolean
+  onSelect: (additive: boolean) => void
+  onDragEnd: (newX: number, newY: number) => void
+  onTextChange: (newText: string) => void
+  onEditingChange: (isEditing: boolean) => void  // NEW: Notify Canvas to disable pan
+}
+
+const Text: React.FC<TextProps> = ({
+  textShape,
+  isSelected,
+  isPrimary,
+  onSelect,
+  onDragEnd,
+  onTextChange,
+  onEditingChange
+}) => {
+  const [isEditing, setIsEditing] = useState(false)
+  const textRef = useRef<Konva.Text>(null)
+
+  const handleDblClick = () => {
+    setIsEditing(true)
+    onEditingChange(true)  // Disable pan in Canvas
+  }
+
+  useEffect(() => {
+    if (!isEditing || !textRef.current) return
+
+    const textNode = textRef.current
+    const stage = textNode.getStage()
+    if (!stage) return
+
+    // Create input
+    const input = document.createElement('input')
+    input.value = textShape.text
+    input.style.position = 'absolute'
+    input.style.zIndex = '10000'  // Above canvas
+    
+    // Use Konva's getAbsolutePosition (handles all transforms!)
+    const absPos = textNode.getAbsolutePosition()
+    const scale = stage.scaleX()
+    
+    input.style.left = `${absPos.x}px`
+    input.style.top = `${absPos.y}px`
+    input.style.fontSize = `${16 * scale}px`  // Scale with zoom for better UX
+    input.style.fontFamily = textShape.fontFamily
+    input.style.border = '2px solid #3b82f6'
+    input.style.padding = '2px 4px'
+    input.style.background = 'white'
+    
+    document.body.appendChild(input)
+    input.focus()
+    input.select()
+    
+    // Finish editing
+    const handleFinish = () => {
+      const newText = input.value.trim()
+      if (newText && newText.length <= 200) {  // Character limit
+        onTextChange(newText)
+      }
+      document.body.removeChild(input)
+      setIsEditing(false)
+      onEditingChange(false)  // Re-enable pan in Canvas
+    }
+    
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === 'Escape') {
+        e.preventDefault()
+        handleFinish()
+      }
+    })
+    
+    input.addEventListener('blur', handleFinish)
+    
+    // Cleanup
+    return () => {
+      if (document.body.contains(input)) {
+        document.body.removeChild(input)
+        onEditingChange(false)  // Ensure pan re-enabled
+      }
+    }
+  }, [isEditing, textShape, onTextChange, onEditingChange])
+
+  return (
+    <Group
+      x={textShape.x}
+      y={textShape.y}
+      draggable={isSelected && !isEditing}
+      onDragEnd={handleDragEnd}
+      onClick={handleClick}
+      onDblClick={handleDblClick}
+    >
+      <KonvaText
+        ref={textRef}
+        text={textShape.text}
+        fontSize={textShape.fontSize}
+        fontFamily={textShape.fontFamily}
+        fill={textShape.color}
+        stroke={isSelected ? SELECTION_COLORS.STROKE : undefined}
+        strokeWidth={isSelected ? 1 : 0}
+      />
+    </Group>
+  )
+}
+```
+
+**In Canvas.tsx (to disable pan during text editing):**
+```typescript
+const [isTextEditing, setIsTextEditing] = useState(false)
+
+<Stage
+  draggable={!isTextEditing && isPanning && !isRectangleDragging}
+  ...
+>
+  {/* ... */}
+  <Text
+    textShape={text}
+    onEditingChange={setIsTextEditing}  // Track editing state
+    ...
+  />
+</Stage>
+```
+
+**Simplifications Applied:**
+- ✅ Pan disabled during editing (via `onEditingChange` callback)
+- ✅ Font scaled with zoom: `16 * scale` (better UX, still simple)
+- ✅ Uses Konva's `getAbsolutePosition()` (no props needed, handles all transforms)
+- ✅ Single line only (`<input>` not `<textarea>`)
+- ✅ Basic styling
+
+**Why Option C (getAbsolutePosition)**:
+- No stageRef prop passing (cleaner boundaries)
+- Konva handles coordinate math (more robust)
+- Future-proof (works with any canvas transforms)
+- Text component notifies Canvas via callback to disable pan
+
+**Complexity**: ~35 lines instead of 50+
+
+---
+
+### **AI Agent Shape Disambiguation (All PRs)**
+
+**Update system prompt** to disambiguate shape operations:
+
+```typescript
+// functions/src/utils/systemPrompt.ts
+
+You can create, modify, move, and delete shapes:
+- Rectangles: "add a square", "create a box", "make a rectangle"
+- Circles: "add a circle", "create a dot", "make a round shape"
+- Lines: "draw a line", "create an arrow from X to Y"
+- Text: "add text saying...", "write...", "label this with..."
+
+When the user says "shape" without specifying:
+- If there's a selection, operate on the selected shape(s)
+- If creating new, ask for clarification or default to rectangle
+- Use context clues: "round" → circle, "arrow" → line, "label"/"write" → text
+```
+
+---
+
+### **Z-Index Helper Functions (PR #5+)**
+
+**Important**: Phase 3C introduces shapes across multiple Firebase collections.
+
+```typescript
+// canvasService.ts
+
+// EXISTING (Phase 3A): Works only for rectangles
+private getMaxZIndex(rectangles: Rectangle[]): number {
+  return Math.max(0, ...rectangles.map(r => r.zIndex || 0))
+}
+
+// NEW (Phase 3C): Queries ALL shape collections
+async getMaxZIndexAcrossAllShapes(): Promise<number> {
+  const [rectangles, circles, lines, texts] = await Promise.all([
+    this.getAllRectangles(),
+    this.getAllCircles(),      // PR #5
+    this.getAllLines(),         // PR #6
+    this.getAllTextShapes(),    // PR #7
+  ])
+  
+  const allZIndexes = [
+    ...rectangles.map(r => r.zIndex || 0),
+    ...circles.map(c => c.zIndex || 0),
+    ...lines.map(l => l.zIndex || 0),
+    ...texts.map(t => t.zIndex || 0),
+  ]
+  
+  return Math.max(0, ...allZIndexes)
+}
+
+// Usage when creating any new shape:
+const maxZ = await this.getMaxZIndexAcrossAllShapes()
+const newShape = {
+  ...shapeData,
+  zIndex: maxZ + 1000,  // Maintain gaps for layer operations
+}
+```
+
+**Call Sites**:
+- `createRectangle()` - already uses `getMaxZIndex()` locally
+- `createCircle()` - use `getMaxZIndexAcrossAllShapes()` (PR #5)
+- `createLine()` - use `getMaxZIndexAcrossAllShapes()` (PR #6)
+- `createTextShape()` - use `getMaxZIndexAcrossAllShapes()` (PR #7)
+
+**Why Two Functions**:
+- `getMaxZIndex(rectangles)` - Private, takes in-memory array (fast, for existing rect code)
+- `getMaxZIndexAcrossAllShapes()` - Public async, queries Firebase (correct for new shapes)
 
 ---
 
@@ -410,6 +774,14 @@ export const selectCircle = async (
   })
 }
 
+export const clearCircleSelection = async (circleId: string): Promise<void> => {
+  const circleRef = dbRef(`circles/${circleId}`)
+  await dbUpdate(circleRef, {
+    selectedBy: null,
+    selectedAt: null
+  })
+}
+
 export const onCirclesChange = (callback: (circles: CircleShape[]) => void): (() => void) => {
   const circlesRef = dbRef('circles')
   
@@ -466,6 +838,7 @@ Add circle state and operations:
 
 ```typescript
 import type { CircleShape } from '../components/canvas/Circle'
+import type { ShapeType } from '../shared/shapes'
 
 interface CanvasContextType {
   // Existing rectangle state
@@ -474,11 +847,10 @@ interface CanvasContextType {
   // NEW: Circle state
   circles: CircleShape[]
   
-  // Selection works across shapes (from Phase 3B)
-  selectedRectangleIds: Set<string>
-  selectedCircleIds: Set<string>  // NEW
+  // REFACTORED: Unified selection (from Phase 3B, now with shapes)
+  selectedShapes: Map<string, ShapeType>  // CHANGED from separate Sets
   primarySelectionId: string | null
-  primarySelectionType: 'rectangle' | 'circle' | null  // NEW
+  primarySelectionType: ShapeType | null  // CHANGED to use ShapeType
   
   // NEW: Circle operations
   createCircle: (x: number, y: number, radius: number) => Promise<CircleShape | null>
@@ -487,13 +859,17 @@ interface CanvasContextType {
   deleteCircle: (circleId: string) => Promise<void>
   changeCircleColor: (circleId: string, color: string) => Promise<void>
   
+  // UPDATED: Selection methods now take ShapeType
+  selectShape: (shapeId: string, shapeType: ShapeType, additive?: boolean) => Promise<void>
+  selectMultiple: (shapeIds: Array<{id: string, type: ShapeType}>) => Promise<void>
+  
   // ... existing methods
 }
 
 // Implementation
 const [circles, setCircles] = useState<CircleShape[]>([])
-const [selectedCircleIds, setSelectedCircleIds] = useState<Set<string>>(new Set())
-const [primarySelectionType, setPrimarySelectionType] = useState<'rectangle' | 'circle' | null>(null)
+const [selectedShapes, setSelectedShapes] = useState<Map<string, ShapeType>>(new Map())
+const [primarySelectionType, setPrimarySelectionType] = useState<ShapeType | null>(null)
 
 // Listen to circles collection
 useEffect(() => {
@@ -520,9 +896,8 @@ const createCircle = useCallback(async (
   try {
     const circle = await canvasService.createCircle(x, y, radius, DEFAULT_RECT.FILL, user.uid)
     if (circle) {
-      // Select the new circle
-      setSelectedCircleIds(new Set([circle.id]))
-      setSelectedRectangleIds(new Set())  // Clear rectangle selection
+      // Select the new circle using unified selection
+      setSelectedShapes(new Map([[circle.id, 'circle']]))
       setPrimarySelectionId(circle.id)
       setPrimarySelectionType('circle')
       showToast('Circle created')
@@ -547,96 +922,125 @@ const updateCircleRadius = useCallback(async (circleId: string, radius: number) 
 const deleteCircle = useCallback(async (circleId: string) => {
   try {
     await canvasService.deleteCircle(circleId)
-    // Remove from selection
-    setSelectedCircleIds(prev => {
-      const next = new Set(prev)
+    // Remove from unified selection
+    setSelectedShapes(prev => {
+      const next = new Map(prev)
       next.delete(circleId)
       return next
     })
     if (primarySelectionId === circleId) {
-      setPrimarySelectionId(null)
-      setPrimarySelectionType(null)
+      const remaining = Array.from(selectedShapes.keys()).filter(id => id !== circleId)
+      setPrimarySelectionId(remaining[0] || null)
+      setPrimarySelectionType(remaining[0] ? selectedShapes.get(remaining[0])! : null)
     }
   } catch (err) {
     console.error('Error deleting circle:', err)
     setError('Failed to delete circle')
   }
-}, [primarySelectionId])
+}, [primarySelectionId, selectedShapes])
 
 // ... other circle operations
 
-// UPDATE: Selection methods to handle both rectangles and circles
-const selectCircle = useCallback(async (circleId: string, additive: boolean = false) => {
+// REFACTORED: Unified selection method for all shapes
+const selectShape = useCallback(async (
+  shapeId: string,
+  shapeType: ShapeType,
+  additive: boolean = false
+) => {
   if (selectionLocked) return
   if (!user) return
   
-  const circle = circles.find(c => c.id === circleId)
-  if (!circle) return
+  // Find the shape
+  let shape
+  if (shapeType === 'rectangle') {
+    shape = rectangles.find(r => r.id === shapeId)
+  } else if (shapeType === 'circle') {
+    shape = circles.find(c => c.id === shapeId)
+  }
+  // ... etc for line, text
+  
+  if (!shape) return
+  
+  // Check if already selected by another user
+  if (shape.selectedBy && shape.selectedBy !== user.uid) {
+    showToast(`This ${shapeType} is currently selected by another user`)
+    return
+  }
   
   if (!additive) {
-    // Clear all selections, select this circle
-    setSelectedRectangleIds(new Set())
-    setSelectedCircleIds(new Set([circleId]))
-    setPrimarySelectionId(circleId)
-    setPrimarySelectionType('circle')
+    // Clear all selections, select this shape
+    await clearSelection()
+    setSelectedShapes(new Map([[shapeId, shapeType]]))
+    setPrimarySelectionId(shapeId)
+    setPrimarySelectionType(shapeType)
+    
+    // Update Firebase
+    if (shapeType === 'rectangle') {
+      await canvasService.selectRectangle(shapeId, user.uid, user.displayName || 'User')
+    } else if (shapeType === 'circle') {
+      await canvasService.selectCircle(shapeId, user.uid, user.displayName || 'User')
+    }
+    // ... etc
   } else {
-    // Toggle in/out of circle selection
-    setSelectedCircleIds(prev => {
-      const next = new Set(prev)
-      if (next.has(circleId)) {
-        next.delete(circleId)
-        if (circleId === primarySelectionId) {
-          // Set new primary from remaining selection
-          const allSelected = [...selectedRectangleIds, ...next]
-          setPrimarySelectionId(allSelected[0] || null)
-          setPrimarySelectionType(allSelected[0] ? 'circle' : null)
+    // Additive selection
+    setSelectedShapes(prev => {
+      const next = new Map(prev)
+      if (next.has(shapeId)) {
+        next.delete(shapeId)
+        if (shapeId === primarySelectionId) {
+          const remaining = Array.from(next.keys())
+          setPrimarySelectionId(remaining[0] || null)
+          setPrimarySelectionType(remaining[0] ? next.get(remaining[0])! : null)
         }
       } else {
-        next.add(circleId)
-        setPrimarySelectionId(circleId)
-        setPrimarySelectionType('circle')
+        if (next.size >= MAX_SELECTION_LIMIT) {
+          showToast(`Selection limit reached (${MAX_SELECTION_LIMIT})`)
+          return prev
+        }
+        next.set(shapeId, shapeType)
+        setPrimarySelectionId(shapeId)
+        setPrimarySelectionType(shapeType)
       }
       return next
     })
   }
-}, [selectionLocked, user, circles, primarySelectionId, selectedRectangleIds])
+}, [selectionLocked, user, rectangles, circles, primarySelectionId, selectedShapes, showToast])
 
-// UPDATE: Delete selected to handle both shapes
+// UPDATE: Delete selected to handle all shapes
 const deleteSelectedShapes = useCallback(async () => {
-  const rectIds = Array.from(selectedRectangleIds)
-  const circleIds = Array.from(selectedCircleIds)
+  const shapesToDelete = Array.from(selectedShapes.entries())
   
-  for (const id of rectIds) {
-    await canvasService.deleteRectangle(id)
-  }
-  for (const id of circleIds) {
-    await canvasService.deleteCircle(id)
+  for (const [shapeId, shapeType] of shapesToDelete) {
+    if (shapeType === 'rectangle') {
+      await canvasService.deleteRectangle(shapeId)
+    } else if (shapeType === 'circle') {
+      await canvasService.deleteCircle(shapeId)
+    }
+    // ... etc for line, text
   }
   
-  setSelectedRectangleIds(new Set())
-  setSelectedCircleIds(new Set())
+  setSelectedShapes(new Map())
   setPrimarySelectionId(null)
   setPrimarySelectionType(null)
   
-  const total = rectIds.length + circleIds.length
-  showToast(`Deleted ${total} shape${total > 1 ? 's' : ''}`)
-}, [selectedRectangleIds, selectedCircleIds, showToast])
+  showToast(`Deleted ${shapesToDelete.length} shape${shapesToDelete.length > 1 ? 's' : ''}`)
+}, [selectedShapes, showToast])
 
-// UPDATE: Change color to handle both shapes
+// UPDATE: Change color to handle all shapes
 const changeSelectedShapesColor = useCallback(async (color: string) => {
-  const rectIds = Array.from(selectedRectangleIds)
-  const circleIds = Array.from(selectedCircleIds)
+  const shapesToUpdate = Array.from(selectedShapes.entries())
   
-  for (const id of rectIds) {
-    await canvasService.changeRectangleColor(id, color)
-  }
-  for (const id of circleIds) {
-    await canvasService.changeCircleColor(id, color)
+  for (const [shapeId, shapeType] of shapesToUpdate) {
+    if (shapeType === 'rectangle') {
+      await canvasService.changeRectangleColor(shapeId, color)
+    } else if (shapeType === 'circle') {
+      await canvasService.changeCircleColor(shapeId, color)
+    }
+    // ... etc for line, text
   }
   
-  const total = rectIds.length + circleIds.length
-  showToast(`Changed color of ${total} shape${total > 1 ? 's' : ''}`)
-}, [selectedRectangleIds, selectedCircleIds, showToast])
+  showToast(`Changed color of ${shapesToUpdate.length} shape${shapesToUpdate.length > 1 ? 's' : ''}`)
+}, [selectedShapes, showToast])
 ```
 
 #### 3. `/src/components/canvas/Canvas.tsx`
@@ -685,22 +1089,26 @@ const handleDoubleClick = useCallback((e: KonvaEventObject<MouseEvent>) => {
   const pos = stage.getPointerPosition()
   if (!pos) return
   
-  const canvasPos = transformToCanvasCoords(pos)
+  const canvasPos = transformToCanvasCoords(pos.x, pos.y, stage)  // FIXED: separate x, y args
+  if (!canvasPos) return
   
   if (shapeMode === 'rectangle') {
     createRectangle(canvasPos.x, canvasPos.y)
   } else if (shapeMode === 'circle') {
     createCircle(canvasPos.x, canvasPos.y, 50)  // Default radius 50
   }
-}, [shapeMode, createRectangle, createCircle, selectionLocked, transformToCanvasCoords])
+}, [shapeMode, createRectangle, createCircle, selectionLocked])
 
 // Update keyboard handler for shape mode
 const handleKeyDown = useCallback((e: KeyboardEvent) => {
   if (selectionLocked) return
   
+  // CRITICAL: Don't trigger shortcuts when user is typing in an input
+  if (isTextEditing) return  // NEW: Pass down from Text component via onEditingChange
+  
   // ... existing shortcuts
   
-  // Shape mode shortcuts
+  // Shape mode shortcuts (only when NOT editing text)
   if (e.key === 'r' || e.key === 'R') {
     e.preventDefault()
     setShapeMode('rectangle')
@@ -711,14 +1119,24 @@ const handleKeyDown = useCallback((e: KeyboardEvent) => {
     setShapeMode('circle')
     return
   }
+  if (e.key === 'l' || e.key === 'L') {
+    e.preventDefault()
+    setShapeMode('line')
+    return
+  }
+  if (e.key === 't' || e.key === 'T') {
+    e.preventDefault()
+    setShapeMode('text')
+    return
+  }
   
-  // Delete: works on both rectangles and circles
+  // Delete: works on all shapes
   if (e.key === 'Delete' || e.key === 'Backspace') {
     e.preventDefault()
     deleteSelectedShapes()
     return
   }
-}, [selectionLocked, deleteSelectedShapes])
+}, [selectionLocked, isTextEditing, deleteSelectedShapes])
 
 // Render
 return (
@@ -782,9 +1200,10 @@ export const CIRCLE_CONSTRAINTS = {
 ```
 
 #### 5. `/functions/src/tools.ts` (AI Support)
-Add createCircle tool:
+Add shape-specific tools:
 
 ```typescript
+// PR #5: Circle tools
 export const createCircle = tool({
   description: 'Create a circle on the canvas',
   parameters: z.object({
@@ -796,10 +1215,78 @@ export const createCircle = tool({
   execute: async () => ({ success: true })
 })
 
+export const updateCircleRadius = tool({
+  description: 'Change the radius of the selected circle',
+  parameters: z.object({
+    radius: z.number().describe('New radius in pixels (10-1500)')
+  }),
+  execute: async () => ({ success: true })
+})
+
+// PR #6: Line tools
+export const createLine = tool({
+  description: 'Create a line on the canvas',
+  parameters: z.object({
+    startX: z.number().describe('Start X position'),
+    startY: z.number().describe('Start Y position'),
+    endX: z.number().describe('End X position'),
+    endY: z.number().describe('End Y position'),
+    hasArrow: z.boolean().optional().describe('Whether line has an arrowhead. Default false.'),
+    color: z.string().describe('Color as hex code. Must be #ef4444 (red), #3b82f6 (blue), or #22c55e (green).')
+  }),
+  execute: async () => ({ success: true })
+})
+
+export const updateLineEndpoints = tool({
+  description: 'Update the start or end position of a line',
+  parameters: z.object({
+    startX: z.number().optional(),
+    startY: z.number().optional(),
+    endX: z.number().optional(),
+    endY: z.number().optional()
+  }),
+  execute: async () => ({ success: true })
+})
+
+// PR #7: Text tools
+export const createText = tool({
+  description: 'Create text on the canvas',
+  parameters: z.object({
+    x: z.number().optional().describe('X position. Defaults to viewport center.'),
+    y: z.number().optional().describe('Y position. Defaults to viewport center.'),
+    text: z.string().describe('The text content (max 200 characters)'),
+    fontSize: z.number().optional().describe('Font size in pixels. Default 16.'),
+    color: z.string().describe('Color as hex code. Must be #ef4444 (red), #3b82f6 (blue), or #22c55e (green).')
+  }),
+  execute: async () => ({ success: true })
+})
+
+export const updateTextContent = tool({
+  description: 'Update the text content of a text shape',
+  parameters: z.object({
+    text: z.string().describe('The new text content (max 200 characters)')
+  }),
+  execute: async () => ({ success: true })
+})
+
+export const updateTextFontSize = tool({
+  description: 'Change the font size of the selected text',
+  parameters: z.object({
+    fontSize: z.number().describe('New font size in pixels')
+  }),
+  execute: async () => ({ success: true })
+})
+
 // Add to tools object
 export const tools = {
-  // ... existing
-  createCircle  // NEW
+  // ... existing (createRectangle, resizeRectangle, etc.)
+  createCircle,        // PR #5
+  updateCircleRadius,  // PR #5
+  createLine,          // PR #6
+  updateLineEndpoints, // PR #6
+  createText,          // PR #7
+  updateTextContent,   // PR #7
+  updateTextFontSize   // PR #7
 }
 ```
 
@@ -858,6 +1345,13 @@ case 'resizeRectangle':
 - [ ] Mode selector shows current mode visually
 - [ ] Default circle radius is 50px
 - [ ] Circles appear at click position
+
+**Manual Testing - Keyboard Shortcuts:**
+- [ ] `R` key switches to rectangle mode
+- [ ] `C` key switches to circle mode
+- [ ] Mode shortcuts work immediately
+- [ ] KeyboardShortcuts component updated with `R` and `C` shortcuts
+- [ ] Shortcuts display in collapsed sidebar section
 
 **Manual Testing - Circle Operations:**
 - [ ] Can select circles (click)
