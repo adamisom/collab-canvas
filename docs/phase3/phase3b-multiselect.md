@@ -1162,6 +1162,77 @@ const captureSnapshot = useCallback((): CommandSnapshot => {
 
 ### Testing Checklist
 
+**High-Value Unit Tests** 🧪
+
+Before implementing, consider these unit tests for critical logic:
+
+1. **`transformToCanvasCoords` (Canvas.tsx)** - HIGH VALUE
+   ```typescript
+   // Test: Coordinate transformation with zoom
+   // Given: Stage scaled to 2x, point at screen (200, 200), stage position (50, 50)
+   // Expected: Canvas coords (75, 75) = ((200 - 50) / 2, (200 - 50) / 2)
+   ```
+   **Why**: Critical for selection box working correctly with zoom/pan. Easy to break.
+
+2. **`selectMultiple` race condition handling (CanvasContext.tsx)** - HIGH VALUE
+   ```typescript
+   // Test: Skip rectangles already selected by other users
+   // Given: 5 rectangles, 2 have selectedBy="otherUser"
+   // Expected: Only 3 selected, toast shows "Selected 3, 2 already taken by other users"
+   ```
+   **Why**: Core multi-user conflict resolution. Complex logic.
+
+3. **`selectMultiple` limit enforcement (CanvasContext.tsx)** - HIGH VALUE
+   ```typescript
+   // Test: Enforce 25 rectangle limit
+   // Given: 30 rectangles in selection box
+   // Expected: None selected, toast shows "Selection too large (max 25 rectangles)"
+   ```
+   **Why**: Important UX constraint, edge case handling.
+
+4. **`pasteRectangles` relative positioning (CanvasContext.tsx)** - HIGH VALUE
+   ```typescript
+   // Test: Maintain relative positions when pasting multiple
+   // Given: 3 clipboard rectangles at [(10,10), (50,10), (30,50)]
+   // Expected: Pasted at [(30,30), (70,30), (50,70)] - all offset by (20,20), spacing preserved
+   ```
+   **Why**: Complex spatial calculation. Easy to get wrong. High user impact.
+
+5. **ColorPicker `addToHistory` (ColorPicker.tsx)** - MEDIUM-HIGH VALUE
+   ```typescript
+   // Test: Enforce MAX_HISTORY=5, deduplicate, newest first
+   // Given: History [A,B,C,D,E], add B
+   // Expected: History [B,A,C,D,E] (B moved to front, still 5 items)
+   
+   // Test: Pop oldest when at limit
+   // Given: History [A,B,C,D,E], add F
+   // Expected: History [F,A,B,C,D] (E dropped)
+   ```
+   **Why**: Clear business logic, localStorage interaction.
+
+6. **ColorPicker `hasMixedColors` (ColorPicker.tsx)** - MEDIUM VALUE
+   ```typescript
+   // Test: Detect mixed colors correctly
+   // Given: 3 selected, colors ["#FF0000", "#FF0000", "#00FF00"]
+   // Expected: hasMixedColors = true
+   
+   // Test: Single color not mixed
+   // Given: 3 selected, all color "#FF0000"
+   // Expected: hasMixedColors = false
+   ```
+   **Why**: Drives UI state (? indicator). Simple but important.
+
+**Lower Priority (Better as Integration Tests):**
+- Mouse/keyboard event handlers (test via integration)
+- SelectionBox rendering (visual component)
+- `copySelectedRectangles` (straightforward filter/map)
+- `deleteSelectedRectangles` (simple loop)
+- `changeSelectedRectanglesColor` (simple loop)
+
+**Recommendation**: Focus on tests #1-4 (coordinate transform, selectMultiple, paste positioning). These have the highest complexity-to-value ratio.
+
+---
+
 **Manual Testing - Selection Methods:**
 - [ ] Click rectangle selects single (clears others)
 - [ ] Cmd/Ctrl+Click adds rectangle to selection
