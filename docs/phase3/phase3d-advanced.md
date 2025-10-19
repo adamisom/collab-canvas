@@ -1104,7 +1104,7 @@ describe('getSelectedShapesFromMap', () => {
 ### What This PR Delivers
 
 **Selection Tools:**
-1. **Lasso Select** - Draw freeform path to select shapes (uses "any corner inside" logic)
+1. **Lasso Select** - Draw freeform path to select shapes (uses "center inside" logic)
 2. **Select All of Type** - Select all rectangles, circles, lines, or text
 3. **Invert Selection** - Select unselected, deselect selected
 
@@ -1127,7 +1127,7 @@ describe('getSelectedShapesFromMap', () => {
   - First, calculate lasso's bounding box
   - Filter shapes to only those whose bounds intersect lasso bounds
   - Then run expensive point-in-polygon check only on candidates
-- Use point-in-polygon algorithm with "any corner inside" logic (more forgiving than drag box)
+- Use point-in-polygon algorithm with "center inside" logic (simpler and faster than checking corners)
 - **Selection limit**: Stop at 25 shapes (enforced during selection, not after)
 - Multiple exit paths: Escape, Shift+L toggle, or failed lasso (< 3 points)
 
@@ -1225,7 +1225,7 @@ export const boundsIntersect = (a: Bounds, b: Bounds): boolean => {
 
 /**
  * Check if shape is within lasso selection
- * Uses "any corner inside" logic (more forgiving than Phase 3B's drag box)
+ * Uses "center inside" logic (simpler and faster than checking corners)
  * Includes bounding box pre-filter for performance
  */
 export const isShapeInLasso = (shape: Shape, lassoPoints: number[]): boolean => {
@@ -1237,16 +1237,11 @@ export const isShapeInLasso = (shape: Shape, lassoPoints: number[]): boolean => 
     return false  // Shape is definitely outside lasso
   }
   
-  // Check all four corners with expensive polygon test
-  const corners = [
-    { x: bounds.x, y: bounds.y },
-    { x: bounds.x + bounds.width, y: bounds.y },
-    { x: bounds.x + bounds.width, y: bounds.y + bounds.height },
-    { x: bounds.x, y: bounds.y + bounds.height }
-  ]
+  // Check if shape center is inside lasso
+  const centerX = bounds.x + bounds.width / 2
+  const centerY = bounds.y + bounds.height / 2
   
-  // Shape is selected if ANY corner is inside (organic selection)
-  return corners.some(corner => isPointInPolygon(corner, lassoPoints))
+  return isPointInPolygon({ x: centerX, y: centerY }, lassoPoints)
 }
 ```
 
@@ -1634,7 +1629,7 @@ export const tools = {
 - [ ] Escape key exits lasso mode
 - [ ] Failed lasso (< 3 points) automatically exits mode
 - [ ] Can draw lasso path
-- [ ] Lasso selects shapes with any corner inside path (organic selection)
+- [ ] Lasso selects shapes with center inside path
 - [ ] Lasso works with all shape types
 - [ ] Can select all rectangles
 - [ ] Can select all circles
