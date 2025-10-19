@@ -10,19 +10,24 @@
 > **📝 Document Updates:** This plan has been comprehensively updated with:
 > - **PR Renumbering**: PRs are now #10-12 (following Phase 3C's PRs #5-9)
 > - **Unified Selection State**: All code samples use `selectedShapes: Map<string, ShapeType>` from Phase 3C
-> - **Type Imports**: Fixed to use `shared/shapes.ts` for consistency
+> - **Type Imports**: Fixed to use `shared/shapes.ts` for consistency (all imports corrected)
 > - **Shared Utilities**: Extracted common shape operations to reusable helpers
 > - **Lasso Shortcut Fix**: Changed from `L` (conflicts with Line mode) to `Shift+L`
 > - **Lasso Performance**: Added bounding box pre-filter for 3-10x speedup
 > - **Lasso Selection Limit**: Enforces 25-shape limit during selection
-> - **Text Bounds**: Added measuredWidth/Height fields for accurate alignment
+> - **Text Measurements**: Added `measuredWidth`/`measuredHeight` to TextShape with debounced Firebase updates
+> - **Text Alignment**: Accurate cross-user alignment using persisted Konva measurements
+> - **Rotation Property**: Added `rotation?: number` to BaseShape interface
 > - **Rotation Handle**: Fixed angle calculation bug and added center point guidance
+> - **Rotation Keyboard**: Inlined shape lookup logic (no helper function needed)
+> - **Shift Key Threading**: Complete prop chain from Canvas → shape components → RotateHandle
 > - **Batch Updates**: Alignment uses `Promise.all()` for better performance
 > - **AI Tool Specs**: Full implementation with client executor integration
 > - **CSS Samples**: Complete stylesheets for all new UI components
-> - **UI Components**: Select-all-type modal, rotation angle indicator
-> - **High-Value Tests**: 5 test suites covering critical algorithms
+> - **UI Components**: Select-all-type modal, rotation angle indicator, debounced text measurement
+> - **High-Value Tests**: 4 test suites covering critical algorithms
 > - **Constants**: Extracted magic numbers to shared constants
+> - **Missing Imports**: Added all required imports (isShapeInLasso, INTERACTION_CONSTANTS, etc.)
 
 ---
 
@@ -330,7 +335,8 @@ export interface Bounds {
 
 /**
  * Get bounding box for any shape type
- * For text, uses measuredWidth/Height if available, otherwise estimates
+ * For text, uses measuredWidth/Height from Firebase (populated via debounced Konva measurements)
+ * Falls back to estimation if measurements unavailable
  */
 export const getShapeBounds = (shape: Shape): Bounds => {
   switch (shape.type) {
@@ -363,7 +369,7 @@ export const getShapeBounds = (shape: Shape): Bounds => {
       }
     
     case 'text':
-      // Use measured bounds if available (populated from Konva refs)
+      // Use measured bounds if available (persisted to Firebase for cross-user consistency)
       if (shape.measuredWidth && shape.measuredHeight) {
         return {
           x: shape.x,
@@ -372,7 +378,7 @@ export const getShapeBounds = (shape: Shape): Bounds => {
           height: shape.measuredHeight
         }
       }
-      // Fallback to estimation
+      // Fallback to estimation if not yet measured
       const estimatedWidth = shape.text.length * shape.fontSize * 0.6
       const estimatedHeight = shape.fontSize * 1.2
       return {
@@ -466,8 +472,7 @@ export const updateShapeProperty = async (
 
 #### `/src/utils/alignmentHelpers.ts`
 ```typescript
-import type { Shape } from '../shared/shapes'
-import type { ShapeType } from '../shared/types'
+import type { Shape, ShapeType } from '../shared/shapes'
 import { getShapeBounds, type Bounds } from './shapeHelpers'
 
 // Calculate new position for shape after alignment
@@ -1251,6 +1256,9 @@ export const isShapeInLasso = (shape: Shape, lassoPoints: number[]): boolean => 
 Add selection tools:
 
 ```typescript
+import { isShapeInLasso } from '../utils/selectionHelpers'
+import { INTERACTION_CONSTANTS } from '../utils/constants'
+
 interface CanvasContextType {
   // ... existing
   
@@ -1893,12 +1901,25 @@ export default RotateHandle
 ### Files to Update
 
 #### 1. `/src/shared/shapes.ts`
-Add rotation property to BaseShape:
+Add rotation property to BaseShape and measured dimensions to TextShape:
 
 ```typescript
 interface BaseShape {
   // ... existing properties
   rotation?: number  // Rotation in degrees (0-360), defaults to 0
+}
+
+// Update TextShape interface
+export interface TextShape extends BaseShape {
+  type: 'text'
+  text: string
+  fontSize: number
+  fontFamily: string
+  fontWeight?: 'normal' | 'bold'
+  fontStyle?: 'normal' | 'italic'
+  // NEW: Measured dimensions for accurate alignment (populated via Konva, debounced)
+  measuredWidth?: number   // Actual rendered width from Konva Text node
+  measuredHeight?: number  // Actual rendered height from Konva Text node
 }
 ```
 
@@ -1973,24 +1994,115 @@ const handleKeyDown = useCallback((e: KeyboardEvent) => {
   // Rotate 15° clockwise: Cmd+R (IMPORTANT: preventDefault to avoid browser reload!)
   if ((e.metaKey || e.ctrlKey) && e.key === 'r') {
     e.preventDefault()  // Critical: prevent browser reload
+    
     if (primarySelectionId && primarySelectionType) {
-      const shape = getShapeById(primarySelectionId, primarySelectionType)
-      if (shape) {
-        const currentRotation = shape.rotation || 0
-        rotateShape(primarySelectionId, primarySelectionType, currentRotation + 15)
+      // Get current rotation from the selected shape
+      let currentRotation = 0
+      
+      switch (primarySelectionType) {
+        case 'rectangle':
+          const rect = rectangles.find(r => r.id === primarySelectionId)
+          if (rect) currentRotation = rect.rotation || 0
+          break
+        case 'circle':
+          const circle = circles.find(c => c.id === primarySelectionId)
+          if (circle) currentRotation = circle.rotation || 0
+          break
+        case 'line':
+          const line = lines.find(l => l.id === primarySelectionId)
+          if (line) currentRotation = line.rotation || 0
+          break
+        case 'text':
+          const textShape = texts.find(t => t.id === primarySelectionId)
+          if (textShape) currentRotation = textShape.rotation || 0
+          break
       }
+      
+      rotateShape(primarySelectionId, primarySelectionType, currentRotation + 15)
     }
     return
   }
-}, [primarySelectionId, primarySelectionType, rotateShape])
+}, [primarySelectionId, primarySelectionType, rectangles, circles, lines, texts, rotateShape])
 ```
 
-#### 4. `/src/components/canvas/Rectangle.tsx` (and Circle, Line, Text)
+#### 4. `/src/components/canvas/Text.tsx`
+Add debounced measurement updates for accurate alignment:
+
+```typescript
+import { useEffect, useRef } from 'react'
+
+// In Text component
+const textRef = useRef<any>(null)
+
+// Measure and persist text dimensions (debounced for performance)
+useEffect(() => {
+  if (!textRef.current) return
+  
+  const node = textRef.current
+  const width = node.width()
+  const height = node.height()
+  
+  // Only update if measurements changed significantly (avoid tiny rendering variations)
+  const currentWidth = text.measuredWidth || 0
+  const currentHeight = text.measuredHeight || 0
+  
+  if (Math.abs(width - currentWidth) > 1 || Math.abs(height - currentHeight) > 1) {
+    // Debounce: wait 500ms after last change before updating Firebase
+    const timeoutId = setTimeout(() => {
+      canvasService.updateText(text.id, {
+        measuredWidth: width,
+        measuredHeight: height
+      }).catch(err => {
+        console.error('Failed to update text measurements:', err)
+        // Non-critical error - alignment will use estimation fallback
+      })
+    }, 500)
+    
+    return () => clearTimeout(timeoutId)
+  }
+}, [text.text, text.fontSize, text.fontWeight, text.fontStyle, text.measuredWidth, text.measuredHeight])
+
+// Apply ref to Konva Text node
+<Text
+  ref={textRef}
+  // ... other props
+/>
+```
+
+#### 5. `/src/components/canvas/Canvas.tsx` (Rendering)
+Pass isShiftPressed to shape components:
+
+```typescript
+// In Canvas.tsx render section
+{rectangles.map(rectangle => (
+  <Rectangle
+    key={rectangle.id}
+    rectangle={rectangle}
+    isSelected={selectedShapes.has(rectangle.id)}
+    isPrimary={primarySelectionId === rectangle.id}
+    isShiftPressed={isShiftPressed}  // NEW: Pass shift state for rotation snapping
+    // ... other props
+  />
+))}
+
+// Similar for Circle, Line, Text components
+```
+
+#### 6. `/src/components/canvas/Rectangle.tsx` (and Circle, Line, Text)
 Add RotateHandle when shape is primary selection:
 
 ```typescript
 import RotateHandle from './RotateHandle'
 import { getShapeCenter } from '../../utils/shapeHelpers'
+
+// Update component props interface
+interface RectangleProps {
+  rectangle: Rectangle
+  isSelected: boolean
+  isPrimary: boolean
+  isShiftPressed: boolean  // NEW: For rotation snap-to-15°
+  // ... other props
+}
 
 // In component
 const { rotateShape } = useCanvas()
@@ -2016,14 +2128,14 @@ return (
         onRotateStart={() => setIsRotating(true)}
         onRotate={(angle) => rotateShape(rectangle.id, 'rectangle', angle)}
         onRotateEnd={() => setIsRotating(false)}
-        isShiftPressed={isShiftPressed}  // Pass from Canvas
+        isShiftPressed={isShiftPressed}
       />
     )}
   </Group>
 )
 ```
 
-#### 5. `/src/services/canvasCommandExecutor.ts` (AI Support)
+#### 7. `/src/services/canvasCommandExecutor.ts` (AI Support)
 Add rotation command execution:
 
 ```typescript
@@ -2046,7 +2158,7 @@ case 'rotateShape':
   }
 ```
 
-#### 6. `/functions/src/tools.ts` (AI Support)
+#### 8. `/functions/src/tools.ts` (AI Support)
 Add rotation tool:
 
 ```typescript
