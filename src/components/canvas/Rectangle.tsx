@@ -14,7 +14,7 @@ interface RectangleProps {
   isSelected?: boolean
   isPrimary?: boolean  // NEW: Is this the primary selection (shows resize handles)
   isShiftPressed?: boolean  // NEW: Is Shift key pressed (disables dragging for selection box)
-  onClick?: (rectangle: Rectangle) => void
+  onClick?: (rectangle: Rectangle, cmdOrCtrlPressed: boolean) => void
   onDragStart?: (rectangle: Rectangle) => void
   onDragEnd?: (rectangle: Rectangle, newX: number, newY: number) => void
   onResize?: (rectangle: Rectangle, newWidth: number, newHeight: number, newX?: number, newY?: number) => void
@@ -57,7 +57,8 @@ const RectangleComponent: React.FC<RectangleProps> = ({
   const handleClick = (e: KonvaEventObject<MouseEvent>) => {
     stopEventPropagation(e)
     if (onClick && !isResizing && !isDragging) {
-      onClick(rectangle)
+      const cmdOrCtrlPressed = e.evt.metaKey || e.evt.ctrlKey
+      onClick(rectangle, cmdOrCtrlPressed)
     }
   }
 
@@ -85,7 +86,8 @@ const RectangleComponent: React.FC<RectangleProps> = ({
       
       // Select the rectangle if not already selected
       if (!isSelected && onClick) {
-        onClick(rectangle)
+        const cmdOrCtrlPressed = e.evt.metaKey || e.evt.ctrlKey
+        onClick(rectangle, cmdOrCtrlPressed)
       }
       
       // Manually start the drag since the draggable prop update won't happen in time
