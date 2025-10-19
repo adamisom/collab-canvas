@@ -354,6 +354,19 @@ const Canvas: React.FC<CanvasProps> = ({
 
   // Get selected rectangle (primary selection)
   const selectedRectangle = rectangles.find(r => r.id === primarySelectionId)
+  
+  // NEW: Check if multiple selections have mixed colors
+  const selectedColors = useMemo(() => {
+    const colors = new Set<string>()
+    for (const id of selectedRectangleIds) {
+      const rect = rectangles.find(r => r.id === id)
+      if (rect) colors.add(rect.color)
+    }
+    return colors
+  }, [selectedRectangleIds, rectangles])
+  
+  const hasMixedColors = selectedColors.size > 1
+  const displayColor = hasMixedColors ? '?' : (selectedRectangle?.color || '#000000')
 
   // Sort rectangles by zIndex for rendering (lower zIndex = render first = behind)
   const sortedRectangles = useMemo(() => {
@@ -634,7 +647,7 @@ const Canvas: React.FC<CanvasProps> = ({
             <div className="header-color-picker">
               <span className="color-label">Color:</span>
               <ColorPicker
-                selectedColor={selectedRectangle.color}
+                selectedColor={displayColor}  // CHANGED: Use displayColor (shows ? for mixed)
                 onColorChange={handleColorChange}
               />
             </div>
@@ -669,6 +682,8 @@ const Canvas: React.FC<CanvasProps> = ({
                 key={rectangle.id}
                 rectangle={rectangle}
                 isSelected={selectedRectangleIds.has(rectangle.id)}
+                isPrimary={rectangle.id === primarySelectionId}  // NEW
+                isShiftPressed={isShiftPressed}  // NEW
                 onClick={handleRectangleClick}
                 onDragStart={handleRectangleDragStart}
                 onDragEnd={handleRectangleDragEnd}

@@ -12,6 +12,8 @@ import ResizeHandle from './ResizeHandle'
 interface RectangleProps {
   rectangle: Rectangle
   isSelected?: boolean
+  isPrimary?: boolean  // NEW: Is this the primary selection (shows resize handles)
+  isShiftPressed?: boolean  // NEW: Is Shift key pressed (disables dragging for selection box)
   onClick?: (rectangle: Rectangle) => void
   onDragStart?: (rectangle: Rectangle) => void
   onDragEnd?: (rectangle: Rectangle, newX: number, newY: number) => void
@@ -23,6 +25,8 @@ interface RectangleProps {
 const RectangleComponent: React.FC<RectangleProps> = ({ 
   rectangle, 
   isSelected = false,
+  isPrimary = false,  // NEW
+  isShiftPressed = false,  // NEW
   onClick,
   onDragStart,
   onDragEnd,
@@ -211,7 +215,7 @@ const RectangleComponent: React.FC<RectangleProps> = ({
               : DEFAULT_RECT.STROKE_WIDTH
         }
         dash={isSelectedByOther ? [5, 5] : undefined}
-        draggable={!isResizing && dragEnabled}
+        draggable={isSelected && !isResizing && !isShiftPressed && dragEnabled}  // NEW: Disable dragging during Shift
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
@@ -236,7 +240,7 @@ const RectangleComponent: React.FC<RectangleProps> = ({
       />
       
       {/* Render resize handles when selected and not dragging */}
-      {isSelected && !isDragging && (
+      {isPrimary && !isDragging && !isShiftPressed && (  // CHANGED: Only show for primary selection, hide during Shift
         <>
           {Object.entries(RESIZE_DIRECTIONS).map(([, direction]) => {
             const position = handlePositions[direction]

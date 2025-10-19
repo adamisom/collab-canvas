@@ -12,6 +12,9 @@ const MAX_HISTORY = 5
 const ColorPicker: React.FC<ColorPickerProps> = ({ selectedColor, onColorChange }) => {
   const [hexInput, setHexInput] = useState('')
   const [colorHistory, setColorHistory] = useState<string[]>([])
+  
+  // NEW: Check if showing mixed color indicator
+  const isMixed = selectedColor === '?'
 
   // Load color history from localStorage
   useEffect(() => {
@@ -73,7 +76,7 @@ const ColorPicker: React.FC<ColorPickerProps> = ({ selectedColor, onColorChange 
         {RECTANGLE_COLOR_OPTIONS.map((colorOption) => (
           <button
             key={colorOption.value}
-            className={`color-option ${selectedColor === colorOption.value ? 'selected' : ''}`}
+            className={`color-option ${!isMixed && selectedColor === colorOption.value ? 'selected' : ''}`}  // CHANGED: Don't highlight when mixed
             style={{ backgroundColor: colorOption.value }}
             onClick={() => handleQuickColorClick(colorOption.value)}
             title={colorOption.name}
@@ -82,21 +85,22 @@ const ColorPicker: React.FC<ColorPickerProps> = ({ selectedColor, onColorChange 
         ))}
       </div>
 
-      {/* Hex input */}
+      {/* Hex input - show ? when mixed */}
       <form onSubmit={handleHexSubmit} className="color-hex-form">
         <input
           type="text"
-          value={hexInput}
+          value={isMixed ? '?' : hexInput}  // CHANGED: Show ? when mixed
           onChange={(e) => setHexInput(e.target.value)}
-          placeholder="#3b82f6"
+          placeholder={isMixed ? '(mixed)' : '#3b82f6'}  // CHANGED: Different placeholder when mixed
           className="color-hex-input"
           maxLength={7}
           aria-label="Hex color input"
+          disabled={isMixed}  // CHANGED: Disable input when mixed
         />
         <button 
           type="submit" 
           className="color-hex-submit"
-          disabled={!hexInput.trim()}
+          disabled={!hexInput.trim() || isMixed}  // CHANGED: Disable when mixed
         >
           ✓
         </button>
@@ -108,7 +112,7 @@ const ColorPicker: React.FC<ColorPickerProps> = ({ selectedColor, onColorChange 
           {colorHistory.map((color, index) => (
             <button
               key={`${color}-${index}`}
-              className={`color-history-option ${selectedColor === color ? 'selected' : ''}`}
+              className={`color-history-option ${!isMixed && selectedColor === color ? 'selected' : ''}`}  // CHANGED: Don't highlight when mixed
               style={{ backgroundColor: color }}
               onClick={() => handleHistoryClick(color)}
               title={color}
