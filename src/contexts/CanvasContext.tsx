@@ -621,8 +621,12 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
   const deleteSelectedRectangles = useCallback(async () => {
     if (selectedShapes.size === 0) return
 
+    // Count shapes by type
+    const typeCounts = { rectangle: 0, circle: 0, line: 0, text: 0 }
+    
     // Delete all sequentially based on shape type
     for (const [id, shapeType] of selectedShapes.entries()) {
+      typeCounts[shapeType]++
       switch (shapeType) {
         case 'rectangle':
           await canvasService.deleteRectangle(id)
@@ -639,12 +643,29 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       }
     }
 
-    const count = selectedShapes.size
     setSelectedShapes(new Map())
     setPrimarySelectionId(null)
     setPrimarySelectionType(null)
 
-    showToast(`Deleted ${count} shape${count > 1 ? 's' : ''}`)
+    // Generate custom message based on what was deleted
+    const count = selectedShapes.size
+    if (count === 1) {
+      // Single shape - be specific
+      const shapeType = Array.from(selectedShapes.values())[0]
+      showToast(`Deleted 1 ${shapeType}`)
+    } else {
+      // Multiple shapes - check if all same type
+      const types = Object.entries(typeCounts).filter(([, count]) => count > 0)
+      if (types.length === 1) {
+        // All same type
+        const [type, typeCount] = types[0]
+        showToast(`Deleted ${typeCount} ${type}s`)
+      } else {
+        // Mixed types
+        const parts = types.map(([type, count]) => `${count} ${type}${count > 1 ? 's' : ''}`)
+        showToast(`Deleted ${count} shapes (${parts.join(', ')})`)
+      }
+    }
   }, [selectedShapes, showToast])
 
   // NEW: Change color of all selected shapes
