@@ -1438,6 +1438,75 @@ All components using `selectedRectangleId` must be updated to use `selectedRecta
 
 ---
 
+## Quick Local Testing Plan
+
+### **Setup:**
+```bash
+npm run dev
+```
+Then open `http://localhost:5173` - this will connect to production Firebase.
+
+---
+
+### **Phase 3B Feature Testing:**
+
+#### **1. Selection Box (Shift+Drag)**
+- ✅ Hold **Shift**, drag on empty space → Should see blue transparent selection box with dashed border
+- ✅ Draw box around 2-3 rectangles → Should select all fully contained rectangles
+- ✅ Release Shift → Cursor returns to normal, can't drag rectangles while Shift held
+- ✅ Press **Escape** during drag → Cancels selection box
+
+#### **2. Multi-Select Methods**
+- ✅ Click rectangle → Selects single (clears others), shows red border
+- ✅ **Cmd/Ctrl+Click** another rectangle → Adds to selection (both red borders)
+- ✅ Cmd/Ctrl+Click selected rectangle → Removes from selection (toggle)
+- ✅ **Cmd/Ctrl+A** → Selects all rectangles (or shows toast if >25)
+- ✅ **Escape** → Clears all selections
+
+#### **3. Primary Selection & Resize Handles**
+- ✅ Select 3 rectangles → All have red borders
+- ✅ Check resize handles → Only the **last-clicked** rectangle shows handles
+- ✅ Click different selected rectangle → Resize handles move to that one
+
+#### **4. Pan Mode (Spacebar)**
+- ✅ Hold **Spacebar** → Cursor changes to grab/hand icon
+- ✅ Spacebar+Drag → Pans the canvas
+- ✅ Release Spacebar → Returns to normal mode
+
+#### **5. Copy/Paste Multiple**
+- ✅ Select 2-3 rectangles, press **Cmd+C** → Should see "X rectangles copied" toast
+- ✅ Press **Cmd+V** → Should paste all with same relative positions, 20px offset
+- ✅ All pasted rectangles should be selected
+- ✅ Paste again (Cmd+V) → Creates another set
+
+#### **6. Delete Multiple**
+- ✅ Select 2-3 rectangles, press **Delete** or **Backspace** → All should disappear
+
+#### **7. Color Picker with Multi-Select**
+- ✅ Select 2 rectangles with **same color** → Color picker shows that color
+- ✅ Select 2 rectangles with **different colors** → Color picker shows **?** (mixed)
+- ✅ With mixed colors, click a preset color → Both rectangles change to that color
+
+#### **8. Selection Limit**
+- ✅ Create 26+ rectangles, try Cmd+A → Should see toast "Maximum 25 rectangles can be selected"
+- ✅ Try Shift+Drag over 26+ rectangles → Should see same toast
+
+#### **9. Updated Keyboard Shortcuts**
+- ✅ Check left sidebar → "Keyboard Shortcuts" section should include:
+  - Space+Drag (Pan mode)
+  - Shift+Drag (Select box)
+  - Cmd/Ctrl+A (Select all)
+  - Esc (Clear selection)
+
+#### **10. AI Agent with Multi-Select**
+- ✅ Select 1 rectangle, ask AI: "duplicate it" → Still works for single selection
+- ✅ Select multiple rectangles, ask AI: "change color to red" → Should change all selected (uses primary)
+- ✅ Without selection, ask AI: "create a rectangle" → Should still work
+
+**Total test time: ~7-8 minutes** ⏱️
+
+---
+
 ## Next Steps
 
 **Proceed to Phase 3C**: [Shape Expansion](./phase3c-shapes.md)
