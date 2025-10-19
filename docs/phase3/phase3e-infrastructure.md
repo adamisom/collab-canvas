@@ -84,7 +84,7 @@ Phase 3E prepares the application infrastructure for production. This phase incl
 - Create Firebase Auth Trigger (Cloud Function) to auto-create user profiles
 - Create shared UserProfilesContext for efficient profile caching
 - Update `AuthContext` to use Google auth
-- Update security rules moved to separate PR (see Phase 3F)
+- Update security rules moved to separate PR (see PR #15 below)
 
 ### Files to Create
 
@@ -144,12 +144,23 @@ Export the auth triggers:
 export { onUserCreated, onUserDeleted } from './authTriggers'
 ```
 
+**Deployment Instructions:**
+```bash
+# From project root, deploy all functions (including auth triggers)
+firebase deploy --only functions
+
+# Verify deployment in Firebase Console → Functions
+# Test by signing in with a new Google account
+```
+
+> **Note:** Auth triggers automatically activate on the first user sign-in after deployment. The Cloud Function will handle all user profile creation going forward.
+
 #### `/src/contexts/UserProfilesContext.tsx`
 Shared context for efficient user profile caching:
 
 ```typescript
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react'
-import { dbRef, dbOnValue } from '../services/firebaseService'
+import { firebaseDatabase, dbRef, dbOnValue } from '../services/firebaseService'
 
 interface UserProfile {
   uid: string
@@ -172,25 +183,62 @@ export const UserProfilesProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [profiles, setProfiles] = useState<Map<string, UserProfile>>(new Map())
   const [loading, setLoading] = useState(true)
   
-  // Single subscription to ALL user profiles
+  // Single subscription to user profiles for currently online users
   useEffect(() => {
-    const usersRef = dbRef('users')
+    const profileUnsubscribes = new Map<string, () => void>()
     
-    const unsubscribe = dbOnValue(usersRef, (snapshot) => {
-      const newProfiles = new Map<string, UserProfile>()
+    // Subscribe to cursors to know which users are online
+    const cursorsRef = dbRef(firebaseDatabase, 'cursors')
+    
+    const unsubscribeCursors = dbOnValue(cursorsRef, (cursorsSnapshot) => {
+      const onlineUserIds = new Set<string>()
       
-      if (snapshot.exists()) {
-        snapshot.forEach((child) => {
-          const profile = child.val() as UserProfile
-          newProfiles.set(profile.uid, profile)
+      if (cursorsSnapshot.exists()) {
+        cursorsSnapshot.forEach((child) => {
+          onlineUserIds.add(child.key!)
         })
       }
       
-      setProfiles(newProfiles)
+      // Unsubscribe from profiles of users who went offline
+      profileUnsubscribes.forEach((unsubscribe, userId) => {
+        if (!onlineUserIds.has(userId)) {
+          unsubscribe()
+          profileUnsubscribes.delete(userId)
+          setProfiles((prev) => {
+            const updated = new Map(prev)
+            updated.delete(userId)
+            return updated
+          })
+        }
+      })
+      
+      // Subscribe to profiles of new online users
+      onlineUserIds.forEach((userId) => {
+        if (!profileUnsubscribes.has(userId)) {
+          const userRef = dbRef(firebaseDatabase, `users/${userId}`)
+          const unsubscribe = dbOnValue(userRef, (userSnapshot) => {
+            if (userSnapshot.exists()) {
+              const profile = userSnapshot.val() as UserProfile
+              setProfiles((prev) => {
+                const updated = new Map(prev)
+                updated.set(userId, profile)
+                return updated
+              })
+            }
+          })
+          profileUnsubscribes.set(userId, unsubscribe)
+        }
+      })
+      
       setLoading(false)
     })
     
-    return unsubscribe
+    return () => {
+      // Cleanup all subscriptions
+      unsubscribeCursors()
+      profileUnsubscribes.forEach((unsubscribe) => unsubscribe())
+      profileUnsubscribes.clear()
+    }
   }, [])
   
   const getProfile = useCallback((userId: string) => {
@@ -199,14 +247,20 @@ export const UserProfilesProvider: React.FC<{ children: React.ReactNode }> = ({ 
   
   const getInitials = useCallback((userId: string) => {
     const profile = profiles.get(userId)
-    if (!profile) return '?'
+    if (!profile || !profile.displayName) return '?'
     
-    return profile.displayName
+    const name = profile.displayName.trim()
+    if (!name) return '?'
+    
+    const initials = name
       .split(' ')
+      .filter(n => n.length > 0)  // Filter empty strings
       .map(n => n[0])
       .join('')
       .toUpperCase()
       .slice(0, 2)
+    
+    return initials || '?'  // Fallback if still empty
   }, [profiles])
   
   return (
@@ -233,6 +287,9 @@ export const useUserProfile = (userId: string) => {
   }
 }
 ```
+
+**Key Design Decision:**
+This context only subscribes to profiles for **currently online users** (users with active cursors). This ensures efficient memory usage and database reads, even if hundreds of users have signed in historically. Profiles automatically load when users join and unload when they leave.
 
 #### `/src/components/auth/SignInModal.tsx`
 Simple Google-only sign-in:
@@ -468,11 +525,34 @@ const UserProfileDropdown: React.FC = () => {
   )
 }
 
-export default UserProfileDropdown
+export default React.memo(UserProfileDropdown)
 ```
 
-**CSS for avatar initials** (add to `UserProfileDropdown.css`):
+#### `/src/components/ui/UserProfileDropdown.css`
+Complete styles for the dropdown:
+
 ```css
+.user-profile-dropdown {
+  position: relative;
+}
+
+.profile-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  color: white;
+}
+
+.profile-button:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
 .avatar-initials {
   width: 32px;
   height: 32px;
@@ -483,6 +563,31 @@ export default UserProfileDropdown
   color: white;
   font-weight: 600;
   font-size: 14px;
+  flex-shrink: 0;
+}
+
+.display-name {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 240px;
+  padding: 8px;
+  z-index: 1000;
+}
+
+.user-info {
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .avatar-initials-large {
@@ -495,50 +600,106 @@ export default UserProfileDropdown
   color: white;
   font-weight: 600;
   font-size: 18px;
+  flex-shrink: 0;
+}
+
+.user-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.user-details .name {
+  font-weight: 600;
+  color: #2d3748;
+  font-size: 14px;
+  margin-bottom: 2px;
+}
+
+.user-details .email {
+  font-size: 12px;
+  color: #718096;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dropdown-divider {
+  height: 1px;
+  background: #e2e8f0;
+  margin: 8px 0;
+}
+
+.dropdown-item {
+  width: 100%;
+  padding: 10px 12px;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #2d3748;
+  transition: background-color 0.2s;
+  text-align: left;
+}
+
+.dropdown-item:hover {
+  background: #f7fafc;
+}
+
+.dropdown-item svg {
+  flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+  .dropdown-menu {
+    right: auto;
+    left: 50%;
+    transform: translateX(-50%);
+  }
 }
 ```
 
 ### Files to Update
 
 #### 1. `/src/contexts/AuthContext.tsx` ⚠️ MAJOR UPDATE
-Replace Anonymous Auth with Google Auth (simplified - no client-side profile creation):
+**Update in place** - Replace Anonymous Auth with Google Auth (simplified - no client-side profile creation):
 
+**Changes needed:**
+1. Update imports:
 ```typescript
 import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth'
+```
 
+2. Update `AuthContextType` interface:
+```typescript
 interface AuthContextType {
   user: User | null
   username: string | null
   loading: boolean
   
-  // UPDATED: Replace signInAnonymously with signInWithGoogle
+  // REPLACE: signIn(username: string) → signInWithGoogle()
   signInWithGoogle: () => Promise<void>
   signOut: () => Promise<void>
 }
+```
 
-// Create Google provider
+3. Create Google provider:
+```typescript
+// Add before AuthProvider
 const googleProvider = new GoogleAuthProvider()
+```
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  // Listen to auth state changes
-  useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged((firebaseUser) => {
-      setUser(firebaseUser)
-      setLoading(false)
-    })
-    
-    return unsubscribe
-  }, [])
-
-  // Sign in with Google
+4. Replace `signIn` function with `signInWithGoogle`:
+```typescript
+// REPLACE the signIn function with:
   const signInWithGoogle = useCallback(async () => {
     try {
       setLoading(true)
-      await signInWithPopup(auth, googleProvider)
-      // User profile automatically created by Firebase Auth Trigger
+    await signInWithPopup(firebaseAuth, googleProvider)
+    // User profile automatically created by Firebase Auth Trigger
     } catch (error: any) {
       console.error('Error signing in with Google:', error)
       throw error
@@ -546,85 +707,124 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setLoading(false)
     }
   }, [])
+```
 
-  // Sign out
+5. Simplify `onAuthStateChanged` - remove username localStorage and database logic:
+```typescript
+useEffect(() => {
+  const unsubscribe = onAuthStateChange(firebaseAuth, (firebaseUser) => {
+    setUser(firebaseUser)
+    setLoading(false)
+  })
+  
+  return unsubscribe
+}, [])
+```
+
+6. Update `username` derivation (keep it simple):
+```typescript
+const username = user?.displayName || user?.email?.split('@')[0] || null
+```
+
+7. Simplify `signOut` - remove localStorage and cursor cleanup (Auth Trigger handles it):
+```typescript
   const signOut = useCallback(async () => {
     try {
-      await auth.signOut()
+    await firebaseAuth.signOut()
       setUser(null)
     } catch (error: any) {
       console.error('Error signing out:', error)
       throw error
     }
   }, [])
+```
 
-  const username = user?.displayName || user?.email?.split('@')[0] || null
-
+8. Update context value:
+```typescript
   return (
     <AuthContext.Provider value={{
       user,
       username,
       loading,
-      signInWithGoogle,
+    signInWithGoogle,  // Changed from signIn
       signOut
     }}>
       {children}
     </AuthContext.Provider>
   )
-}
 ```
 
-**Key Changes:**
-- ❌ Removed `signInAnonymously`
-- ✅ Added `signInWithGoogle` using `signInWithPopup`
-- ✅ Removed client-side profile creation (handled by Cloud Function trigger)
-- ✅ Much simpler and more reliable
+**Summary of changes:**
+- ❌ Remove `signIn(username)` → ✅ Add `signInWithGoogle()`
+- ❌ Remove localStorage username logic
+- ❌ Remove manual user profile creation
+- ❌ Remove cursor cleanup on signOut (Auth Trigger handles it)
+- ✅ Simplify to just Google auth with popup
+- ✅ Cloud Function handles all user data management
 
 #### 2. `/src/components/layout/Header.tsx`
-Add user profile dropdown:
+**Update in place** - Replace user info section with UserProfileDropdown:
 
+1. Add import:
 ```typescript
 import UserProfileDropdown from '../ui/UserProfileDropdown'
-
-// Replace anonymous sign-in button with:
-<UserProfileDropdown />
 ```
 
-#### 3. `/src/App.tsx`
-Show sign-in modal when not authenticated and wrap with UserProfilesProvider:
+2. Replace the **contents** of the `.user-section` div (lines 24-32) with just the dropdown component:
+```typescript
+<div className="user-section">
+<UserProfileDropdown />
+</div>
+```
 
+**That's it!** The dropdown handles display, sign-out button, and user info internally. Keep the `.user-section` wrapper div for styling.
+
+#### 3. `/src/App.tsx`
+**Update in place** - Replace `LoginForm` with `SignInModal` and add `UserProfilesProvider`:
+
+1. Update imports (replace `LoginForm` with `SignInModal`):
 ```typescript
 import SignInModal from './components/auth/SignInModal'
 import { UserProfilesProvider } from './contexts/UserProfilesContext'
+```
 
-function App() {
-  const { user, loading } = useAuth()
-
-  if (loading) {
-    return <div className="loading">Loading...</div>
-  }
-
+2. In `AppContent` component, replace `<LoginForm />` with `<SignInModal />` (line 75):
+```typescript
   if (!user) {
     return <SignInModal />
   }
-
-  return (
-    <UserProfilesProvider>
-    <div className="app">
-      {/* Main app content */}
-    </div>
-    </UserProfilesProvider>
-  )
-}
 ```
 
-#### 4. `/src/components/canvas/Cursor.tsx`
+3. Wrap the authenticated app content with `UserProfilesProvider` (lines 78-85):
+```typescript
+  return (
+  <UserProfilesProvider>
+    <div className="App">
+      <Header />
+      <CanvasProvider>
+        <CanvasContent />
+      </CanvasProvider>
+    </div>
+  </UserProfilesProvider>
+)
+```
+
+**Summary:** Replace `LoginForm` with `SignInModal`, wrap authenticated content with `UserProfilesProvider`.
+
+#### 4. Delete Old Auth Files
+**Files to delete:**
+- `/src/components/auth/LoginForm.tsx` (replaced by `SignInModal.tsx`)
+- `/src/components/auth/LoginForm.css` (replaced by `SignInModal.css`)
+
+These are completely replaced by the new Google authentication UI.
+
+#### 5. `/src/components/canvas/Cursor.tsx`
 Update to show user initials (using shared UserProfilesContext):
 
 ```typescript
 import { useUserProfile } from '../../contexts/UserProfilesContext'
 import { getUserColor } from '../../utils/userColors'
-import { Circle, Text, Group, Line } from 'react-konva'
+import { Circle, Text, Group, Line, Rect } from 'react-konva'
 
 const Cursor: React.FC<{ cursor: CursorData }> = ({ cursor }) => {
   const { profile, initials } = useUserProfile(cursor.userId)
@@ -650,7 +850,7 @@ return (
         <Rect
           x={0}
           y={0}
-          width={profile.displayName.length * 6 + 36}
+          width={Math.max(profile.displayName.length * 7 + 40, 80)}
           height={24}
           fill="rgba(0, 0, 0, 0.8)"
           cornerRadius={12}
@@ -685,16 +885,21 @@ return (
 )
 }
 
-export default Cursor
+export default React.memo(Cursor, (prev, next) => {
+  return prev.cursor.x === next.cursor.x && 
+         prev.cursor.y === next.cursor.y &&
+         prev.cursor.userId === next.cursor.userId
+})
 ```
 
 **Benefits:**
 - ✅ No database calls per cursor (uses shared cache)
+- ✅ Only loads profiles for currently online users (efficient memory usage)
 - ✅ Shows user initials in colored circle
-- ✅ Efficient and fast
+- ✅ Automatically updates when users join/leave
 - ✅ Real-time updates when profiles change
 
-#### 5. Firebase Console Configuration
+#### 6. Firebase Console Configuration
 **Super simple - 2-minute setup:**
 
 1. Go to [Firebase Console](https://console.firebase.google.com/)
@@ -737,16 +942,19 @@ export default Cursor
 **Manual Testing - Real-Time Collaboration:**
 - [ ] Multiple authenticated users can collaborate
 - [ ] Cursors show correct user initials and names
+- [ ] Profiles load automatically when users join (cursor appears)
+- [ ] Profiles unload when users leave (no memory leak)
 - [ ] All operations work with authenticated users
 - [ ] Exclusive selection still works per rectangle
 - [ ] User can see their own profile in header with initials
-- [ ] UserProfilesContext efficiently caches all profiles
+- [ ] UserProfilesContext efficiently caches only online user profiles
 
 ### Success Criteria
 - ✅ Google authentication works flawlessly
 - ✅ User profiles automatically created by Cloud Function
 - ✅ User initials show in header dropdown and collaborative cursors
-- ✅ UserProfilesContext efficiently caches profiles (no redundant fetches)
+- ✅ UserProfilesContext efficiently caches only online user profiles (no redundant fetches)
+- ✅ Profiles automatically load/unload as users join/leave
 - ✅ All Phase 3A-3D features still work
 - ✅ No console errors
 - ✅ Real-time collaboration verified with Google-authenticated users
@@ -788,15 +996,10 @@ export default Cursor
 ### What This PR Delivers
 
 **Unit Tests:**
-- Context tests (AuthContext, CanvasContext)
+- Context tests (AuthContext, CanvasContext, UserProfilesContext)
 - Service tests (canvasService, aiAgent)
 - Component tests (Rectangle, Circle, Line, Text)
-- Utility tests (alignment, selection helpers)
-
-**Integration Tests:**
-- Full workflow tests (create, edit, delete)
-- Multi-user collaboration tests
-- AI agent integration tests
+- Utility tests (alignment, selection helpers, getInitials)
 
 **Test Coverage Goal: 70%+**
 
@@ -807,7 +1010,7 @@ export default Cursor
 **Testing Framework:**
 - Vitest (already configured from Phase 2)
 - React Testing Library
-- Firebase emulator for integration tests
+- Mock Firebase services for unit tests
 
 **Continuous Integration:**
 - GitHub Actions workflow (optional)
@@ -815,16 +1018,40 @@ export default Cursor
 
 ### Files to Create
 
-#### `/src/contexts/__tests__/CanvasContext.test.tsx`
+> **Note:** All new test files should be placed in `/tests/` directory to maintain consistency with existing test structure.
+
+#### `/tests/contexts/CanvasContext.test.tsx`
 ```typescript
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, act, waitFor } from '@testing-library/react'
-import { CanvasProvider, useCanvas } from '../CanvasContext'
-import { AuthProvider } from '../AuthContext'
+import { CanvasProvider, useCanvas } from '../../src/contexts/CanvasContext'
+import { AuthProvider } from '../../src/contexts/AuthContext'
 
-// Mock Firebase
-vi.mock('../../services/firebaseService', () => ({
-  // Mock implementations
+// Mock Firebase services
+vi.mock('../../src/services/firebaseService', () => ({
+  firebaseAuth: {},
+  firebaseDatabase: {},
+  dbRef: vi.fn((db, path) => ({ path })),
+  dbSet: vi.fn(() => Promise.resolve()),
+  dbOnValue: vi.fn((ref, callback) => {
+    // Simulate empty snapshot
+    callback({ exists: () => false, val: () => null })
+    return vi.fn() // Unsubscribe
+  }),
+  dbPush: vi.fn(() => Promise.resolve({ key: 'test-id' })),
+  dbRemove: vi.fn(() => Promise.resolve()),
+  dbUpdate: vi.fn(() => Promise.resolve()),
+  dbGet: vi.fn(() => Promise.resolve({ exists: () => false, val: () => null })),
+  onAuthStateChange: vi.fn((auth, callback) => {
+    callback(null)
+    return vi.fn()
+  })
+}))
+
+// Mock Firebase Auth separately
+vi.mock('firebase/auth', () => ({
+  signInWithPopup: vi.fn(() => Promise.resolve({ user: { uid: 'test-uid', displayName: 'Test User', email: 'test@example.com' } })),
+  GoogleAuthProvider: vi.fn()
 }))
 
 describe('CanvasContext', () => {
@@ -882,14 +1109,14 @@ describe('CanvasContext', () => {
 })
 ```
 
-#### `/src/utils/__tests__/alignmentHelpers.test.ts`
+#### `/tests/utils/alignmentHelpers.test.ts`
 ```typescript
 import { describe, it, expect } from 'vitest'
 import {
   getShapeBounds,
   calculateAlignedPosition,
   calculateDistributedPositions
-} from '../alignmentHelpers'
+} from '../../src/utils/alignmentHelpers'
 
 describe('alignmentHelpers', () => {
   describe('getShapeBounds', () => {
@@ -970,31 +1197,229 @@ describe('alignmentHelpers', () => {
 })
 ```
 
-#### `/tests/integration/collaboration.test.ts`
+#### `/tests/contexts/UserProfilesContext.test.tsx`
 ```typescript
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { connectDatabaseEmulator } from 'firebase/database'
+import { describe, it, expect, vi } from 'vitest'
+import { renderHook, waitFor } from '@testing-library/react'
+import { UserProfilesProvider, useUserProfiles } from '../../src/contexts/UserProfilesContext'
 
-describe('Multi-User Collaboration', () => {
-  beforeAll(() => {
-    // Connect to Firebase emulator
-    connectDatabaseEmulator(database, 'localhost', 9000)
+// Mock Firebase with comprehensive user data
+vi.mock('../../src/services/firebaseService', () => ({
+  dbRef: vi.fn(),
+  dbOnValue: vi.fn((ref, callback) => {
+    // Simulate Firebase snapshot with test users
+    const mockSnapshot = {
+      exists: () => true,
+      forEach: (fn: Function) => {
+        fn({ val: () => ({ uid: 'user1', displayName: 'John Doe', email: 'john@example.com', createdAt: 1, lastSeenAt: 1 }) })
+        fn({ val: () => ({ uid: 'user2', displayName: 'Jane Smith', email: 'jane@example.com', createdAt: 2, lastSeenAt: 2 }) })
+        fn({ val: () => ({ uid: 'user3', displayName: 'Madonna', email: 'madonna@example.com', createdAt: 3, lastSeenAt: 3 }) })
+        fn({ val: () => ({ uid: 'user4', displayName: 'John  Doe', email: 'spaces@example.com', createdAt: 4, lastSeenAt: 4 }) })
+      }
+    }
+    callback(mockSnapshot)
+    return vi.fn() // Unsubscribe function
+  })
+}))
+
+describe('UserProfilesContext', () => {
+  const wrapper = ({ children }) => <UserProfilesProvider>{children}</UserProfilesProvider>
+
+  it('should load and cache all user profiles', async () => {
+    const { result } = renderHook(() => useUserProfiles(), { wrapper })
+    
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false)
+    })
+    
+    expect(result.current.profiles.size).toBe(4)
+    expect(result.current.profiles.get('user1')?.displayName).toBe('John Doe')
+    expect(result.current.profiles.get('user2')?.displayName).toBe('Jane Smith')
   })
 
-  afterAll(() => {
-    // Cleanup
+  it('should return correct initials for two-word name', async () => {
+    const { result } = renderHook(() => useUserProfiles(), { wrapper })
+    
+    await waitFor(() => {
+      const initials = result.current.getInitials('user1')
+      expect(initials).toBe('JD')
+    })
   })
 
-  it('should sync rectangle creation between users', async () => {
-    // Test implementation with two simulated users
+  it('should handle single-word names', async () => {
+    const { result } = renderHook(() => useUserProfiles(), { wrapper })
+    
+    await waitFor(() => {
+      const initials = result.current.getInitials('user3')  // Madonna
+      expect(initials).toBe('MA')
+    })
   })
 
-  it('should handle exclusive selection', async () => {
-    // Test implementation
+  it('should handle empty display names', async () => {
+    const { result } = renderHook(() => useUserProfiles(), { wrapper })
+    
+    await waitFor(() => {
+      const initials = result.current.getInitials('nonexistent')
+      expect(initials).toBe('?')
+    })
   })
 
-  it('should sync AI commands', async () => {
-    // Test implementation
+  it('should handle names with extra spaces', async () => {
+    const { result } = renderHook(() => useUserProfiles(), { wrapper })
+    
+    await waitFor(() => {
+      const initials = result.current.getInitials('user4')  // "John  Doe" with double space
+      expect(initials).toBe('JD')  // Should filter empty strings
+    })
+  })
+
+  it('should provide profile data via getProfile', async () => {
+    const { result } = renderHook(() => useUserProfiles(), { wrapper })
+    
+    await waitFor(() => {
+      const profile = result.current.getProfile('user1')
+      expect(profile).toBeDefined()
+      expect(profile?.displayName).toBe('John Doe')
+      expect(profile?.email).toBe('john@example.com')
+    })
+  })
+})
+```
+
+#### `/tests/contexts/AuthContext.test.tsx`
+```typescript
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { renderHook, act, waitFor } from '@testing-library/react'
+import { AuthProvider, useAuth } from '../../src/contexts/AuthContext'
+import { signInWithPopup } from 'firebase/auth'
+
+// Mock Firebase Auth
+vi.mock('firebase/auth', () => ({
+  signInWithPopup: vi.fn(),
+  GoogleAuthProvider: vi.fn(),
+  onAuthStateChanged: vi.fn((auth, callback) => {
+    callback(null)
+    return vi.fn()
+  })
+}))
+
+describe('AuthContext with Google Auth', () => {
+  const wrapper = ({ children }) => <AuthProvider>{children}</AuthProvider>
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('should sign in with Google successfully', async () => {
+    const mockUser = { uid: 'test-uid', displayName: 'Test User', email: 'test@example.com' }
+    vi.mocked(signInWithPopup).mockResolvedValue({ user: mockUser } as any)
+
+    const { result } = renderHook(() => useAuth(), { wrapper })
+
+    await act(async () => {
+      await result.current.signInWithGoogle()
+    })
+
+    await waitFor(() => {
+      expect(signInWithPopup).toHaveBeenCalled()
+    })
+  })
+
+  it('should handle Google popup blocked error', async () => {
+    const popupError = new Error('Popup blocked by browser')
+    vi.mocked(signInWithPopup).mockRejectedValue(popupError)
+
+    const { result } = renderHook(() => useAuth(), { wrapper })
+
+    await expect(async () => {
+      await result.current.signInWithGoogle()
+    }).rejects.toThrow('Popup blocked by browser')
+  })
+
+  it('should handle Google sign-in cancellation', async () => {
+    const cancelError = new Error('auth/popup-closed-by-user')
+    vi.mocked(signInWithPopup).mockRejectedValue(cancelError)
+
+    const { result } = renderHook(() => useAuth(), { wrapper })
+
+    await expect(async () => {
+      await result.current.signInWithGoogle()
+    }).rejects.toThrow()
+  })
+
+  it('should derive username from displayName', () => {
+    // Test username extraction logic
+    const displayName = 'John Doe'
+    const username = displayName
+    expect(username).toBe('John Doe')
+  })
+
+  it('should derive username from email if no displayName', () => {
+    const email = 'john@example.com'
+    const username = email.split('@')[0]
+    expect(username).toBe('john')
+  })
+})
+```
+
+#### `/tests/components/auth/SignInModal.test.tsx`
+```typescript
+import { describe, it, expect, vi } from 'vitest'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import SignInModal from '../../../src/components/auth/SignInModal'
+import { useAuth } from '../../../src/contexts/AuthContext'
+
+vi.mock('../../../src/contexts/AuthContext')
+
+describe('SignInModal', () => {
+  it('should display error message on sign-in failure', async () => {
+    const mockSignIn = vi.fn().mockRejectedValue(new Error('Sign in failed'))
+    vi.mocked(useAuth).mockReturnValue({ signInWithGoogle: mockSignIn } as any)
+
+    render(<SignInModal />)
+    
+    const button = screen.getByText('Sign in with Google')
+    fireEvent.click(button)
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent('Sign in failed')
+    })
+  })
+
+  it('should disable button while loading', async () => {
+    const mockSignIn = vi.fn(() => new Promise(resolve => setTimeout(resolve, 100)))
+    vi.mocked(useAuth).mockReturnValue({ signInWithGoogle: mockSignIn } as any)
+
+    render(<SignInModal />)
+    
+    const button = screen.getByText('Sign in with Google')
+    fireEvent.click(button)
+
+    expect(button).toBeDisabled()
+    expect(screen.getByText('Signing in...')).toBeInTheDocument()
+  })
+
+  it('should clear error on retry', async () => {
+    const mockSignIn = vi.fn()
+      .mockRejectedValueOnce(new Error('First error'))
+      .mockResolvedValueOnce(undefined)
+    vi.mocked(useAuth).mockReturnValue({ signInWithGoogle: mockSignIn } as any)
+
+    render(<SignInModal />)
+    
+    const button = screen.getByText('Sign in with Google')
+    
+    // First attempt - error
+    fireEvent.click(button)
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent('First error')
+    })
+
+    // Second attempt - should clear error
+    fireEvent.click(button)
+    await waitFor(() => {
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    })
   })
 })
 ```
@@ -1002,17 +1427,26 @@ describe('Multi-User Collaboration', () => {
 ### Files to Update
 
 #### `/package.json`
-Update test scripts:
+Update test scripts and add missing devDependency:
 
 ```json
 {
   "scripts": {
     "test": "vitest",
     "test:ui": "vitest --ui",
-    "test:coverage": "vitest run --coverage",
-    "test:integration": "vitest run tests/integration"
+    "test:coverage": "vitest run --coverage"
+  },
+  "devDependencies": {
+    // ... existing devDependencies ...
+    "@vitest/coverage-v8": "^2.1.8",  // ADD THIS - required for test coverage
+    // ... rest of devDependencies ...
   }
 }
+```
+
+**Installation command:**
+```bash
+npm install --save-dev @vitest/coverage-v8
 ```
 
 #### `/vitest.config.ts`
@@ -1044,15 +1478,11 @@ export default defineConfig({
 **Unit Test Coverage:**
 - [ ] AuthContext tests pass
 - [ ] CanvasContext tests pass
+- [ ] UserProfilesContext tests pass
 - [ ] All service tests pass
 - [ ] All utility tests pass
 - [ ] Component tests pass
 - [ ] Coverage > 70%
-
-**Integration Tests:**
-- [ ] Multi-user collaboration tests pass
-- [ ] AI agent integration tests pass
-- [ ] Full workflow tests pass
 
 **Manual Testing:**
 - [ ] Test with 50+ shapes (mixed types) - basic performance check
@@ -1259,7 +1689,7 @@ Complete replacement with production-grade rules:
       }
     },
     
-    // User profiles
+    // User profiles (includes AI command count for rate limiting)
     "users": {
       "$userId": {
         ".read": "auth != null",  // All users can read all profiles
@@ -1270,7 +1700,14 @@ Complete replacement with production-grade rules:
         "displayName": { ".validate": "newData.isString()" },
         "email": { ".validate": "newData.isString()" },
         "createdAt": { ".validate": "newData.isNumber()" },
-        "lastSeenAt": { ".validate": "newData.isNumber()" }
+        "lastSeenAt": { ".validate": "newData.isNumber()" },
+        
+        // AI command count - nested inside user profile
+        "aiCommandCount": {
+          ".read": "$userId === auth.uid",  // Can only read own command count
+          ".write": "$userId === auth.uid && (!data.exists() || newData.val() > data.val())",  // Can only increment
+          ".validate": "newData.isNumber() && newData.val() >= 0"
+        }
       }
     },
     
@@ -1299,6 +1736,8 @@ Complete replacement with production-grade rules:
 }
 ```
 
+> **Important**: Firebase Cloud Functions using Firebase Admin SDK bypass these security rules entirely. This is how the AI agent (which runs as a Cloud Function) can create shapes on behalf of users without being blocked by the `createdBy` validation.
+
 **Key Security Features:**
 - ✅ Per-shape ownership (can only modify own shapes)
 - ✅ Field-level validation (types, ranges, regex)
@@ -1308,12 +1747,13 @@ Complete replacement with production-grade rules:
 - ✅ User profiles readable by all (for cursors)
 - ✅ Color history private to each user
 - ✅ Text length limits (prevent abuse)
+- ✅ AI command count can only increment (prevents quota manipulation)
 
 ### Testing Checklist
 
 **Security Rules Testing:**
-- [ ] Firebase Rules Playground tested
-- [ ] Firebase emulator tested locally
+- [ ] Firebase Rules Playground tested (online simulator)
+- [ ] Firebase emulator tested locally (OPTIONAL - run `npm run emulators` for local testing)
 - [ ] Malicious write attempts blocked (e.g., delete other users' shapes)
 - [ ] Malicious read attempts blocked (e.g., read other users' color history)
 - [ ] All legitimate operations still work
@@ -1330,7 +1770,8 @@ Complete replacement with production-grade rules:
 - [ ] Wrong data types rejected
 - [ ] Text length limits enforced
 - [ ] Font size limits enforced
-- [ ] AI Cloud Function can still create shapes (has admin access)
+- [ ] AI Cloud Function can create shapes on behalf of users (bypasses rules via Admin SDK)
+- [ ] AI command count can only increment (cannot decrement)
 
 **Integration Testing:**
 - [ ] All Phase 3A-3D features still work
@@ -1357,7 +1798,8 @@ Before moving to Phase 3F, verify:
 - [ ] All 3 PRs merged and tested (13, 14, 15)
 - [ ] Authentication migration complete (Google only)
 - [ ] User profiles auto-created by Cloud Function
-- [ ] UserProfilesContext caching profiles efficiently
+- [ ] UserProfilesContext caching only online user profiles efficiently
+- [ ] Profiles load/unload as users join/leave (verified)
 - [ ] Test suite comprehensive (70%+ coverage)
 - [ ] All tests passing
 - [ ] Security rules deployed and tested
