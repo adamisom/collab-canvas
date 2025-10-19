@@ -1004,7 +1004,96 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
   // PR #6: UNIFIED SHAPE OPERATIONS (type-discriminated)
   // ============================================================================
 
-  // Unified selectShape (handles rectangles, circles, etc.)
+  // ============================================================================
+  // UNIFIED SELECTION (REFACTORED PR #5, Optimized Post-3C)
+  // ============================================================================
+
+  /**
+   * Helper: Get shape service methods by type
+   * Centralizes the mapping between shape types and their service operations
+   */
+  const getShapeServiceMethods = (shapeType: ShapeType) => {
+    switch (shapeType) {
+      case 'rectangle':
+        return {
+          select: canvasService.selectRectangle,
+          deselect: canvasService.deselectRectangle
+        }
+      case 'circle':
+        return {
+          select: canvasService.selectCircle,
+          deselect: canvasService.deselectCircle
+        }
+      case 'line':
+        return {
+          select: canvasService.selectLine,
+          deselect: canvasService.deselectLine
+        }
+      case 'text':
+        return {
+          select: canvasService.selectText,
+          deselect: canvasService.deselectText
+        }
+    }
+  }
+
+  /**
+   * Helper: Find shape by ID and type
+   * Returns the shape object and handles "not found" case
+   */
+  const findShapeByIdAndType = useCallback((shapeId: string, shapeType: ShapeType): Shape | null => {
+    switch (shapeType) {
+      case 'rectangle':
+        // Note: Rectangle type from canvasService doesn't fully implement Shape interface
+        // TODO: Migrate Rectangle to use shared BaseShape (Future Refactor #2)
+        return rectangles.find(r => r.id === shapeId) as Shape | undefined || null
+      case 'circle':
+        return circles.find(c => c.id === shapeId) || null
+      case 'line':
+        return lines.find(l => l.id === shapeId) || null
+      case 'text':
+        return texts.find(t => t.id === shapeId) || null
+    }
+  }, [rectangles, circles, lines, texts])
+
+  /**
+   * Helper: Clear all previous selections (for non-additive mode)
+   * Deselects all shapes across all types
+   */
+  const clearAllSelections = useCallback(async () => {
+    if (!user) return
+    for (const [prevId, prevType] of selectedShapes) {
+      const methods = getShapeServiceMethods(prevType)
+      await methods.deselect(prevId, user.uid)
+    }
+  }, [selectedShapes, user])
+
+  /**
+   * Helper: Update primary selection after removing a shape
+   * If the removed shape was primary, promote another or clear
+   */
+  const updatePrimaryAfterRemoval = useCallback((
+    removedId: string,
+    updatedSelection: Map<string, ShapeType>
+  ): { newPrimary: string | null; newPrimaryType: ShapeType | null } => {
+    if (removedId === primarySelectionId) {
+      if (updatedSelection.size > 0) {
+        const newPrimary = Array.from(updatedSelection.keys())[0]
+        return {
+          newPrimary,
+          newPrimaryType: updatedSelection.get(newPrimary) || null
+        }
+      } else {
+        return { newPrimary: null, newPrimaryType: null }
+      }
+    }
+    return { newPrimary: primarySelectionId, newPrimaryType: primarySelectionType }
+  }, [primarySelectionId, primarySelectionType])
+
+  /**
+   * Unified selectShape (handles all shape types with common logic)
+   * REFACTORED: Extracted duplicate logic into helper functions
+   */
   const selectShape = useCallback(async (shapeId: string, shapeType: ShapeType, additive: boolean = false) => {
     if (!user || !username) return
     
@@ -1013,216 +1102,71 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       return
     }
 
-    // Delegate to the appropriate service method
+    // Special case: rectangles use legacy selectRectangle
     if (shapeType === 'rectangle') {
       await selectRectangle(shapeId, additive)
-    } else if (shapeType === 'circle') {
-      // Similar logic to selectRectangle
-      const circle = circles.find(c => c.id === shapeId)
-      if (!circle) {
-        showToast('Circle not found')
-        return
-      }
+      return
+    }
 
-      if (circle.selectedBy && circle.selectedBy !== user.uid) {
-        showToast(`Circle is currently selected by ${circle.selectedByUsername || 'another user'}`)
-        return
-      }
+    // Find the shape
+    const shape = findShapeByIdAndType(shapeId, shapeType)
+    if (!shape) {
+      showToast(`${shapeType.charAt(0).toUpperCase() + shapeType.slice(1)} not found`)
+      return
+    }
 
-      if (!additive) {
-        // Clear all previous selections
-        for (const [prevId, prevType] of selectedShapes) {
-          if (prevType === 'rectangle') {
-            await canvasService.deselectRectangle(prevId, user.uid)
-          } else if (prevType === 'circle') {
-            await canvasService.deselectCircle(prevId, user.uid)
-          }
-        }
+    // Check ownership
+    if (shape.selectedBy && shape.selectedBy !== user.uid) {
+      const shapeName = shapeType.charAt(0).toUpperCase() + shapeType.slice(1)
+      showToast(`${shapeName} is currently selected by ${shape.selectedByUsername || 'another user'}`)
+      return
+    }
 
-        // Select this one
-        const newSelection = new Map<string, ShapeType>()
-        newSelection.set(shapeId, 'circle')
-        setSelectedShapes(newSelection)
-        setPrimarySelectionId(shapeId)
-        setPrimarySelectionType('circle')
-        await canvasService.selectCircle(shapeId, user.uid, username)
+    const methods = getShapeServiceMethods(shapeType)
+
+    if (!additive) {
+      // Non-additive: clear all, then select this one
+      await clearAllSelections()
+
+      const newSelection = new Map<string, ShapeType>()
+      newSelection.set(shapeId, shapeType)
+      setSelectedShapes(newSelection)
+      setPrimarySelectionId(shapeId)
+      setPrimarySelectionType(shapeType)
+      await methods.select(shapeId, user.uid, username)
+    } else {
+      // Additive: toggle selection
+      const isCurrentlySelected = selectedShapes.has(shapeId)
+
+      if (isCurrentlySelected) {
+        // Remove from selection
+        await methods.deselect(shapeId, user.uid)
+
+        setSelectedShapes(prev => {
+          const next = new Map(prev)
+          next.delete(shapeId)
+
+          const { newPrimary, newPrimaryType } = updatePrimaryAfterRemoval(shapeId, next)
+          setPrimarySelectionId(newPrimary)
+          setPrimarySelectionType(newPrimaryType)
+
+          return next
+        })
       } else {
-        // Additive selection (toggle)
-        const isCurrentlySelected = selectedShapes.has(shapeId)
+        // Add to selection
+        await methods.select(shapeId, user.uid, username)
 
-        if (isCurrentlySelected) {
-          // Remove from selection
-          await canvasService.deselectCircle(shapeId, user.uid)
-
-          setSelectedShapes(prev => {
-            const next = new Map(prev)
-            next.delete(shapeId)
-
-            if (shapeId === primarySelectionId) {
-              if (next.size > 0) {
-                const newPrimary = Array.from(next.keys())[0]
-                setPrimarySelectionId(newPrimary)
-                setPrimarySelectionType(next.get(newPrimary) || null)
-              } else {
-                setPrimarySelectionId(null)
-                setPrimarySelectionType(null)
-              }
-            }
-            return next
-          })
-        } else {
-          // Add to selection
-          await canvasService.selectCircle(shapeId, user.uid, username)
-
-          setSelectedShapes(prev => {
-            const next = new Map(prev)
-            next.set(shapeId, 'circle')
-            return next
-          })
-          setPrimarySelectionId(shapeId)
-          setPrimarySelectionType('circle')
-        }
-      }
-    } else if (shapeType === 'line') {
-      // PR #7: Line selection logic (similar to circle)
-      const line = lines.find(l => l.id === shapeId)
-      if (!line) {
-        showToast('Line not found')
-        return
-      }
-
-      if (line.selectedBy && line.selectedBy !== user.uid) {
-        showToast(`Line is currently selected by ${line.selectedByUsername || 'another user'}`)
-        return
-      }
-
-      if (!additive) {
-        // Clear all previous selections
-        for (const [prevId, prevType] of selectedShapes) {
-          if (prevType === 'rectangle') {
-            await canvasService.deselectRectangle(prevId, user.uid)
-          } else if (prevType === 'circle') {
-            await canvasService.deselectCircle(prevId, user.uid)
-          } else if (prevType === 'line') {
-            await canvasService.deselectLine(prevId, user.uid)
-          }
-        }
-
-        // Select this one
-        const newSelection = new Map<string, ShapeType>()
-        newSelection.set(shapeId, 'line')
-        setSelectedShapes(newSelection)
+        setSelectedShapes(prev => {
+          const next = new Map(prev)
+          next.set(shapeId, shapeType)
+          return next
+        })
         setPrimarySelectionId(shapeId)
-        setPrimarySelectionType('line')
-        await canvasService.selectLine(shapeId, user.uid, username)
-      } else {
-        // Additive selection (toggle)
-        const isCurrentlySelected = selectedShapes.has(shapeId)
-
-        if (isCurrentlySelected) {
-          // Remove from selection
-          await canvasService.deselectLine(shapeId, user.uid)
-
-          setSelectedShapes(prev => {
-            const next = new Map(prev)
-            next.delete(shapeId)
-
-            if (shapeId === primarySelectionId) {
-              if (next.size > 0) {
-                const newPrimary = Array.from(next.keys())[0]
-                setPrimarySelectionId(newPrimary)
-                setPrimarySelectionType(next.get(newPrimary) || null)
-              } else {
-                setPrimarySelectionId(null)
-                setPrimarySelectionType(null)
-              }
-            }
-            return next
-          })
-        } else {
-          // Add to selection
-          await canvasService.selectLine(shapeId, user.uid, username)
-
-          setSelectedShapes(prev => {
-            const next = new Map(prev)
-            next.set(shapeId, 'line')
-            return next
-          })
-          setPrimarySelectionId(shapeId)
-          setPrimarySelectionType('line')
-        }
-      }
-    } else if (shapeType === 'text') {
-      // PR #8: Text selection logic (similar to circle/line)
-      const text = texts.find(t => t.id === shapeId)
-      if (!text) {
-        showToast('Text not found')
-        return
-      }
-
-      if (text.selectedBy && text.selectedBy !== user.uid) {
-        showToast(`Text is currently selected by ${text.selectedByUsername || 'another user'}`)
-        return
-      }
-
-      if (!additive) {
-        // Clear all previous selections
-        for (const [prevId, prevType] of selectedShapes) {
-          if (prevType === 'rectangle') {
-            await canvasService.deselectRectangle(prevId, user.uid)
-          } else if (prevType === 'circle') {
-            await canvasService.deselectCircle(prevId, user.uid)
-          } else if (prevType === 'line') {
-            await canvasService.deselectLine(prevId, user.uid)
-          } else if (prevType === 'text') {
-            await canvasService.deselectText(prevId, user.uid)
-          }
-        }
-
-        // Select this one
-        const newSelection = new Map<string, ShapeType>()
-        newSelection.set(shapeId, 'text')
-        setSelectedShapes(newSelection)
-        setPrimarySelectionId(shapeId)
-        setPrimarySelectionType('text')
-        await canvasService.selectText(shapeId, user.uid, username)
-      } else {
-        // Additive selection toggle
-        if (selectedShapes.has(shapeId)) {
-          // Deselect
-          await canvasService.deselectText(shapeId, user.uid)
-
-          setSelectedShapes(prev => {
-            const next = new Map(prev)
-            next.delete(shapeId)
-
-            if (shapeId === primarySelectionId) {
-              if (next.size > 0) {
-                const newPrimary = Array.from(next.keys())[0]
-                setPrimarySelectionId(newPrimary)
-                setPrimarySelectionType(next.get(newPrimary) || null)
-              } else {
-                setPrimarySelectionId(null)
-                setPrimarySelectionType(null)
-              }
-            }
-            return next
-          })
-        } else {
-          // Add to selection
-          await canvasService.selectText(shapeId, user.uid, username)
-
-          setSelectedShapes(prev => {
-            const next = new Map(prev)
-            next.set(shapeId, 'text')
-            return next
-          })
-          setPrimarySelectionId(shapeId)
-          setPrimarySelectionType('text')
-        }
+        setPrimarySelectionType(shapeType)
       }
     }
-  }, [user, username, circles, lines, texts, selectedShapes, primarySelectionId, selectionLocked, showToast, selectRectangle])
+  }, [user, username, selectionLocked, selectRectangle, selectedShapes, showToast, findShapeByIdAndType, clearAllSelections, updatePrimaryAfterRemoval])
+
 
   // Unified deleteShape (handles rectangles, circles, lines, text)
   const deleteShape = useCallback(async (shapeId: string, shapeType: ShapeType) => {

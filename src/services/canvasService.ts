@@ -138,6 +138,78 @@ export class CanvasService {
   }
 
   /**
+   * REFACTORED (Post-3C): Generic select shape method
+   * Eliminates 100% duplication across circle/line/text selection
+   * @private
+   */
+  private async selectShapeGeneric(
+    shapeId: string,
+    collectionPath: string,
+    userId: string,
+    username: string
+  ): Promise<void> {
+    const shapeRef = dbRef(firebaseDatabase, `${collectionPath}/${shapeId}`)
+    await dbUpdate(shapeRef, {
+      selectedBy: userId,
+      selectedByUsername: username,
+      selectedAt: Date.now()
+    })
+  }
+
+  /**
+   * REFACTORED (Post-3C): Generic deselect shape method
+   * Eliminates 100% duplication across circle/line/text deselection
+   * @private
+   */
+  private async deselectShapeGeneric(
+    shapeId: string,
+    collectionPath: string,
+    userId: string
+  ): Promise<void> {
+    const shapeRef = dbRef(firebaseDatabase, `${collectionPath}/${shapeId}`)
+    const snapshot = await dbGet(shapeRef)
+    
+    if (snapshot.exists()) {
+      const shape = snapshot.val() as { selectedBy?: string | null }
+      if (shape.selectedBy === userId) {
+        await dbUpdate(shapeRef, {
+          selectedBy: null,
+          selectedByUsername: null,
+          selectedAt: null
+        })
+      }
+    }
+  }
+
+  /**
+   * REFACTORED (Post-3C): Generic clear shape selection by user
+   * Used for cleanup when user signs out
+   * @private
+   */
+  private async clearShapeSelectionByUser(
+    collectionRef: DatabaseReference,
+    userId: string
+  ): Promise<void> {
+    const snapshot = await dbGet(collectionRef)
+    if (!snapshot.exists()) return
+
+    const shapes = snapshot.val() as Record<string, { selectedBy?: string | null }>
+    const updates: Record<string, unknown> = {}
+
+    for (const [id, shape] of Object.entries(shapes)) {
+      if (shape.selectedBy === userId) {
+        updates[`${id}/selectedBy`] = null
+        updates[`${id}/selectedByUsername`] = null
+        updates[`${id}/selectedAt`] = null
+      }
+    }
+
+    if (Object.keys(updates).length > 0) {
+      await dbUpdate(collectionRef, updates)
+    }
+  }
+
+  /**
    * Validate that a rectangle exists and return its data
    * @private
    */
@@ -642,24 +714,8 @@ export class CanvasService {
    */
   async selectCircle(circleId: string, userId: string, username: string): Promise<boolean> {
     try {
-      const circleRef = dbRef(firebaseDatabase, `/circles/${circleId}`)
-      const snapshot = await dbGet(circleRef)
-      
-      if (!snapshot.exists()) {
-        return false
-      }
-      
-      const circle = snapshot.val() as CircleShape
-      if (circle.selectedBy && circle.selectedBy !== userId) {
-        return false
-      }
-      
-      await dbUpdate(circleRef, {
-        selectedBy: userId,
-        selectedByUsername: username,
-        selectedAt: Date.now()
-      })
-      
+      // REFACTORED (Post-3C): Use generic method
+      await this.selectShapeGeneric(circleId, '/circles', userId, username)
       return true
     } catch (error) {
       console.error('Error selecting circle:', error)
@@ -674,21 +730,8 @@ export class CanvasService {
    */
   async deselectCircle(circleId: string, userId: string): Promise<void> {
     try {
-      const circleRef = dbRef(firebaseDatabase, `/circles/${circleId}`)
-      const snapshot = await dbGet(circleRef)
-      
-      if (!snapshot.exists()) {
-        return
-      }
-      
-      const circle = snapshot.val() as CircleShape
-      if (circle.selectedBy === userId) {
-        await dbUpdate(circleRef, {
-          selectedBy: null,
-          selectedByUsername: null,
-          selectedAt: null
-        })
-      }
+      // REFACTORED (Post-3C): Use generic method
+      await this.deselectShapeGeneric(circleId, '/circles', userId)
     } catch (error) {
       console.error('Error deselecting circle:', error)
       throw error
@@ -812,12 +855,8 @@ export class CanvasService {
 
   async selectLine(lineId: string, userId: string, username: string): Promise<void> {
     try {
-      const lineRef = dbRef(firebaseDatabase, `${DB_PATHS.LINES}/${lineId}`)
-      await dbUpdate(lineRef, {
-        selectedBy: userId,
-        selectedByUsername: username,
-        selectedAt: Date.now()
-      })
+      // REFACTORED (Post-3C): Use generic method
+      await this.selectShapeGeneric(lineId, DB_PATHS.LINES, userId, username)
     } catch (error) {
       console.error('Error selecting line:', error)
       throw error
@@ -826,19 +865,8 @@ export class CanvasService {
 
   async deselectLine(lineId: string, userId: string): Promise<void> {
     try {
-      const lineRef = dbRef(firebaseDatabase, `${DB_PATHS.LINES}/${lineId}`)
-      const snapshot = await dbGet(lineRef)
-      
-      if (snapshot.exists()) {
-        const line = snapshot.val() as LineShape
-        if (line.selectedBy === userId) {
-          await dbUpdate(lineRef, {
-            selectedBy: null,
-            selectedByUsername: null,
-            selectedAt: null
-          })
-        }
-      }
+      // REFACTORED (Post-3C): Use generic method
+      await this.deselectShapeGeneric(lineId, DB_PATHS.LINES, userId)
     } catch (error) {
       console.error('Error deselecting line:', error)
       throw error
@@ -847,23 +875,8 @@ export class CanvasService {
 
   async clearLineSelection(userId: string): Promise<void> {
     try {
-      const snapshot = await dbGet(this.linesRef)
-      if (!snapshot.exists()) return
-      
-      const lines = snapshot.val() as Record<string, LineShape>
-      const updates: Record<string, null | string> = {}
-      
-      Object.entries(lines).forEach(([lineId, line]) => {
-        if (line.selectedBy === userId) {
-          updates[`${lineId}/selectedBy`] = null
-          updates[`${lineId}/selectedByUsername`] = null
-          updates[`${lineId}/selectedAt`] = null
-        }
-      })
-      
-      if (Object.keys(updates).length > 0) {
-        await dbUpdate(this.linesRef, updates)
-      }
+      // REFACTORED (Post-3C): Use generic method
+      await this.clearShapeSelectionByUser(this.linesRef, userId)
     } catch (error) {
       console.error('Error clearing line selections:', error)
     }
@@ -946,12 +959,8 @@ export class CanvasService {
 
   async selectText(textId: string, userId: string, username: string): Promise<void> {
     try {
-      const textRef = dbRef(firebaseDatabase, `${DB_PATHS.TEXTS}/${textId}`)
-      await dbUpdate(textRef, {
-        selectedBy: userId,
-        selectedByUsername: username,
-        selectedAt: Date.now()
-      })
+      // REFACTORED (Post-3C): Use generic method
+      await this.selectShapeGeneric(textId, DB_PATHS.TEXTS, userId, username)
     } catch (error) {
       console.error('Error selecting text:', error)
       throw error
@@ -960,19 +969,8 @@ export class CanvasService {
 
   async deselectText(textId: string, userId: string): Promise<void> {
     try {
-      const textRef = dbRef(firebaseDatabase, `${DB_PATHS.TEXTS}/${textId}`)
-      const snapshot = await dbGet(textRef)
-      
-      if (snapshot.exists()) {
-        const text = snapshot.val() as TextShape
-        if (text.selectedBy === userId) {
-          await dbUpdate(textRef, {
-            selectedBy: null,
-            selectedByUsername: null,
-            selectedAt: null
-          })
-        }
-      }
+      // REFACTORED (Post-3C): Use generic method
+      await this.deselectShapeGeneric(textId, DB_PATHS.TEXTS, userId)
     } catch (error) {
       console.error('Error deselecting text:', error)
       throw error
@@ -981,23 +979,8 @@ export class CanvasService {
 
   async clearTextSelection(userId: string): Promise<void> {
     try {
-      const snapshot = await dbGet(this.textsRef)
-      if (!snapshot.exists()) return
-      
-      const texts = snapshot.val() as Record<string, TextShape>
-      const updates: Record<string, null | string> = {}
-      
-      Object.entries(texts).forEach(([textId, text]) => {
-        if (text.selectedBy === userId) {
-          updates[`${textId}/selectedBy`] = null
-          updates[`${textId}/selectedByUsername`] = null
-          updates[`${textId}/selectedAt`] = null
-        }
-      })
-      
-      if (Object.keys(updates).length > 0) {
-        await dbUpdate(this.textsRef, updates)
-      }
+      // REFACTORED (Post-3C): Use generic method
+      await this.clearShapeSelectionByUser(this.textsRef, userId)
     } catch (error) {
       console.error('Error clearing text selections:', error)
     }

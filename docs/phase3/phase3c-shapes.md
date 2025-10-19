@@ -2158,6 +2158,74 @@ Before moving to Phase 3D, verify:
 
 ---
 
+## Post-Phase 3C Refactoring
+
+**Completed after PR #9 to reduce technical debt before Phase 3D**
+
+### Refactor #1: Extract Common Selection Logic
+**File**: `src/contexts/CanvasContext.tsx` (1,489 lines → ~1,300 lines)
+
+**Problem**: `selectShape()` has ~200 lines of nearly identical code for circle/line/text selection logic.
+
+**Solution**: Extract shared logic into helper method `handleShapeSelection()`:
+- Common ownership check
+- Common clear-previous-selections logic
+- Common additive toggle logic
+- Service method mapping via object
+
+**Impact**: Reduce duplication by 80%, improve maintainability
+
+---
+
+### Refactor #2: Generic Shape CRUD Operations
+**File**: `src/services/canvasService.ts` (1,008 lines → ~700 lines)
+
+**Problem**: Select/deselect methods are 100% identical across shape types (48 lines × 3 = 144 lines of duplication).
+
+**Solution**: Create generic selection methods:
+```typescript
+private async selectShapeGeneric(shapeId: string, collectionPath: string, userId: string, username: string)
+private async deselectShapeGeneric(shapeId: string, collectionPath: string, userId: string)
+private async clearShapeSelection(collectionRef: DatabaseReference, userId: string)
+```
+
+**Impact**: Remove ~300 lines of duplicate code
+
+---
+
+### Refactor #3: Extract Shape Handler Factory
+**File**: `src/components/canvas/Canvas.tsx` (1,061 lines → ~900 lines)
+
+**Problem**: Duplicate handler patterns for click/drag operations across shapes.
+
+**Solution**: Factory functions for common handler patterns:
+```typescript
+const createShapeClickHandler = (shapeType: ShapeType) => 
+  useCallback((shapeId: string) => selectShape(shapeId, shapeType), [selectShape])
+
+const createShapeDragHandler = (updateFn) => 
+  useCallback(async (id, x, y) => { /* common logic */ }, [updateFn])
+```
+
+**Impact**: Reduce handlers from ~200 → ~50 lines
+
+---
+
+### Future Refactoring Opportunities
+**To revisit after Phase 3D implementation**
+
+1. **Extract Custom Hooks** (Canvas.tsx): `useCoordinateTransform`, `useKeyboardControls`, `useCanvasZoom`, `useShapeHandlers`
+2. **Rectangle Type Migration**: Align Rectangle with other shapes (use BaseShape, required zIndex, remove updatedAt)
+3. **Shape Factory Pattern**: Centralize shape creation logic with consistent defaults
+4. **Selection Manager Class**: Encapsulate all selection state/operations
+5. **Constants Consolidation**: Add `SHAPE_CONSTRAINTS` (z-index gap, text max length, min radius)
+6. **Performance**: Batch Firebase writes in bulk operations, memoize expensive calculations
+7. **Dead Code Cleanup**: Remove unused refs, outdated comments, orphaned variables
+
+**Note**: These are lower priority and should be considered after Phase 3D features are stable.
+
+---
+
 ## Next Steps
 
 **Proceed to Phase 3D**: [Advanced Features](./phase3d-advanced.md)
