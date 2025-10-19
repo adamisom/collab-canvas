@@ -188,10 +188,13 @@ const RectangleComponent: React.FC<RectangleProps> = ({
   }
 
   // Calculate resize handle positions using current visual rectangle during resize
+  // Account for offset (rotation origin at center) - visual top-left is at (x - width/2, y - height/2)
   const rectForHandles = isResizing && currentVisualRect ? currentVisualRect : rectangle
+  const visualX = rectForHandles.x - rectForHandles.width / 2
+  const visualY = rectForHandles.y - rectForHandles.height / 2
   const handlePositions = calculateResizeHandlePositions(
-    rectForHandles.x, 
-    rectForHandles.y, 
+    visualX, 
+    visualY, 
     rectForHandles.width, 
     rectForHandles.height
   )
