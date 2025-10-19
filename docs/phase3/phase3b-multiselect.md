@@ -3,7 +3,8 @@
 **Focus**: Convert from single selection to multi-select (Breaking Change)  
 **PRs**: 4  
 **Work Level**: Medium-High  
-**Dependencies**: Phase 3A complete
+**Dependencies**: Phase 3A complete  
+**Status**: ✅ **COMPLETED** (October 2025)
 
 > **⚠️ Before Implementation:** Review this plan and ask questions before proceeding. Consider whether any plans need to change first. Also re-read the sibling file README.md to ensure broader context.
 
@@ -1412,6 +1413,15 @@ This section documents key implementation decisions made during planning:
 - **Decision**: Spacebar takes priority when both keys held
 - **Implementation**: `if (isPanning) return` check comes first
 - **Rationale**: Pan mode is less common, so prioritize it when user explicitly activates
+
+### **Implementation Variation: Interaction Model (Implemented)**
+- **Actual Implementation**: Double-click to create shapes, Click+Drag to pan canvas
+- **Originally Planned**: Single-click to create, Spacebar+Drag to pan
+- **Rationale for Change**: 
+  - Double-click to create is more intentional, reduces accidental shape creation
+  - Click+Drag for pan is more discoverable and standard in many tools
+  - Added discoverability via first-visit toast and empty canvas message
+  - Updated keyboard shortcuts modal accordingly
 
 ---
 
