@@ -1,7 +1,7 @@
 # Phase 3E: Infrastructure & Production Readiness
 
-**Focus**: Authentication migration, comprehensive testing, and documentation  
-**PRs**: 12-14  
+**Focus**: Authentication migration, comprehensive testing, and security  
+**PRs**: 13-15  
 **Work Level**: High  
 **Dependencies**: All previous phases complete (3A-3D)
 
@@ -11,22 +11,22 @@
 
 ## Phase Overview
 
-Phase 3E prepares the application for production and submission. This phase includes the second and final breaking change (authentication migration) and ensures everything is tested, documented, and ready for users.
+Phase 3E prepares the application infrastructure for production. This phase includes the second and final breaking change (authentication migration), comprehensive testing, and production-grade security rules.
 
 **PRs in this phase:**
-- **PR #12**: Authentication Migration - From Anonymous to third-party providers
-- **PR #13**: Testing & Performance - Comprehensive test suite and optimization
-- **PR #14**: Documentation, Dev Log & Demo - User docs, dev log, demo video
+- **PR #13**: Authentication Migration - From Anonymous to Google Auth
+- **PR #14**: Testing & Quality - Comprehensive test suite (70%+ coverage)
+- **PR #15**: Database Security Rules - Production-grade security
 
 **Why this phase?**
 - Authentication migration is a breaking change that needs its own PR
 - Testing ensures quality and catches regressions
-- Documentation enables users and evaluators to understand the project
-- Essential for production readiness
+- Security rules are critical for production deployment
+- Infrastructure must be solid before final features
 
 ---
 
-## PR #12: Authentication Migration
+## PR #13: Authentication Migration
 
 **Branch**: `feature/auth-migration`  
 **Work Level**: Low-Medium (simplified from original plan)  
@@ -36,7 +36,7 @@ Phase 3E prepares the application for production and submission. This phase incl
 - Anonymous auth is insufficient for production
 - Users need persistent identities  
 - Required for comments/annotations (Phase 3F)
-- Enables user profiles with avatars
+- Enables user profiles with identity
 - Industry standard for real applications
 
 ### What This PR Delivers
@@ -50,7 +50,7 @@ Phase 3E prepares the application for production and submission. This phase incl
 **User Profiles:**
 - Display name (from Google account)
 - Email (from Google account)
-- Avatar URL (from Google account)
+- User initials (derived from display name)
 - Color history (already stored per user from Phase 3A)
 - Last seen timestamp
 
@@ -76,16 +76,163 @@ Phase 3E prepares the application for production and submission. This phase incl
 **UI Updates:**
 - Create simple sign-in modal with "Sign in with Google" button
 - Add user profile dropdown in header
-- Show avatar in collaborative cursors
+- Show user initials in collaborative cursors (colored circles)
 - Add sign-out button
 
 **Code Changes:**
 - Replace `signInAnonymously()` with `signInWithPopup(GoogleAuthProvider)`
-- Create user profile in `/users/{userId}` on first sign-in
+- Create Firebase Auth Trigger (Cloud Function) to auto-create user profiles
+- Create shared UserProfilesContext for efficient profile caching
 - Update `AuthContext` to use Google auth
-- Update security rules to require `auth != null`
+- Update security rules moved to separate PR (see Phase 3F)
 
 ### Files to Create
+
+#### `/functions/src/authTriggers.ts`
+Firebase Auth Trigger to auto-create user profiles:
+
+```typescript
+import { onAuthUserCreated, onAuthUserDeleted } from 'firebase-functions/v2/auth'
+import * as admin from 'firebase-admin'
+
+// Automatically create user profile when user signs in for first time
+export const onUserCreated = onAuthUserCreated(async (event) => {
+  const { uid, email, displayName } = event.data
+  
+  try {
+    await admin.database().ref(`users/${uid}`).set({
+      uid,
+      displayName: displayName || email?.split('@')[0] || 'User',
+      email,
+      createdAt: Date.now(),
+      lastSeenAt: Date.now()
+    })
+    
+    console.log(`✅ Created profile for user ${uid}`)
+  } catch (error) {
+    console.error(`❌ Failed to create profile for ${uid}:`, error)
+    throw error // Firebase will retry automatically
+  }
+})
+
+// Clean up user data when account is deleted
+export const onUserDeleted = onAuthUserDeleted(async (event) => {
+  const { uid } = event.data
+  
+  try {
+    // Remove user profile
+    await admin.database().ref(`users/${uid}`).remove()
+    
+    // Remove cursor
+    await admin.database().ref(`cursors/${uid}`).remove()
+    
+    // Remove color history
+    await admin.database().ref(`colorHistory/${uid}`).remove()
+    
+    console.log(`✅ Cleaned up data for deleted user ${uid}`)
+  } catch (error) {
+    console.error(`❌ Failed to clean up data for ${uid}:`, error)
+  }
+})
+```
+
+#### `/functions/src/index.ts`
+Export the auth triggers:
+
+```typescript
+// Add to existing exports
+export { onUserCreated, onUserDeleted } from './authTriggers'
+```
+
+#### `/src/contexts/UserProfilesContext.tsx`
+Shared context for efficient user profile caching:
+
+```typescript
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react'
+import { dbRef, dbOnValue } from '../services/firebaseService'
+
+interface UserProfile {
+  uid: string
+  displayName: string
+  email: string
+  createdAt: number
+  lastSeenAt: number
+}
+
+interface UserProfilesContextType {
+  profiles: Map<string, UserProfile>
+  getProfile: (userId: string) => UserProfile | undefined
+  getInitials: (userId: string) => string
+  loading: boolean
+}
+
+const UserProfilesContext = createContext<UserProfilesContextType | undefined>(undefined)
+
+export const UserProfilesProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [profiles, setProfiles] = useState<Map<string, UserProfile>>(new Map())
+  const [loading, setLoading] = useState(true)
+  
+  // Single subscription to ALL user profiles
+  useEffect(() => {
+    const usersRef = dbRef('users')
+    
+    const unsubscribe = dbOnValue(usersRef, (snapshot) => {
+      const newProfiles = new Map<string, UserProfile>()
+      
+      if (snapshot.exists()) {
+        snapshot.forEach((child) => {
+          const profile = child.val() as UserProfile
+          newProfiles.set(profile.uid, profile)
+        })
+      }
+      
+      setProfiles(newProfiles)
+      setLoading(false)
+    })
+    
+    return unsubscribe
+  }, [])
+  
+  const getProfile = useCallback((userId: string) => {
+    return profiles.get(userId)
+  }, [profiles])
+  
+  const getInitials = useCallback((userId: string) => {
+    const profile = profiles.get(userId)
+    if (!profile) return '?'
+    
+    return profile.displayName
+      .split(' ')
+      .map(n => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2)
+  }, [profiles])
+  
+  return (
+    <UserProfilesContext.Provider value={{ profiles, getProfile, getInitials, loading }}>
+      {children}
+    </UserProfilesContext.Provider>
+  )
+}
+
+export const useUserProfiles = () => {
+  const context = useContext(UserProfilesContext)
+  if (!context) {
+    throw new Error('useUserProfiles must be used within UserProfilesProvider')
+  }
+  return context
+}
+
+export const useUserProfile = (userId: string) => {
+  const { getProfile, getInitials, loading } = useUserProfiles()
+  return {
+    profile: getProfile(userId),
+    initials: getInitials(userId),
+    loading
+  }
+}
+```
 
 #### `/src/components/auth/SignInModal.tsx`
 Simple Google-only sign-in:
@@ -238,10 +385,13 @@ export default SignInModal
 ```typescript
 import React, { useState, useRef, useEffect } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
+import { useUserProfile } from '../../contexts/UserProfilesContext'
+import { getUserColor } from '../../utils/userColors'
 import './UserProfileDropdown.css'
 
 const UserProfileDropdown: React.FC = () => {
   const { user, signOut } = useAuth()
+  const { initials } = useUserProfile(user?.uid || '')
   const [isOpen, setIsOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
@@ -264,7 +414,7 @@ const UserProfileDropdown: React.FC = () => {
   if (!user) return null
 
   const displayName = user.displayName || user.email || 'User'
-  const photoURL = user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random`
+  const userColor = getUserColor(user.uid)
 
   return (
     <div className="user-profile-dropdown" ref={dropdownRef}>
@@ -272,14 +422,24 @@ const UserProfileDropdown: React.FC = () => {
         className="profile-button"
         onClick={() => setIsOpen(!isOpen)}
       >
-        <img src={photoURL} alt={displayName} className="avatar" />
+        <div 
+          className="avatar-initials"
+          style={{ backgroundColor: userColor }}
+        >
+          {initials}
+        </div>
         <span className="display-name">{displayName}</span>
       </button>
 
       {isOpen && (
         <div className="dropdown-menu">
           <div className="user-info">
-            <img src={photoURL} alt={displayName} className="avatar-large" />
+            <div 
+              className="avatar-initials-large"
+              style={{ backgroundColor: userColor }}
+            >
+              {initials}
+            </div>
             <div className="user-details">
               <div className="name">{displayName}</div>
               {user.email && <div className="email">{user.email}</div>}
@@ -295,8 +455,10 @@ const UserProfileDropdown: React.FC = () => {
               setIsOpen(false)
             }}
           >
-            <svg width="16" height="16" viewBox="0 0 16 16">
-              {/* Sign out icon */}
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M6 14H4C3.46957 14 2.96086 13.7893 2.58579 13.4142C2.21071 13.0391 2 12.5304 2 12V4C2 3.46957 2.21071 2.96086 2.58579 2.58579C2.96086 2.21071 3.46957 2 4 2H6" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+              <path d="M11 11L14 8L11 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M14 8H6" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
             </svg>
             Sign Out
           </button>
@@ -309,14 +471,40 @@ const UserProfileDropdown: React.FC = () => {
 export default UserProfileDropdown
 ```
 
+**CSS for avatar initials** (add to `UserProfileDropdown.css`):
+```css
+.avatar-initials {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.avatar-initials-large {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 600;
+  font-size: 18px;
+}
+```
+
 ### Files to Update
 
 #### 1. `/src/contexts/AuthContext.tsx` ⚠️ MAJOR UPDATE
-Replace Anonymous Auth with Google Auth:
+Replace Anonymous Auth with Google Auth (simplified - no client-side profile creation):
 
 ```typescript
 import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth'
-import { dbRef, dbGet, dbSet, dbUpdate } from '../services/firebaseService'
 
 interface AuthContextType {
   user: User | null
@@ -349,10 +537,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signInWithGoogle = useCallback(async () => {
     try {
       setLoading(true)
-      const result = await signInWithPopup(auth, googleProvider)
-      
-      // Create/update user profile in database
-      await createUserProfile(result.user)
+      await signInWithPopup(auth, googleProvider)
+      // User profile automatically created by Firebase Auth Trigger
     } catch (error: any) {
       console.error('Error signing in with Google:', error)
       throw error
@@ -360,33 +546,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setLoading(false)
     }
   }, [])
-
-  // Create or update user profile in database
-  const createUserProfile = async (firebaseUser: User) => {
-    const userRef = dbRef(`users/${firebaseUser.uid}`)
-    
-    // Check if profile exists
-    const snapshot = await dbGet(userRef)
-    
-    if (!snapshot.exists()) {
-      // Create new profile
-      await dbSet(userRef, {
-        uid: firebaseUser.uid,
-        displayName: firebaseUser.displayName || 'User',
-        email: firebaseUser.email,
-        photoURL: firebaseUser.photoURL,
-        createdAt: Date.now(),
-        lastSeenAt: Date.now()
-      })
-    } else {
-      // Update last seen
-      await dbUpdate(userRef, {
-        lastSeenAt: Date.now(),
-        displayName: firebaseUser.displayName,
-        photoURL: firebaseUser.photoURL
-      })
-    }
-  }
 
   // Sign out
   const signOut = useCallback(async () => {
@@ -418,9 +577,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 **Key Changes:**
 - ❌ Removed `signInAnonymously`
 - ✅ Added `signInWithGoogle` using `signInWithPopup`
-- ✅ Create user profile at `/users/{userId}` on first sign-in
-- ✅ Update `lastSeenAt` on subsequent sign-ins
-- ✅ Store displayName, email, photoURL from Google account
+- ✅ Removed client-side profile creation (handled by Cloud Function trigger)
+- ✅ Much simpler and more reliable
 
 #### 2. `/src/components/layout/Header.tsx`
 Add user profile dropdown:
@@ -433,10 +591,11 @@ import UserProfileDropdown from '../ui/UserProfileDropdown'
 ```
 
 #### 3. `/src/App.tsx`
-Show sign-in modal when not authenticated:
+Show sign-in modal when not authenticated and wrap with UserProfilesProvider:
 
 ```typescript
 import SignInModal from './components/auth/SignInModal'
+import { UserProfilesProvider } from './contexts/UserProfilesContext'
 
 function App() {
   const { user, loading } = useAuth()
@@ -450,123 +609,92 @@ function App() {
   }
 
   return (
+    <UserProfilesProvider>
     <div className="app">
       {/* Main app content */}
     </div>
+    </UserProfilesProvider>
   )
 }
 ```
 
-#### 4. `/database.rules.json` ⚠️ UPDATE SECURITY RULES
-Require authenticated users:
-
-```json
-{
-  "rules": {
-    ".read": "auth != null",
-    ".write": "auth != null",
-    
-    "rectangles": {
-      "$rectangleId": {
-        ".validate": "newData.hasChildren(['id', 'x', 'y', 'width', 'height', 'color', 'createdBy'])",
-        "createdBy": {
-          ".validate": "newData.val() === auth.uid"
-        }
-      }
-    },
-    
-    "circles": {
-      "$circleId": {
-        ".validate": "newData.hasChildren(['id', 'type', 'x', 'y', 'radius', 'color', 'createdBy'])",
-        "createdBy": {
-          ".validate": "newData.val() === auth.uid"
-        }
-      }
-    },
-    
-    "lines": {
-      "$lineId": {
-        ".validate": "newData.hasChildren(['id', 'type', 'x', 'y', 'endX', 'endY', 'color', 'createdBy'])",
-        "createdBy": {
-          ".validate": "newData.val() === auth.uid"
-        }
-      }
-    },
-    
-    "texts": {
-      "$textId": {
-        ".validate": "newData.hasChildren(['id', 'type', 'x', 'y', 'text', 'color', 'createdBy'])",
-        "createdBy": {
-          ".validate": "newData.val() === auth.uid"
-        }
-      }
-    },
-    
-    "users": {
-      "$userId": {
-        ".read": true,
-        ".write": "$userId === auth.uid",
-        ".validate": "newData.hasChildren(['uid', 'displayName'])"
-      }
-    },
-    
-    "cursors": {
-      "$userId": {
-        ".write": "$userId === auth.uid"
-      }
-    }
-  }
-}
-```
-
-#### 5. `/src/components/canvas/Cursor.tsx`
-Update to show user avatars:
+#### 4. `/src/components/canvas/Cursor.tsx`
+Update to show user initials (using shared UserProfilesContext):
 
 ```typescript
-import { useAuth } from '../../contexts/AuthContext'
+import { useUserProfile } from '../../contexts/UserProfilesContext'
+import { getUserColor } from '../../utils/userColors'
+import { Circle, Text, Group, Line } from 'react-konva'
 
-// Fetch user profile for cursor
-const [userProfile, setUserProfile] = useState<any>(null)
-
-useEffect(() => {
-  const fetchUserProfile = async () => {
-    const userRef = dbRef(`users/${cursor.userId}`)
-    const snapshot = await dbGet(userRef)
-    if (snapshot.exists()) {
-      setUserProfile(snapshot.val())
-    }
-  }
-  fetchUserProfile()
-}, [cursor.userId])
-
-// Show avatar in cursor
+const Cursor: React.FC<{ cursor: CursorData }> = ({ cursor }) => {
+  const { profile, initials } = useUserProfile(cursor.userId)
+  
+  if (!profile) return null
+  
+  const userColor = getUserColor(cursor.userId)
+  
 return (
   <Group x={cursor.x} y={cursor.y}>
     {/* Cursor arrow */}
-    
-    {/* User info with avatar */}
-    {userProfile && (
-      <Group x={10} y={10}>
-        <Image
-          image={avatarImage}  // Load from userProfile.photoURL
-          width={20}
-          height={20}
-          cornerRadius={10}
+      <Line
+        points={[0, 0, 0, 16, 4, 12, 8, 18, 12, 14, 8, 10, 14, 10, 0, 0]}
+        fill={userColor}
+        stroke="white"
+        strokeWidth={1}
+        closed
+      />
+      
+      {/* User info badge */}
+      <Group x={16} y={0}>
+        {/* Background pill */}
+        <Rect
+          x={0}
+          y={0}
+          width={profile.displayName.length * 6 + 36}
+          height={24}
+          fill="rgba(0, 0, 0, 0.8)"
+          cornerRadius={12}
+        />
+        
+        {/* Initials circle */}
+        <Circle
+          x={12}
+          y={12}
+          radius={8}
+          fill={userColor}
         />
         <Text
-          text={userProfile.displayName}
-          x={25}
-          y={5}
-          fontSize={12}
+          x={8}
+          y={7}
+          text={initials}
+          fontSize={8}
+          fill="white"
+          fontStyle="bold"
+        />
+        
+        {/* User name */}
+        <Text
+          x={24}
+          y={7}
+          text={profile.displayName}
+          fontSize={11}
           fill="white"
         />
       </Group>
-    )}
   </Group>
 )
+}
+
+export default Cursor
 ```
 
-#### 6. Firebase Console Configuration
+**Benefits:**
+- ✅ No database calls per cursor (uses shared cache)
+- ✅ Shows user initials in colored circle
+- ✅ Efficient and fast
+- ✅ Real-time updates when profiles change
+
+#### 5. Firebase Console Configuration
 **Super simple - 2-minute setup:**
 
 1. Go to [Firebase Console](https://console.firebase.google.com/)
@@ -585,9 +713,9 @@ return (
 - [ ] Can sign in with Google
 - [ ] Sign-in button shows correct Google branding
 - [ ] Can sign out
-- [ ] User profile created in database on first sign-in
-- [ ] User profile displays in header dropdown
-- [ ] Avatar shows in cursor (from Google profile photo)
+- [ ] User profile automatically created by Cloud Function on first sign-in
+- [ ] User profile displays in header dropdown with initials
+- [ ] User initials show in cursor (colored circle)
 - [ ] Display name shows correctly (from Google account)
 - [ ] Email shows correctly (from Google account)
 
@@ -608,16 +736,17 @@ return (
 
 **Manual Testing - Real-Time Collaboration:**
 - [ ] Multiple authenticated users can collaborate
-- [ ] Cursors show correct user avatars and names
+- [ ] Cursors show correct user initials and names
 - [ ] All operations work with authenticated users
 - [ ] Exclusive selection still works per rectangle
-- [ ] User can see their own profile in header
+- [ ] User can see their own profile in header with initials
+- [ ] UserProfilesContext efficiently caches all profiles
 
 ### Success Criteria
 - ✅ Google authentication works flawlessly
-- ✅ User profiles created and displayed with avatars
-- ✅ Avatars show in collaborative cursors
-- ✅ Security rules enforce authentication
+- ✅ User profiles automatically created by Cloud Function
+- ✅ User initials show in header dropdown and collaborative cursors
+- ✅ UserProfilesContext efficiently caches profiles (no redundant fetches)
 - ✅ All Phase 3A-3D features still work
 - ✅ No console errors
 - ✅ Real-time collaboration verified with Google-authenticated users
@@ -631,19 +760,21 @@ return (
 
 **User Data Structure:**
 - Added user profiles collection: `/users/{userId}`
-- Profile includes: `uid`, `displayName`, `email`, `photoURL`, `createdAt`, `lastSeenAt`
+- Profile includes: `uid`, `displayName`, `email`, `createdAt`, `lastSeenAt`
+- User initials derived from `displayName`
 
 **Migration Notes:**
 - No data migration needed (no production users)
 - Anonymous auth completely removed (not kept for testing)
 - All users must sign in with Google account
+- User initials used instead of photos for visual identity
 - Update all documentation to reflect Google sign-in flow
 
 ---
 
-## PR #13: Testing & Performance
+## PR #14: Testing & Quality
 
-**Branch**: `feature/testing-performance`  
+**Branch**: `feature/testing-quality`  
 **Work Level**: Medium  
 **Breaking Changes**: None
 
@@ -667,13 +798,9 @@ return (
 - Multi-user collaboration tests
 - AI agent integration tests
 
-**Performance Testing:**
-- Load testing with 100+ shapes
-- Multi-user performance (5+ concurrent users)
-- Memory leak detection
-- Optimization recommendations
-
 **Test Coverage Goal: 70%+**
+
+> **Note:** Performance testing is considered out of scope for this PR. Basic manual testing with many shapes is sufficient.
 
 ### Implementation Strategy
 
@@ -681,11 +808,6 @@ return (
 - Vitest (already configured from Phase 2)
 - React Testing Library
 - Firebase emulator for integration tests
-
-**Performance Monitoring:**
-- Chrome DevTools profiling
-- Lighthouse audit
-- Custom performance metrics
 
 **Continuous Integration:**
 - GitHub Actions workflow (optional)
@@ -877,31 +999,6 @@ describe('Multi-User Collaboration', () => {
 })
 ```
 
-#### `/tests/performance/loadTest.ts`
-```typescript
-import { describe, it, expect } from 'vitest'
-import { performance } from 'perf_hooks'
-
-describe('Performance Tests', () => {
-  it('should render 100 rectangles in under 100ms', async () => {
-    const startTime = performance.now()
-    
-    // Create 100 rectangles
-    // Measure render time
-    
-    const endTime = performance.now()
-    const renderTime = endTime - startTime
-    
-    expect(renderTime).toBeLessThan(100)
-  })
-
-  it('should handle 5 concurrent users smoothly', async () => {
-    // Simulate 5 users creating shapes simultaneously
-    // Measure sync latency
-  })
-})
-```
-
 ### Files to Update
 
 #### `/package.json`
@@ -913,8 +1010,7 @@ Update test scripts:
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage",
-    "test:integration": "vitest run tests/integration",
-    "test:performance": "vitest run tests/performance"
+    "test:integration": "vitest run tests/integration"
   }
 }
 ```
@@ -958,725 +1054,298 @@ export default defineConfig({
 - [ ] AI agent integration tests pass
 - [ ] Full workflow tests pass
 
-**Performance Tests:**
-- [ ] 100+ shapes render smoothly
-- [ ] 5+ concurrent users work well
-- [ ] No memory leaks detected
-- [ ] Lighthouse score > 90
-
-**Manual Performance Testing:**
-- [ ] Test with 200+ shapes (mixed types)
-- [ ] Test with 10+ concurrent users
-- [ ] Monitor Firebase usage
-- [ ] Check bundle size
-- [ ] Profile with Chrome DevTools
+**Manual Testing:**
+- [ ] Test with 50+ shapes (mixed types) - basic performance check
+- [ ] Test with 3+ concurrent users
+- [ ] Monitor Firebase usage (check console)
+- [ ] Check bundle size (should be reasonable)
 
 ### Success Criteria
 - ✅ All tests passing
 - ✅ Test coverage > 70%
-- ✅ Performance benchmarks met
+- ✅ Basic manual performance testing passes (50+ shapes works smoothly)
 - ✅ No console errors in tests
 - ✅ CI/CD pipeline working (optional)
 
 ---
 
-## PR #14: Documentation, Dev Log & Demo
+## PR #15: Database Security Rules
 
-**Branch**: `feature/documentation`  
-**Work Level**: Medium  
-**Breaking Changes**: None
+**Branch**: `feature/database-security`  
+**Work Level**: Low  
+**Breaking Changes**: None (tightens security only)
 
 ### Why This PR?
-- Enable users to understand and use the application
-- Document development process for evaluation
-- Create demo video for submission
-- Essential for project completion
-- Shows professionalism and attention to detail
+- Current rules are too permissive (allow any authenticated user to write anything)
+- Production requires strict security rules
+- Prevent malicious users from deleting others' work
+- Validate data structure and types
+- Protect user privacy
+- Essential for production deployment
 
 ### What This PR Delivers
 
-**User Documentation:**
-- Updated README with all features
-- User guide with screenshots
-- Keyboard shortcuts reference
-- Troubleshooting guide
+**Comprehensive Security Rules:**
+- Per-shape write permissions (only owner can modify their shapes)
+- Field-level validation (types, ranges, formats)
+- Protection for user profiles (can only edit own profile)
+- Cursor write protection (can only update own cursor)
+- Color history privacy (can only read/write own history)
+- Selection field special handling (any user can select)
 
-**Developer Documentation:**
-- Architecture documentation (updated from Phase 2)
-- API documentation
-- Testing guide
-- Deployment guide
+**Data Validation:**
+- Type checking (strings, numbers, booleans)
+- Range validation (positive dimensions, valid hex colors)
+- Required fields enforcement
+- Structure validation
 
-**AI Development Log:**
-- Detailed log of all AI interactions during Phase 3
-- Decisions made, problems solved
-- AI assistance patterns
-- Reflection on AI collaboration
-
-**Demo Video:**
-- 3-5 minute walkthrough
-- Shows all major features
-- Multi-user collaboration demo
-- AI agent demo
-- Professional production quality
+**Privacy Protection:**
+- Users can only modify their own data
+- User profiles readable by all (for collaboration)
+- Color history private to each user
+- AI command count protection (can only increment)
 
 ### Implementation Strategy
 
-**Documentation Updates:**
-- Update existing docs from Phase 2
-- Add Phase 3 feature documentation
-- Create visual guides with screenshots
-- Document keyboard shortcuts
-
-**AI Development Log:**
-- Review conversation history
-- Document key decisions
-- Capture AI collaboration insights
-- Reflect on process
-
-**Demo Video:**
-- Script key features to showcase
-- Record with screen capture software
-- Add narration or captions
-- Edit for clarity and pacing
-
-### Files to Create
-
-#### `/docs/phase3/ai-development-log.md`
-```markdown
-# Phase 3 AI Development Log
-
-## Overview
-This document chronicles the AI-assisted development process for Phase 3 of CollabCanvas.
-
-## Phase 3A: Polish & Quick Wins
-
-### PR #1: Duplicate + Copy/Paste
-**AI Assistance:**
-- Helped design clipboard state management
-- Suggested offset calculation for paste operations
-- Provided code samples for keyboard shortcuts
-
-**Decisions Made:**
-- Store clipboard in component state (not localStorage)
-- Use 20px offset for paste/duplicate
-- Auto-select pasted rectangles
-
-**Challenges Solved:**
-- Preventing browser's default shortcuts
-- Handling clipboard state on sign-out
-- Supporting multiple paste operations
-
-### PR #2: Enhanced Color Picker
-**AI Assistance:**
-- Designed color history persistence strategy
-- Created hex validation logic
-- Suggested UX patterns for color history
-
-**Decisions Made:**
-- Store color history per user in Firebase
-- Limit to 10 most recent colors
-- Show history in expandable section
-
-### PR #3: Layering & Z-Index
-**AI Assistance:**
-- Explained z-index management strategies
-- Helped design swap-based layer operations
-- Created efficient sorting algorithms
-
-**Decisions Made:**
-- Use compact z-index numbering (0, 1, 2...)
-- Swap z-index values for bring-forward/send-backward
-- Shared z-index across all shape types
-
-## Phase 3B: Multi-Select
-
-### PR #4: Multi-Select Implementation
-**AI Assistance:**
-- Designed selection model architecture
-- Provided transformation algorithms for selection box
-- Created comprehensive testing checklists
-
-**Decisions Made:**
-- Use Set<string> for selected IDs
-- Add primarySelectionId for resize handles
-- Support five selection methods
-
-**Challenges Solved:**
-- Coordinate transformation for selection box
-- Managing multi-select state across shape types
-- Preserving exclusive selection per rectangle
-
-## Phase 3C: Shape Expansion
-
-### Architecture Decision: Separate Collections
-**AI Assistance:**
-- Analyzed three architectural approaches
-- Explained trade-offs of each option
-- Recommended simplest approach for current constraints
-
-**Decision:**
-- Use separate Firebase collections per shape type
-- Rationale: No migration, no breaking changes, can refactor later
-- Trade-off: More code duplication, but simpler now
-
-### PR #5-8: Circle, Line, Text Shapes
-**AI Assistance:**
-- Created consistent patterns across shape types
-- Designed shape-specific resize handles
-- Helped with text editing UX
-
-**Decisions Made:**
-- Circle: Single radial resize handle
-- Line: Two-click creation, endpoint handles
-- Text: Inline editing with HTML input overlay
-- Text formatting as BONUS feature
-
-## Phase 3D: Advanced Features
-
-### PR #9: Alignment Tools
-**AI Assistance:**
-- Designed alignment algorithms
-- Created distribution calculations
-- Provided shape bounds abstraction
-
-**Decisions Made:**
-- Support 6 alignment types + 2 distribution types
-- Work with mixed shape types
-- Keyboard shortcuts match Figma/Sketch standards
-
-### PR #10-11: Selection Tools & Rotation
-**AI Assistance:**
-- Implemented lasso selection with point-in-polygon
-- Designed rotation handle placement
-- Created angle snapping logic
-
-## Phase 3E: Infrastructure
-
-### PR #12: Authentication Migration
-**AI Assistance:**
-- Analyzed authentication options (Firebase Auth vs Auth0 vs Clerk)
-- Recommended Firebase Auth with Google for simplicity
-- Designed simplified migration strategy
-- Updated security rules
-- Created clean sign-in UI
-
-**Decision:**
-- Use Firebase Auth with Google Sign-In only
-- Rationale: Simplest path, everyone has Gmail, can add more providers later
-- Remove Anonymous auth entirely
-- No migration of anonymous data (acceptable - no production users)
-- User profiles with avatars from Google accounts
-
-## Key Insights
-
-### AI Collaboration Patterns
-1. **Architecture Discussions**: AI excellent for analyzing trade-offs
-2. **Code Generation**: AI provided complete, working code samples
-3. **Testing**: AI created comprehensive testing checklists
-4. **Documentation**: AI helped structure and write detailed specs
-
-### What Worked Well
-- Breaking down complex features into PRs
-- Creating detailed implementation guides before coding
-- Using AI to explore alternative approaches
-- Iterative refinement of specifications
-
-### Challenges
-- Keeping track of state across many PRs
-- Ensuring consistency across shape types
-- Managing breaking changes carefully
-- Balancing simplicity with future flexibility
-
-### Time Savings
-- Estimated 40-50% time savings from AI assistance
-- Particularly valuable for: boilerplate code, testing, documentation
-- Allowed focus on architecture and UX decisions
-
-## Reflection
-
-The AI-assisted development process for Phase 3 demonstrated the value of having an AI pair programmer for a large, complex project. The AI excelled at:
-
-1. Generating detailed implementation plans
-2. Providing working code samples
-3. Identifying edge cases
-4. Creating comprehensive tests
-5. Writing clear documentation
-
-The human developer remained essential for:
-1. Making architectural decisions
-2. Evaluating trade-offs
-3. Understanding user needs
-4. Ensuring code quality
-5. Maintaining project vision
-
-This collaboration model proved highly effective for a project of this scope and complexity.
-```
-
-#### `/docs/USER_GUIDE.md` (Updated)
-```markdown
-# CollabCanvas User Guide
-
-## Welcome to CollabCanvas
-
-CollabCanvas is a real-time collaborative canvas application with an AI agent that can help you create and manipulate shapes using natural language.
-
-## Getting Started
-
-### Sign In
-1. Visit the application URL
-2. Click "Sign in with Google"
-3. Choose your Google account (or sign in if needed)
-4. You'll be taken to the canvas
-
-### Your First Shape
-
-**Create a Rectangle:**
-1. Ensure Rectangle mode is selected (press `R`)
-2. Double-click anywhere on the canvas
-3. A blue rectangle appears
-
-**Create a Circle:**
-1. Press `C` to enter Circle mode
-2. Double-click to create a circle
-
-**Create Text:**
-1. Press `T` to enter Text mode
-2. Double-click to create text
-3. Type your text and press Enter
-
-## Core Features
-
-### Selection
-- **Single Select**: Click any shape
-- **Multi-Select**: Cmd/Ctrl + Click shapes
-- **Box Select**: Drag on empty canvas
-- **Lasso Select**: Press `L`, draw a path
-- **Select All**: Cmd/Ctrl + A
-- **Select All of Type**: (Coming in menu)
-
-### Manipulation
-- **Move**: Drag selected shape(s)
-- **Resize**: Drag resize handles (rectangles, circles)
-- **Rotate**: Drag rotate handle (above shape)
-- **Delete**: Press Delete or Backspace
-
-### Clipboard Operations
-- **Copy**: Cmd/Ctrl + C
-- **Paste**: Cmd/Ctrl + V
-- **Duplicate**: Cmd/Ctrl + D
-
-### Color
-- Quick colors: Click preset buttons
-- Custom color: Enter hex code
-- Recent colors: Expand color history
-
-### Layering
-- **Bring Forward**: Cmd/Ctrl + ]
-- **Send Backward**: Cmd/Ctrl + [
-- **Bring to Front**: Cmd/Ctrl + Shift + ]
-- **Send to Back**: Cmd/Ctrl + Shift + [
-
-### Alignment (2+ shapes selected)
-- **Align Left**: Cmd/Ctrl + Shift + L
-- **Align Center (H)**: Cmd/Ctrl + Shift + H
-- **Align Right**: Cmd/Ctrl + Shift + R
-- **Align Top**: Cmd/Ctrl + Shift + T
-- **Align Center (V)**: Cmd/Ctrl + Shift + V
-- **Align Bottom**: Cmd/Ctrl + Shift + B
-
-## AI Agent
-
-### Using the AI
-1. Click the chat icon or press `A`
-2. Type natural language commands
-3. Press Enter or click Send
-4. Watch as the AI creates/modifies shapes
-
-### Example Commands
-- "Create a red rectangle in the center"
-- "Make it bigger"
-- "Change it to blue"
-- "Duplicate it"
-- "Create a circle above it"
-- "Align them to the left"
-- "Delete everything"
-
-### AI Tips
-- Be specific: "Create a large blue circle"
-- Use pronouns: "Make it bigger" (refers to selected shape)
-- Combine operations: "Create a red rectangle and a blue circle next to it"
-- The AI understands context from your selection
-
-## Collaboration
-
-### Real-Time Collaboration
-- Multiple users can edit simultaneously
-- Each user has a colored cursor with their name
-- Shape selection is exclusive (one user at a time per shape)
-- All changes sync in real-time
-
-### Best Practices
-- Communicate with collaborators
-- One person per shape to avoid conflicts
-- Use AI to speed up workflows
-- Take advantage of alignment tools for consistency
-
-## Keyboard Shortcuts
-
-Press `?` to see all keyboard shortcuts in the app.
-
-## Troubleshooting
-
-### Shape won't select
-- Another user may have it selected
-- Try clicking again
-- Check if selection is locked (AI processing)
-
-### Can't paste
-- Copy a shape first (Cmd/Ctrl + C)
-- Ensure you're signed in
-
-### AI not responding
-- Check internet connection
-- Verify a shape is selected (if needed)
-- Try rephrasing your command
-
-### Shapes not syncing
-- Check internet connection
-- Refresh the page
-- Sign out and sign back in
-
-## Tips & Tricks
-
-1. **Rapid Prototyping**: Use AI to quickly create layouts
-2. **Precision**: Use alignment tools for perfect spacing
-3. **Efficiency**: Learn keyboard shortcuts
-4. **Organization**: Use layers strategically
-5. **Collaboration**: Share the URL with teammates
-
-## Need Help?
-
-- Press `?` for keyboard shortcuts
-- Check the troubleshooting section
-- Contact support (add link)
-
----
-
-**Happy Creating!**
-```
-
-#### `/DEMO_SCRIPT.md`
-```markdown
-# CollabCanvas Demo Video Script
-
-**Duration**: 3-5 minutes
-
-## Opening (0:00-0:30)
-"Hi! Welcome to CollabCanvas - a real-time collaborative canvas application with an AI agent.
-
-CollabCanvas lets multiple users work together on a shared canvas, creating and manipulating shapes. What makes it special is the AI agent that understands natural language commands.
-
-Let me show you what it can do."
-
-## Sign In & Interface (0:30-1:00)
-"First, you sign in with Google, GitHub, or Email.
-
-Here's the canvas interface:
-- Shape mode selector (Rectangle, Circle, Line, Text)
-- Color picker with history
-- AI chat panel
-- Alignment toolbar
-- Your profile with avatar"
-
-## Basic Shape Creation (1:00-1:30)
-"Creating shapes is easy. Double-click to create.
-
-[Create rectangle]
-I can resize it by dragging the handles.
-
-[Create circle]
-Circles have a radial resize handle.
-
-[Create text]
-Double-click text to edit it."
-
-## AI Agent Demo (1:30-2:30)
-"Now let's use the AI agent.
-
-[Open AI chat]
-I'll type: 'Create a large red rectangle in the center'
-
-[AI creates it]
-The AI understood and created it!
-
-Let me select it and say: 'Make it blue'
-
-[Changes to blue]
-Perfect!
-
-Now: 'Create a circle next to it'
-
-[AI creates circle]
-Great!
-
-Let me select both and say: 'Align them to the top'
-
-[AI aligns them]
-The AI can perform complex operations too!"
-
-## Multi-Select & Alignment (2:30-3:00)
-"CollabCanvas has powerful multi-select.
-
-[Cmd+Click to select multiple]
-I can select several shapes.
-
-[Show alignment toolbar]
-Then use the alignment tools to align them perfectly.
-
-[Demonstrate alignment]
-Everything lines up perfectly!"
-
-## Real-Time Collaboration (3:00-3:30)
-"The killer feature is real-time collaboration.
-
-[Open second browser window]
-Here's a second user joining.
-
-[Show cursor with avatar]
-You can see each other's cursors.
-
-[Both users create shapes]
-We can both work simultaneously.
-
-[Show exclusive selection]
-When one user selects a shape, it's locked for them."
-
-## Advanced Features (3:30-4:00)
-"CollabCanvas has all the features you'd expect:
-
-[Demonstrate copy/paste]
-- Copy and paste
-
-[Demonstrate duplicate]
-- Duplicate
-
-[Demonstrate layering]
-- Layering (bring to front, send to back)
-
-[Demonstrate rotation]
-- Rotation
-
-[Demonstrate lasso select]
-- Lasso selection"
-
-## Closing (4:00-4:30)
-"CollabCanvas combines the power of real-time collaboration with the intelligence of an AI agent.
-
-Whether you're designing interfaces, creating diagrams, or just sketching ideas, CollabCanvas makes it fast and fun.
-
-Try it yourself at [URL]
-
-Thanks for watching!"
-
----
-
-## Recording Notes
-- Record in 1920x1080
-- Use clean browser window (no extensions visible)
-- Create sample content beforehand
-- Use mouse highlighting in recordings
-- Add smooth transitions
-- Include captions for accessibility
-```
+**Progressive Tightening:**
+- Start with current permissive rules
+- Add per-collection rules
+- Add per-field validation
+- Test thoroughly
+- Deploy incrementally
+
+**Testing Approach:**
+- Test with Firebase Rules Playground
+- Test with emulator
+- Test edge cases (malicious attempts)
+- Verify all legitimate operations still work
 
 ### Files to Update
 
-#### `/README.md` ⚠️ MAJOR UPDATE
-Complete rewrite with all Phase 3 features:
+#### `/database.rules.json`
+Complete replacement with production-grade rules:
 
-```markdown
-# CollabCanvas
-
-A real-time collaborative canvas application with an AI agent, built with React, TypeScript, Firebase, and OpenAI GPT-4o.
-
-## Features
-
-### Real-Time Collaboration
-- Multiple users can edit simultaneously
-- Live cursor tracking with user avatars
-- Exclusive selection (one user per shape)
-- Instant sync across all clients
-
-### Shape Types
-- **Rectangles**: Resizable with drag handles
-- **Circles**: Radial resize handle
-- **Lines/Arrows**: Two-click creation, endpoint handles
-- **Text**: Inline editing, single-line
-
-### Operations
-- **Multi-Select**: Click, Cmd+Click, Box Select, Lasso, Select All
-- **Clipboard**: Copy, Paste, Duplicate
-- **Alignment**: 6 alignment types, 2 distribution types
-- **Layering**: Bring to front/back, forward/backward
-- **Rotation**: Rotate handle, angle snapping
-- **Color**: Quick presets, hex input, color history
-
-### AI Agent
-- Natural language commands
-- Context-aware operations
-- Supports all shape operations
-- Multi-step command execution
-
-### Professional Features
-- Keyboard shortcuts (press `?` to see all)
-- Undo/Redo (browser back/forward)
-- Zoom and pan
-- Responsive design
-
-## Tech Stack
-
-- **Frontend**: React 18, TypeScript, Vite
-- **Canvas**: Konva.js + React-Konva
-- **Backend**: Firebase (Realtime Database, Auth, Cloud Functions)
-- **AI**: OpenAI GPT-4o, Vercel AI SDK
-- **Testing**: Vitest, React Testing Library
-- **Deployment**: Firebase Hosting
-
-## Getting Started
-
-### Prerequisites
-- Node.js 18+
-- Firebase account
-- OpenAI API key
-
-### Installation
-
-1. Clone the repository
-```bash
-git clone https://github.com/yourusername/collab-canvas.git
-cd collab-canvas
+```json
+{
+  "rules": {
+    // Global: must be authenticated
+    ".read": "auth != null",
+    ".write": false,  // Deny all writes by default
+    
+    // Rectangles
+    "rectangles": {
+      "$rectangleId": {
+        // Can create new OR can update own shapes
+        ".write": "!data.exists() || data.child('createdBy').val() === auth.uid",
+        
+        // Validate structure
+        ".validate": "newData.hasChildren(['id', 'x', 'y', 'width', 'height', 'color', 'createdBy', 'createdAt'])",
+        
+        // Field validation
+        "id": { ".validate": "newData.isString()" },
+        "x": { ".validate": "newData.isNumber()" },
+        "y": { ".validate": "newData.isNumber()" },
+        "width": { ".validate": "newData.isNumber() && newData.val() > 0" },
+        "height": { ".validate": "newData.isNumber() && newData.val() > 0" },
+        "color": { 
+          ".validate": "newData.isString() && newData.val().matches(/^#[0-9A-Fa-f]{6}$/)" 
+        },
+        "createdBy": { 
+          ".validate": "newData.val() === auth.uid" 
+        },
+        "createdAt": { ".validate": "newData.isNumber()" },
+        "zIndex": { ".validate": "newData.isNumber()" },
+        
+        // Selection fields - any authenticated user can update
+        "selectedBy": {
+          ".write": "auth != null",
+          ".validate": "newData.val() === auth.uid || newData.val() === null"
+        },
+        "selectedAt": {
+          ".write": "auth != null",
+          ".validate": "newData.isNumber() || newData.val() === null"
+        }
+      }
+    },
+    
+    // Circles (same pattern as rectangles)
+    "circles": {
+      "$circleId": {
+        ".write": "!data.exists() || data.child('createdBy').val() === auth.uid",
+        ".validate": "newData.hasChildren(['id', 'type', 'x', 'y', 'radius', 'color', 'createdBy', 'createdAt'])",
+        
+        "id": { ".validate": "newData.isString()" },
+        "type": { ".validate": "newData.val() === 'circle'" },
+        "x": { ".validate": "newData.isNumber()" },
+        "y": { ".validate": "newData.isNumber()" },
+        "radius": { ".validate": "newData.isNumber() && newData.val() > 0" },
+        "color": { 
+          ".validate": "newData.isString() && newData.val().matches(/^#[0-9A-Fa-f]{6}$/)" 
+        },
+        "createdBy": { ".validate": "newData.val() === auth.uid" },
+        "createdAt": { ".validate": "newData.isNumber()" },
+        "zIndex": { ".validate": "newData.isNumber()" },
+        
+        "selectedBy": {
+          ".write": "auth != null",
+          ".validate": "newData.val() === auth.uid || newData.val() === null"
+        },
+        "selectedAt": {
+          ".write": "auth != null",
+          ".validate": "newData.isNumber() || newData.val() === null"
+        }
+      }
+    },
+    
+    // Lines
+    "lines": {
+      "$lineId": {
+        ".write": "!data.exists() || data.child('createdBy').val() === auth.uid",
+        ".validate": "newData.hasChildren(['id', 'type', 'x', 'y', 'endX', 'endY', 'color', 'createdBy', 'createdAt'])",
+        
+        "id": { ".validate": "newData.isString()" },
+        "type": { ".validate": "newData.val() === 'line'" },
+        "x": { ".validate": "newData.isNumber()" },
+        "y": { ".validate": "newData.isNumber()" },
+        "endX": { ".validate": "newData.isNumber()" },
+        "endY": { ".validate": "newData.isNumber()" },
+        "color": { 
+          ".validate": "newData.isString() && newData.val().matches(/^#[0-9A-Fa-f]{6}$/)" 
+        },
+        "createdBy": { ".validate": "newData.val() === auth.uid" },
+        "createdAt": { ".validate": "newData.isNumber()" },
+        "zIndex": { ".validate": "newData.isNumber()" },
+        
+        "selectedBy": {
+          ".write": "auth != null",
+          ".validate": "newData.val() === auth.uid || newData.val() === null"
+        },
+        "selectedAt": {
+          ".write": "auth != null",
+          ".validate": "newData.isNumber() || newData.val() === null"
+        }
+      }
+    },
+    
+    // Texts
+    "texts": {
+      "$textId": {
+        ".write": "!data.exists() || data.child('createdBy').val() === auth.uid",
+        ".validate": "newData.hasChildren(['id', 'type', 'x', 'y', 'text', 'color', 'createdBy', 'createdAt'])",
+        
+        "id": { ".validate": "newData.isString()" },
+        "type": { ".validate": "newData.val() === 'text'" },
+        "x": { ".validate": "newData.isNumber()" },
+        "y": { ".validate": "newData.isNumber()" },
+        "text": { 
+          ".validate": "newData.isString() && newData.val().length <= 500" 
+        },
+        "fontSize": { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 200" },
+        "color": { 
+          ".validate": "newData.isString() && newData.val().matches(/^#[0-9A-Fa-f]{6}$/)" 
+        },
+        "createdBy": { ".validate": "newData.val() === auth.uid" },
+        "createdAt": { ".validate": "newData.isNumber()" },
+        "zIndex": { ".validate": "newData.isNumber()" },
+        
+        "selectedBy": {
+          ".write": "auth != null",
+          ".validate": "newData.val() === auth.uid || newData.val() === null"
+        },
+        "selectedAt": {
+          ".write": "auth != null",
+          ".validate": "newData.isNumber() || newData.val() === null"
+        }
+      }
+    },
+    
+    // User profiles
+    "users": {
+      "$userId": {
+        ".read": "auth != null",  // All users can read all profiles
+        ".write": "$userId === auth.uid",  // Can only write own profile
+        ".validate": "newData.hasChildren(['uid', 'displayName', 'email', 'createdAt'])",
+        
+        "uid": { ".validate": "newData.val() === $userId" },
+        "displayName": { ".validate": "newData.isString()" },
+        "email": { ".validate": "newData.isString()" },
+        "createdAt": { ".validate": "newData.isNumber()" },
+        "lastSeenAt": { ".validate": "newData.isNumber()" }
+      }
+    },
+    
+    // Cursors
+    "cursors": {
+      "$userId": {
+        ".read": "auth != null",  // All users can see all cursors
+        ".write": "$userId === auth.uid",  // Can only update own cursor
+        ".validate": "newData.hasChildren(['x', 'y', 'userId'])",
+        
+        "x": { ".validate": "newData.isNumber()" },
+        "y": { ".validate": "newData.isNumber()" },
+        "userId": { ".validate": "newData.val() === $userId" }
+      }
+    },
+    
+    // Color history - per user
+    "colorHistory": {
+      "$userId": {
+        ".read": "$userId === auth.uid",  // Can only read own history
+        ".write": "$userId === auth.uid",  // Can only write own history
+        ".validate": "newData.isString() && newData.val().length <= 500"
+      }
+    }
+  }
+}
 ```
 
-2. Install dependencies
-```bash
-npm install
-cd functions && npm install && cd ..
-```
-
-3. Set up environment variables
-```bash
-cp .env.example .env
-# Add your Firebase and OpenAI credentials
-```
-
-4. Run development server
-```bash
-npm run dev
-```
-
-5. Deploy Firebase Functions
-```bash
-npm run deploy:functions
-```
-
-### Configuration
-
-See [Setup Guide](./docs/phase2/setup-guide.md) for detailed configuration instructions.
-
-## Documentation
-
-- [User Guide](./docs/USER_GUIDE.md)
-- [Architecture](./docs/phase2/architecture.md)
-- [Phase 3 Tasks](./docs/phase3/README.md)
-- [AI Development Log](./docs/phase3/ai-development-log.md)
-- [Testing Guide](./docs/phase2/testing-plan.md)
-
-## Testing
-
-Run tests:
-```bash
-npm run test
-```
-
-Run with coverage:
-```bash
-npm run test:coverage
-```
-
-Run integration tests:
-```bash
-npm run test:integration
-```
-
-## Deployment
-
-Deploy to Firebase:
-```bash
-npm run build
-npm run deploy
-```
-
-## Keyboard Shortcuts
-
-Press `?` in the application to see all keyboard shortcuts.
-
-## Contributing
-
-This is a solo project developed with AI assistance. See [AI Development Log](./docs/phase3/ai-development-log.md) for details.
-
-## License
-
-MIT License - see LICENSE file for details
-
-## Acknowledgments
-
-- Built with AI assistance from Claude (Anthropic)
-- Inspired by Figma, Excalidraw, and Miro
-- Firebase for real-time infrastructure
-- OpenAI for GPT-4o
-
-## Demo
-
-Watch the [demo video](./docs/demo-video-link.mp4) (3 minutes)
-
-Try it live: [https://your-app.web.app](https://your-app.web.app)
-```
+**Key Security Features:**
+- ✅ Per-shape ownership (can only modify own shapes)
+- ✅ Field-level validation (types, ranges, regex)
+- ✅ Hex color validation
+- ✅ Positive dimension requirements
+- ✅ Selection fields writable by anyone (for collaboration)
+- ✅ User profiles readable by all (for cursors)
+- ✅ Color history private to each user
+- ✅ Text length limits (prevent abuse)
 
 ### Testing Checklist
 
-**Documentation Quality:**
-- [ ] README is comprehensive and accurate
-- [ ] User guide covers all features
-- [ ] Architecture docs updated
-- [ ] All links work
-- [ ] Screenshots included
-- [ ] Keyboard shortcuts documented
+**Security Rules Testing:**
+- [ ] Firebase Rules Playground tested
+- [ ] Firebase emulator tested locally
+- [ ] Malicious write attempts blocked (e.g., delete other users' shapes)
+- [ ] Malicious read attempts blocked (e.g., read other users' color history)
+- [ ] All legitimate operations still work
+- [ ] Shape creation works
+- [ ] Shape modification works (own shapes only)
+- [ ] Selection updates work (any user can select)
+- [ ] User profile reads work (all profiles)
+- [ ] User profile writes work (own profile only)
 
-**AI Development Log:**
-- [ ] All phases documented
-- [ ] Key decisions explained
-- [ ] Challenges and solutions captured
-- [ ] Insights and reflections included
-- [ ] Process clearly described
+**Edge Case Testing:**
+- [ ] Invalid hex colors rejected
+- [ ] Negative dimensions rejected
+- [ ] Missing required fields rejected
+- [ ] Wrong data types rejected
+- [ ] Text length limits enforced
+- [ ] Font size limits enforced
+- [ ] AI Cloud Function can still create shapes (has admin access)
 
-**Demo Video:**
-- [ ] 3-5 minutes length
-- [ ] All major features shown
-- [ ] Professional production quality
-- [ ] Audio clear (narration or captions)
-- [ ] Smooth editing and pacing
-- [ ] Real-time collaboration demonstrated
-- [ ] AI agent demonstrated
-- [ ] Call-to-action included
+**Integration Testing:**
+- [ ] All Phase 3A-3D features still work
+- [ ] Multi-user collaboration still works
+- [ ] AI agent still works
+- [ ] No console errors
+- [ ] No Firebase permission errors
 
 ### Success Criteria
-- ✅ All documentation complete and accurate
-- ✅ AI development log is comprehensive
-- ✅ Demo video is professional quality
-- ✅ README is clear and inviting
-- ✅ User guide helps users succeed
-- ✅ Architecture docs help developers understand
+- ✅ Production-grade security rules deployed
+- ✅ All malicious operations blocked
+- ✅ All legitimate operations work
+- ✅ Data validation comprehensive
+- ✅ Privacy protection enforced
+- ✅ No regression in existing features
 
 ---
 
@@ -1685,35 +1354,36 @@ Try it live: [https://your-app.web.app](https://your-app.web.app)
 Before moving to Phase 3F, verify:
 
 ### Functionality
-- [ ] All 3 PRs merged and tested
-- [ ] Authentication migration complete
-- [ ] All auth providers working
+- [ ] All 3 PRs merged and tested (13, 14, 15)
+- [ ] Authentication migration complete (Google only)
+- [ ] User profiles auto-created by Cloud Function
+- [ ] UserProfilesContext caching profiles efficiently
 - [ ] Test suite comprehensive (70%+ coverage)
-- [ ] Performance benchmarks met
-- [ ] All documentation complete
-- [ ] AI development log finished
-- [ ] Demo video produced
+- [ ] All tests passing
+- [ ] Security rules deployed and tested
 
 ### Production Readiness
-- [ ] Security rules updated and tested
+- [ ] Production-grade security rules active
 - [ ] All features work with authenticated users
 - [ ] No console errors or warnings
-- [ ] Performance is acceptable
-- [ ] Documentation is submission-ready
+- [ ] Basic performance testing passed (50+ shapes)
+- [ ] Multi-user collaboration verified
 
 ### Quality
-- [ ] All tests passing
+- [ ] Test coverage > 70%
 - [ ] Code is clean and maintainable
 - [ ] User experience is polished
 - [ ] Real-time sync is reliable
+- [ ] Security rules block malicious operations
 
 ---
 
 ## Next Steps
 
-**Proceed to Phase 3F**: [Final Features](./phase3f-final.md)
+**Proceed to Phase 3F**: [Final Features & Documentation](./phase3f-final.md)
 
-Phase 3F adds the last advanced features: AI Agent Enhancements and Comments/Annotations. These are polish features that elevate the application to production quality.
+Phase 3F adds the final polish and documentation: Documentation & Demo, AI Agent Enhancements, and Comments. These features elevate the application to production quality and enable submission.
 
-**Note**: Phase 3E is a major milestone. The application is now production-ready with authentication, testing, and documentation. Phase 3F adds advanced features for power users.
+**Note**: Phase 3E is a critical milestone. The application infrastructure is now production-ready with authentication, testing, and security. Phase 3F focuses on documentation and advanced features.
+
 
