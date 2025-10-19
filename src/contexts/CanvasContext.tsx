@@ -617,36 +617,60 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     setPrimarySelectionType(null)
   }, [user, selectedShapes])
 
-  // NEW: Delete all selected rectangles
+  // NEW: Delete all selected shapes (rectangles, circles, lines, texts)
   const deleteSelectedRectangles = useCallback(async () => {
-    const idsToDelete = Array.from(selectedShapes.keys())
-    if (idsToDelete.length === 0) return
+    if (selectedShapes.size === 0) return
 
-    // Delete all sequentially
-    for (const id of idsToDelete) {
-      await canvasService.deleteRectangle(id)
+    // Delete all sequentially based on shape type
+    for (const [id, shapeType] of selectedShapes.entries()) {
+      switch (shapeType) {
+        case 'rectangle':
+          await canvasService.deleteRectangle(id)
+          break
+        case 'circle':
+          await canvasService.deleteCircle(id)
+          break
+        case 'line':
+          await canvasService.deleteLine(id)
+          break
+        case 'text':
+          await canvasService.deleteText(id)
+          break
+      }
     }
 
+    const count = selectedShapes.size
     setSelectedShapes(new Map())
     setPrimarySelectionId(null)
     setPrimarySelectionType(null)
 
-    const count = idsToDelete.length
-    showToast(`Deleted ${count} rectangle${count > 1 ? 's' : ''}`)
+    showToast(`Deleted ${count} shape${count > 1 ? 's' : ''}`)
   }, [selectedShapes, showToast])
 
-  // NEW: Change color of all selected rectangles
+  // NEW: Change color of all selected shapes
   const changeSelectedRectanglesColor = useCallback(async (color: string) => {
-    const idsToUpdate = Array.from(selectedShapes.keys())
-    if (idsToUpdate.length === 0) return
+    if (selectedShapes.size === 0) return
 
-    // Update all sequentially
-    for (const id of idsToUpdate) {
-      await canvasService.updateRectangle(id, { color })
+    // Update all sequentially based on shape type
+    for (const [id, shapeType] of selectedShapes.entries()) {
+      switch (shapeType) {
+        case 'rectangle':
+          await canvasService.updateRectangle(id, { color })
+          break
+        case 'circle':
+          await canvasService.updateCircle(id, { color })
+          break
+        case 'line':
+          await canvasService.updateLine(id, { color })
+          break
+        case 'text':
+          await canvasService.updateText(id, { color })
+          break
+      }
     }
 
-    const count = idsToUpdate.length
-    showToast(`Changed color of ${count} rectangle${count > 1 ? 's' : ''}`)
+    const count = selectedShapes.size
+    showToast(`Changed color of ${count} shape${count > 1 ? 's' : ''}`)
   }, [selectedShapes, showToast])
 
   // Clear any error messages
