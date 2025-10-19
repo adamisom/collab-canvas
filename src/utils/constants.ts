@@ -15,7 +15,9 @@ export const CURSOR_THROTTLE_MS = 16
 export const DB_PATHS = {
   USERS: 'users',
   CURSORS: 'cursors', 
-  RECTANGLES: 'rectangles'
+  RECTANGLES: 'rectangles',
+  CIRCLES: 'circles',  // PR #6
+  LINES: 'lines'  // PR #7
 } as const
 
 // Rectangle color options

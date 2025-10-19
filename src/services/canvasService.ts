@@ -11,7 +11,7 @@ import {
 } from './firebaseService'
 import type { DatabaseReference, DataSnapshot } from './firebaseService'
 import { DB_PATHS, RECTANGLE_COLORS, RECTANGLE_CONSTRAINTS, CANVAS_BOUNDS } from '../utils/constants'
-import type { CircleShape } from '../shared/shapes'
+import type { CircleShape, LineShape } from '../shared/shapes'
 
 export interface Rectangle {
   id: string
@@ -45,6 +45,17 @@ export interface CircleInput {
   createdBy: string
 }
 
+export interface LineInput {
+  x: number
+  y: number
+  endX: number
+  endY: number
+  strokeWidth?: number
+  color?: string
+  hasArrow?: boolean
+  createdBy: string
+}
+
 /**
  * Canvas Service
  * Handles all Firebase Realtime Database operations for shapes (rectangles, circles, etc.)
@@ -59,10 +70,55 @@ export interface CircleInput {
 export class CanvasService {
   private rectanglesRef: DatabaseReference
   private circlesRef: DatabaseReference  // PR #6
+  private linesRef: DatabaseReference  // PR #7
 
   constructor() {
     this.rectanglesRef = dbRef(firebaseDatabase, DB_PATHS.RECTANGLES)
     this.circlesRef = dbRef(firebaseDatabase, '/circles')  // PR #6
+    this.linesRef = dbRef(firebaseDatabase, '/lines')  // PR #7
+  }
+
+  /**
+   * Get the maximum z-index across ALL shape types (rectangles, circles, lines, text)
+   * Used to ensure new shapes appear on top
+   * @private
+   * @returns Maximum z-index found, or 0 if no shapes exist
+   */
+  private async getMaxZIndexAcrossAllShapes(): Promise<number> {
+    try {
+      let maxZ = 0
+
+      // Check rectangles
+      const rectSnapshot = await dbGet(this.rectanglesRef)
+      if (rectSnapshot.exists()) {
+        const rectangles = Object.values(rectSnapshot.val() as Record<string, Rectangle>)
+        const rectMax = Math.max(...rectangles.map(r => r.zIndex ?? 0))
+        maxZ = Math.max(maxZ, rectMax)
+      }
+
+      // Check circles (PR #6)
+      const circleSnapshot = await dbGet(this.circlesRef)
+      if (circleSnapshot.exists()) {
+        const circles = Object.values(circleSnapshot.val() as Record<string, CircleShape>)
+        const circleMax = Math.max(...circles.map(c => c.zIndex ?? 0))
+        maxZ = Math.max(maxZ, circleMax)
+      }
+
+      // Check lines (PR #7)
+      const lineSnapshot = await dbGet(this.linesRef)
+      if (lineSnapshot.exists()) {
+        const lines = Object.values(lineSnapshot.val() as Record<string, LineShape>)
+        const lineMax = Math.max(...lines.map(l => l.zIndex ?? 0))
+        maxZ = Math.max(maxZ, lineMax)
+      }
+
+      // TODO PR #8: Add text shapes
+
+      return maxZ
+    } catch (error) {
+      console.error('Error fetching max zIndex across shapes:', error)
+      return 1000 // Fallback
+    }
   }
 
   /**
@@ -276,41 +332,6 @@ export class CanvasService {
     return Math.min(
       ...rectangles.map(r => r.zIndex ?? 0)
     )
-  }
-
-  /**
-   * PR #6: Get max zIndex across ALL shape types (rectangles, circles, etc.)
-   * Used when creating new shapes to ensure they appear on top
-   * @private
-   */
-  private async getMaxZIndexAcrossAllShapes(): Promise<number> {
-    try {
-      let maxZ = 0
-
-      // Check rectangles
-      const rectSnapshot = await dbGet(this.rectanglesRef)
-      if (rectSnapshot.exists()) {
-        const rectangles = Object.values(rectSnapshot.val() as Record<string, Rectangle>)
-        const rectMax = Math.max(...rectangles.map(r => r.zIndex ?? 0))
-        maxZ = Math.max(maxZ, rectMax)
-      }
-
-      // Check circles (PR #6)
-      const circleSnapshot = await dbGet(this.circlesRef)
-      if (circleSnapshot.exists()) {
-        const circles = Object.values(circleSnapshot.val() as Record<string, CircleShape>)
-        const circleMax = Math.max(...circles.map(c => c.zIndex ?? 0))
-        maxZ = Math.max(maxZ, circleMax)
-      }
-
-      // TODO PR #7: Add lines
-      // TODO PR #8: Add text
-
-      return maxZ
-    } catch (error) {
-      console.error('Error fetching max zIndex across shapes:', error)
-      return 1000 // Fallback
-    }
   }
 
   /**
@@ -686,6 +707,149 @@ export class CanvasService {
       }
     } catch (error) {
       console.error('Error clearing circle selections:', error)
+    }
+  }
+
+  // ============================================================================
+  // PR #7: LINE/ARROW OPERATIONS
+  // ============================================================================
+
+  async createLine(lineData: LineInput): Promise<LineShape> {
+    try {
+      const now = Date.now()
+      const newLineRef = dbPush(this.linesRef)
+      
+      if (!newLineRef.key) {
+        throw new Error('Failed to generate line ID')
+      }
+
+      // Get max zIndex across ALL shapes and add 1000
+      const maxZ = await this.getMaxZIndexAcrossAllShapes()
+
+      const line: LineShape = {
+        id: newLineRef.key,
+        type: 'line',
+        x: lineData.x,
+        y: lineData.y,
+        endX: lineData.endX,
+        endY: lineData.endY,
+        strokeWidth: lineData.strokeWidth || 4,
+        color: lineData.color || RECTANGLE_COLORS.BLUE,
+        hasArrow: lineData.hasArrow || false,
+        zIndex: maxZ + 1000,
+        createdBy: lineData.createdBy,
+        createdAt: now,
+        selectedBy: null,
+        selectedAt: null
+      }
+
+      await dbUpdate(newLineRef, line)
+      return line
+    } catch (error) {
+      console.error('Error creating line:', error)
+      throw error
+    }
+  }
+
+  onLinesChange(callback: (lines: LineShape[]) => void): () => void {
+    return dbOnValue(this.linesRef, (snapshot: DataSnapshot) => {
+      const lines: LineShape[] = []
+      if (snapshot.exists()) {
+        snapshot.forEach((childSnapshot) => {
+          const line = childSnapshot.val() as LineShape
+          lines.push(line)
+        })
+      }
+      callback(lines)
+    })
+  }
+
+  async updateLine(lineId: string, updates: Partial<LineShape>): Promise<void> {
+    try {
+      const lineRef = dbRef(firebaseDatabase, `${DB_PATHS.LINES}/${lineId}`)
+      await dbUpdate(lineRef, updates)
+    } catch (error) {
+      console.error('Error updating line:', error)
+      throw error
+    }
+  }
+
+  async updateLineEndpoints(lineId: string, endX: number, endY: number): Promise<void> {
+    try {
+      const lineRef = dbRef(firebaseDatabase, `${DB_PATHS.LINES}/${lineId}`)
+      await dbUpdate(lineRef, { endX, endY })
+    } catch (error) {
+      console.error('Error updating line endpoints:', error)
+      throw error
+    }
+  }
+
+  async deleteLine(lineId: string): Promise<void> {
+    try {
+      const lineRef = dbRef(firebaseDatabase, `${DB_PATHS.LINES}/${lineId}`)
+      await dbRemove(lineRef)
+    } catch (error) {
+      console.error('Error deleting line:', error)
+      throw error
+    }
+  }
+
+  async selectLine(lineId: string, userId: string, username: string): Promise<void> {
+    try {
+      const lineRef = dbRef(firebaseDatabase, `${DB_PATHS.LINES}/${lineId}`)
+      await dbUpdate(lineRef, {
+        selectedBy: userId,
+        selectedByUsername: username,
+        selectedAt: Date.now()
+      })
+    } catch (error) {
+      console.error('Error selecting line:', error)
+      throw error
+    }
+  }
+
+  async deselectLine(lineId: string, userId: string): Promise<void> {
+    try {
+      const lineRef = dbRef(firebaseDatabase, `${DB_PATHS.LINES}/${lineId}`)
+      const snapshot = await dbGet(lineRef)
+      
+      if (snapshot.exists()) {
+        const line = snapshot.val() as LineShape
+        if (line.selectedBy === userId) {
+          await dbUpdate(lineRef, {
+            selectedBy: null,
+            selectedByUsername: null,
+            selectedAt: null
+          })
+        }
+      }
+    } catch (error) {
+      console.error('Error deselecting line:', error)
+      throw error
+    }
+  }
+
+  async clearLineSelection(userId: string): Promise<void> {
+    try {
+      const snapshot = await dbGet(this.linesRef)
+      if (!snapshot.exists()) return
+      
+      const lines = snapshot.val() as Record<string, LineShape>
+      const updates: Record<string, null | string> = {}
+      
+      Object.entries(lines).forEach(([lineId, line]) => {
+        if (line.selectedBy === userId) {
+          updates[`${lineId}/selectedBy`] = null
+          updates[`${lineId}/selectedByUsername`] = null
+          updates[`${lineId}/selectedAt`] = null
+        }
+      })
+      
+      if (Object.keys(updates).length > 0) {
+        await dbUpdate(this.linesRef, updates)
+      }
+    } catch (error) {
+      console.error('Error clearing line selections:', error)
     }
   }
 }

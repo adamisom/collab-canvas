@@ -41,14 +41,13 @@ export interface CircleShape extends BaseShape {
 }
 
 /**
- * Line/Arrow shape (Phase 3C PR #6)
+ * Line/Arrow shape (Phase 3C PR #7)
  */
 export interface LineShape extends BaseShape {
   type: 'line'
-  startX: number
-  startY: number
-  endX: number
-  endY: number
+  endX: number  // End point X (start is x from BaseShape)
+  endY: number  // End point Y (start is y from BaseShape)
+  strokeWidth: number
   hasArrow: boolean
 }
 
