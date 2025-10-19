@@ -8,7 +8,9 @@ import { VIEWPORT_WIDTH, VIEWPORT_HEIGHT } from '../../utils/constants'
 import { stopEventPropagation } from '../../utils/eventHelpers'
 import Cursor from './Cursor'
 import Rectangle from './Rectangle'
-import SelectionBox from './SelectionBox'  // NEW
+import Circle from './Circle'  // PR #6
+import SelectionBox from './SelectionBox'
+import ShapeModeSelector from './ShapeModeSelector'  // PR #6
 import ColorPicker from './ColorPicker'
 import Toast from '../ui/Toast'
 import type { Rectangle as RectangleType } from '../../services/canvasService'
@@ -57,17 +59,25 @@ const Canvas: React.FC<CanvasProps> = ({
   // Get canvas context
   const { 
     rectangles, 
+    circles,               // PR #6
+    shapeMode,             // PR #6
     selectedShapes,        // REFACTORED PR #5: Map<string, ShapeType>
     primarySelectionId,    // Last clicked shape
+    primarySelectionType,  // PR #6
+    setShapeMode,          // PR #6
     createRectangle, 
+    createCircle,          // PR #6
     updateRectangle, 
+    updateCircle,          // PR #6
     resizeRectangle, 
+    resizeCircle,          // PR #6
     deleteRectangle, 
     selectRectangle,
+    selectShape,           // PR #6: Unified selection
     selectMultiple,        // Multi-select operation
     selectAll,             // Select all
     clearSelection,        // Clear selection
-    changeRectangleColor,
+    changeShapeColor,      // PR #6: Unified color change
     copySelectedRectangles,  // Copy selected
     pasteRectangles,         // Paste clipboard
     duplicateRectangle,
@@ -221,7 +231,7 @@ const Canvas: React.FC<CanvasProps> = ({
     sendViewportInfo()
   }, [sendViewportInfo])
 
-  // NEW: Handle stage mouse down (for selection box start or rectangle creation)
+  // NEW: Handle stage mouse down (for selection box start or shape creation)
   const handleStageMouseDown = useCallback(async (e: KonvaEventObject<MouseEvent>) => {
     // Only handle clicks on the stage background (not on shapes)
     if (e.target !== e.target.getStage()) return
@@ -238,11 +248,15 @@ const Canvas: React.FC<CanvasProps> = ({
       setSelectionBoxStart(canvasCoords)
       setSelectionBoxEnd(canvasCoords)
     } else {
-      // Otherwise, clear selection and create new rectangle
+      // Otherwise, clear selection and create new shape based on mode
       await clearSelection()
-      await createRectangle(canvasCoords.x, canvasCoords.y)
+      if (shapeMode === 'rectangle') {
+        await createRectangle(canvasCoords.x, canvasCoords.y)
+      } else if (shapeMode === 'circle') {
+        await createCircle(canvasCoords.x, canvasCoords.y)
+      }
     }
-  }, [isShiftPressed, transformToCanvasCoords, clearSelection, createRectangle])
+  }, [isShiftPressed, shapeMode, transformToCanvasCoords, clearSelection, createRectangle, createCircle])
 
   // NEW: Handle stage mouse up (for selection box completion)
   const handleStageMouseUp = useCallback(async () => {
@@ -345,28 +359,75 @@ const Canvas: React.FC<CanvasProps> = ({
     setIsRectangleResizing(false)
   }, [])
 
-  // Handle color change
-  const handleColorChange = useCallback(async (color: string) => {
-    if (primarySelectionId) {
-      await changeRectangleColor(primarySelectionId, color)
+  // PR #6: Circle handlers (similar to rectangle handlers)
+  const handleCircleClick = useCallback(async (circleId: string) => {
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur()
     }
-  }, [primarySelectionId, changeRectangleColor])
+    
+    if (primarySelectionId === circleId) {
+      if (justUsedAICommandRef.current) {
+        justUsedAICommandRef.current = false
+        return
+      }
+      await clearSelection()
+    } else {
+      await selectShape(circleId, 'circle')
+    }
+  }, [clearSelection, selectShape, primarySelectionId])
 
-  // Get selected rectangle (primary selection)
+  const handleCircleDragStart = useCallback(async () => {
+    setIsRectangleDragging(true)  // Reuse rectangle dragging state
+  }, [])
+
+  const handleCircleDragEnd = useCallback(async (circleId: string, newX: number, newY: number) => {
+    setIsRectangleDragging(false)
+    try {
+      await updateCircle(circleId, { x: newX, y: newY })
+    } catch (error) {
+      console.error('Error updating circle position:', error)
+    }
+  }, [updateCircle])
+
+  const handleCircleResize = useCallback(async (
+    circleId: string, 
+    newRadius: number, 
+    newX: number, 
+    newY: number
+  ) => {
+    try {
+      await resizeCircle(circleId, newRadius, newX, newY)
+    } catch (error) {
+      console.error('Error resizing circle:', error)
+    }
+  }, [resizeCircle])
+
+  // Handle color change (unified for all shapes)
+  const handleColorChange = useCallback(async (color: string) => {
+    if (primarySelectionId && primarySelectionType) {
+      await changeShapeColor(primarySelectionId, primarySelectionType, color)
+    }
+  }, [primarySelectionId, primarySelectionType, changeShapeColor])
+
+  // Get selected shape (primary selection) - check both rectangles and circles
   const selectedRectangle = rectangles.find(r => r.id === primarySelectionId)
+  const selectedCircle = circles.find(c => c.id === primarySelectionId)
+  const selectedShape = selectedRectangle || selectedCircle
   
   // Check if multiple selections have mixed colors
   const selectedColors = useMemo(() => {
     const colors = new Set<string>()
     for (const id of selectedShapes.keys()) {
       const rect = rectangles.find(r => r.id === id)
-      if (rect) colors.add(rect.color)
+      const circle = circles.find(c => c.id === id)
+      const shape = rect || circle
+      if (shape) colors.add(shape.color)
     }
     return colors
-  }, [selectedShapes, rectangles])
+  }, [selectedShapes, rectangles, circles])
   
   const hasMixedColors = selectedColors.size > 1
-  const displayColor = hasMixedColors ? '?' : (selectedRectangle?.color || '#000000')
+  const displayColor = hasMixedColors ? '?' : (selectedShape?.color || '#000000')
 
   // Sort rectangles by zIndex for rendering (lower zIndex = render first = behind)
   const sortedRectangles = useMemo(() => {
@@ -376,6 +437,15 @@ const Canvas: React.FC<CanvasProps> = ({
       return aZ - bZ
     })
   }, [rectangles])
+
+  // PR #6: Sort circles by zIndex for rendering
+  const sortedCircles = useMemo(() => {
+    return [...circles].sort((a, b) => {
+      const aZ = a.zIndex ?? 0
+      const bZ = b.zIndex ?? 0
+      return aZ - bZ
+    })
+  }, [circles])
 
   // Keep clipboard operation refs updated
   useEffect(() => {
@@ -431,6 +501,19 @@ const Canvas: React.FC<CanvasProps> = ({
           // Otherwise clear selection
           clearSelection()
         }
+        return
+      }
+      
+      // PR #6: Rectangle mode (R key)
+      if (e.key === 'r' && !isTyping) {
+        setShapeMode('rectangle')
+        return
+      }
+      
+      // PR #6: Circle mode (C key)
+      if (e.key === 'c' && !isTyping && !(e.metaKey || e.ctrlKey)) {
+        // Only if not Cmd+C/Ctrl+C (which is copy)
+        setShapeMode('circle')
         return
       }
       
@@ -589,7 +672,7 @@ const Canvas: React.FC<CanvasProps> = ({
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)
     }
-  }, [primarySelectionId, rectangles, handleRectangleResize, deleteRectangle, isRectangleDragging, isRectangleResizing, getCurrentStagePosition, selectionLocked, selectedShapes, isShiftPressed, isPanning, selectAll, clearSelection, selectionBoxStart])
+  }, [primarySelectionId, rectangles, handleRectangleResize, deleteRectangle, isRectangleDragging, isRectangleResizing, getCurrentStagePosition, selectionLocked, selectedShapes, isShiftPressed, isPanning, selectAll, clearSelection, selectionBoxStart, setShapeMode])
 
   // Detect when rectangle is selected after AI command (input was focused)
   useEffect(() => {
@@ -639,11 +722,17 @@ const Canvas: React.FC<CanvasProps> = ({
             const pos = getCurrentStagePosition()
             return pos ? `${Math.round(pos.x)}, ${Math.round(pos.y)}` : '0, 0'
           })()})</span>
-          <span>Rectangles: {rectangles.length}</span>
+          <span>Shapes: {rectangles.length + circles.length}</span>
           <span>Friends: {Object.keys(cursors).length}</span>
           
+          {/* PR #6: Shape Mode Selector */}
+          <ShapeModeSelector
+            mode={shapeMode}
+            onModeChange={setShapeMode}
+          />
+          
           {/* Color Picker */}
-          {selectedRectangle && (
+          {selectedShape && (
             <div className="header-color-picker">
               <span className="color-label">Color:</span>
               <ColorPicker
@@ -688,6 +777,23 @@ const Canvas: React.FC<CanvasProps> = ({
                 onDragStart={handleRectangleDragStart}
                 onDragEnd={handleRectangleDragEnd}
                 onResize={handleRectangleResize}
+                onResizeStart={handleResizeStart}
+                onResizeEnd={handleResizeEnd}
+              />
+            ))}
+            
+            {/* PR #6: Render circles (sorted by zIndex) */}
+            {sortedCircles.map((circle) => (
+              <Circle
+                key={circle.id}
+                circle={circle}
+                isSelected={selectedShapes.has(circle.id)}
+                isPrimary={circle.id === primarySelectionId}
+                isShiftPressed={isShiftPressed}
+                onClick={handleCircleClick}
+                onDragStart={handleCircleDragStart}
+                onDragEnd={handleCircleDragEnd}
+                onResize={handleCircleResize}
                 onResizeStart={handleResizeStart}
                 onResizeEnd={handleResizeEnd}
               />

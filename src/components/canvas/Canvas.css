@@ -556,3 +556,40 @@
     display: none;
   }
 }
+
+/* PR #6: Shape Mode Selector */
+.shape-mode-selector {
+  display: flex;
+  gap: 4px;
+  background: #f1f5f9;
+  padding: 4px;
+  border-radius: 6px;
+}
+
+.shape-mode-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.shape-mode-btn:hover {
+  background: #e2e8f0;
+  color: #334155;
+}
+
+.shape-mode-btn.active {
+  background: #3b82f6;
+  color: white;
+}
+
+.shape-mode-btn:active {
+  transform: scale(0.95);
+}

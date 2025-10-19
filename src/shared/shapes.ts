@@ -18,6 +18,7 @@ interface BaseShape {
   createdBy: string
   createdAt: number
   selectedBy: string | null
+  selectedByUsername?: string | null  // Optional for display purposes
   selectedAt: number | null
 }
 
