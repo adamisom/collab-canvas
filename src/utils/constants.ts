@@ -127,3 +127,10 @@ export const AI_CONSTANTS = {
 
 // Valid colors for AI commands (imported from shared types to ensure consistency with Cloud Function)
 export const VALID_AI_COLORS = VALID_RECTANGLE_COLORS
+
+// Interaction constants (Phase 3D: Advanced features)
+export const INTERACTION_CONSTANTS = {
+  ROTATE_HANDLE_OFFSET: 30,  // Distance above shape for rotate handle
+  MIN_LASSO_POINTS: 6,        // Minimum points for valid lasso (3 points × 2 coords)
+  LASSO_SELECTION_LIMIT: 25,  // Maximum shapes that can be selected via lasso
+} as const

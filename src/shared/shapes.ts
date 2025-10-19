@@ -21,6 +21,7 @@ interface BaseShape {
   selectedBy: string | null
   selectedByUsername?: string | null  // Optional for display purposes
   selectedAt: number | null
+  rotation?: number  // Rotation in degrees (0-360), defaults to 0 (Phase 3D)
 }
 
 /**
@@ -63,6 +64,9 @@ export interface TextShape extends BaseShape {
   // PR #8 additions (BONUS):
   fontWeight?: 'normal' | 'bold'
   fontStyle?: 'normal' | 'italic'
+  // Phase 3D: Measured dimensions for accurate alignment (populated via Konva, debounced)
+  measuredWidth?: number   // Actual rendered width from Konva Text node
+  measuredHeight?: number  // Actual rendered height from Konva Text node
 }
 
 /**
