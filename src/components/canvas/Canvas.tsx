@@ -1325,7 +1325,7 @@ const Canvas: React.FC<CanvasProps> = ({
             })()}
             
             {/* NEW: Empty canvas message */}
-            {rectangles.length === 0 && (
+            {rectangles.length === 0 && circles.length === 0 && lines.length === 0 && texts.length === 0 && (
               <Text
                 x={0}
                 y={VIEWPORT_HEIGHT / 2 - 20}
