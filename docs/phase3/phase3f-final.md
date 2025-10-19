@@ -41,17 +41,14 @@ Phase 3F adds the final polish features that elevate CollabCanvas from a solid c
 ### What This PR Delivers
 
 **Enhanced AI Capabilities:**
-1. **Undo/Redo AI Commands** - Rollback AI actions
-2. **AI Command History** - Review past AI commands
-3. **Multi-Step Command Preview** - Show what AI will do before executing
-4. **AI Suggestions** - Proactive suggestions based on context
-5. **Voice Input** (BONUS) - Speak commands to AI
+1. **AI Suggestions** - Proactive suggestions based on context
+2. **AI Command History** - Review past AI commands (read-only)
+3. **Voice Input** (BONUS) - Speak commands to AI
 
 **Improved UX:**
 - AI typing indicator (show when AI is thinking)
 - Better error messages with suggestions
 - Command confirmation for destructive operations
-- AI command shortcuts (templates)
 
 **Advanced Features:**
 - Batch operations (e.g., "Create 10 circles in a grid")
@@ -59,18 +56,6 @@ Phase 3F adds the final polish features that elevate CollabCanvas from a solid c
 - Relative positioning (e.g., "Create a circle above each rectangle")
 
 ### Implementation Strategy
-
-**Undo/Redo:**
-- Track AI command history with snapshots
-- Store before/after states
-- Implement undo/redo stack
-- Keyboard shortcuts: Cmd+Z (undo), Cmd+Shift+Z (redo)
-
-**Command Preview:**
-- Dry-run mode for AI commands
-- Show preview overlay on canvas
-- User can approve or reject
-- Useful for complex operations
 
 **AI Suggestions:**
 - Context-aware suggestions based on canvas state
@@ -81,6 +66,12 @@ Phase 3F adds the final polish features that elevate CollabCanvas from a solid c
   - "These shapes look misaligned. Want to align them?"
   - "Multiple similar shapes. Want to distribute them evenly?"
 
+**Command History:**
+- Simple read-only list of past commands
+- Store user input and AI response
+- No state snapshots (too complex)
+- Just for reference/learning
+
 **Voice Input:**
 - Use Web Speech API
 - Microphone button in AI chat
@@ -89,139 +80,43 @@ Phase 3F adds the final polish features that elevate CollabCanvas from a solid c
 
 ### Files to Create
 
-#### `/src/contexts/AIHistoryContext.tsx`
+#### `/src/components/ai/AICommandHistory.tsx` (Updated - Read-only)
 ```typescript
-import React, { createContext, useContext, useState, useCallback } from 'react'
+import React, { useState } from 'react'
+import './AICommandHistory.css'
 
 interface AICommand {
   id: string
   timestamp: number
   userInput: string
   aiResponse: string
-  canvasStateBefore: any  // Snapshot before command
-  canvasStateAfter: any   // Snapshot after command
   success: boolean
 }
 
-interface AIHistoryContextType {
-  commandHistory: AICommand[]
-  addCommand: (command: AICommand) => void
-  undoLastCommand: () => Promise<void>
-  redoLastUndo: () => Promise<void>
-  canUndo: boolean
-  canRedo: boolean
+interface AICommandHistoryProps {
+  commands: AICommand[]
 }
 
-const AIHistoryContext = createContext<AIHistoryContextType | undefined>(undefined)
-
-export const AIHistoryProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [commandHistory, setCommandHistory] = useState<AICommand[]>([])
-  const [undoStack, setUndoStack] = useState<AICommand[]>([])
-  const [redoStack, setRedoStack] = useState<AICommand[]>([])
-
-  const addCommand = useCallback((command: AICommand) => {
-    setCommandHistory(prev => [...prev, command])
-    setUndoStack(prev => [...prev, command])
-    setRedoStack([])  // Clear redo stack on new command
-  }, [])
-
-  const undoLastCommand = useCallback(async () => {
-    if (undoStack.length === 0) return
-
-    const lastCommand = undoStack[undoStack.length - 1]
-    
-    // Restore canvas state to before command
-    await restoreCanvasState(lastCommand.canvasStateBefore)
-    
-    setUndoStack(prev => prev.slice(0, -1))
-    setRedoStack(prev => [...prev, lastCommand])
-  }, [undoStack])
-
-  const redoLastUndo = useCallback(async () => {
-    if (redoStack.length === 0) return
-
-    const lastUndo = redoStack[redoStack.length - 1]
-    
-    // Restore canvas state to after command
-    await restoreCanvasState(lastUndo.canvasStateAfter)
-    
-    setRedoStack(prev => prev.slice(0, -1))
-    setUndoStack(prev => [...prev, lastUndo])
-  }, [redoStack])
-
-  return (
-    <AIHistoryContext.Provider value={{
-      commandHistory,
-      addCommand,
-      undoLastCommand,
-      redoLastUndo,
-      canUndo: undoStack.length > 0,
-      canRedo: redoStack.length > 0
-    }}>
-      {children}
-    </AIHistoryContext.Provider>
-  )
-}
-
-export const useAIHistory = () => {
-  const context = useContext(AIHistoryContext)
-  if (!context) {
-    throw new Error('useAIHistory must be used within AIHistoryProvider')
-  }
-  return context
-}
-
-// Helper to restore canvas state
-const restoreCanvasState = async (state: any) => {
-  // Implementation depends on how state is structured
-  // Would need to clear current canvas and recreate all shapes
-}
-```
-
-#### `/src/components/ai/AICommandHistory.tsx`
-```typescript
-import React, { useState } from 'react'
-import { useAIHistory } from '../../contexts/AIHistoryContext'
-import './AICommandHistory.css'
-
-const AICommandHistory: React.FC = () => {
-  const { commandHistory, undoLastCommand, redoLastUndo, canUndo, canRedo } = useAIHistory()
+const AICommandHistory: React.FC<AICommandHistoryProps> = ({ commands }) => {
   const [isExpanded, setIsExpanded] = useState(false)
 
   return (
     <div className="ai-command-history">
       <div className="history-header">
-        <h3>AI Command History</h3>
+        <h3>Recent Commands</h3>
         <button onClick={() => setIsExpanded(!isExpanded)}>
           {isExpanded ? 'Collapse' : 'Expand'}
         </button>
       </div>
 
-      <div className="history-actions">
-        <button
-          onClick={undoLastCommand}
-          disabled={!canUndo}
-          title="Undo last AI command (Cmd+Z)"
-        >
-          ↶ Undo
-        </button>
-        <button
-          onClick={redoLastUndo}
-          disabled={!canRedo}
-          title="Redo last undone command (Cmd+Shift+Z)"
-        >
-          ↷ Redo
-        </button>
-      </div>
-
       {isExpanded && (
         <div className="history-list">
-          {commandHistory.length === 0 ? (
+          {commands.length === 0 ? (
             <div className="empty-state">
               No AI commands yet. Try asking the AI to create a shape!
             </div>
           ) : (
-            commandHistory.slice().reverse().map((command) => (
+            commands.slice().reverse().slice(0, 10).map((command) => (
               <div
                 key={command.id}
                 className={`history-item ${command.success ? 'success' : 'error'}`}
