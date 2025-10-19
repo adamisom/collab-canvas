@@ -51,10 +51,18 @@ const KeyboardShortcuts: React.FC = () => {
               <div className="shortcut-key">🖱️ Double-click</div>
               <div className="shortcut-desc">Create shape/text</div>
             </div>
+            <div className="shortcut-item">
+              <div className="shortcut-key">🤖 AI</div>
+              <div className="shortcut-desc">can create shapes too</div>
+            </div>
           </div>
           
           <div className="shortcuts-section">
             <strong>Selection:</strong>
+            <div className="shortcut-item">
+              <div className="shortcut-key">🖱️ Click</div>
+              <div className="shortcut-desc">to deselect</div>
+            </div>
             <div className="shortcut-item">
               <div className="shortcut-key">⇧+Drag</div>
               <div className="shortcut-desc">Select box</div>
