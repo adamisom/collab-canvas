@@ -15,6 +15,7 @@ import SelectionBox from './SelectionBox'
 import ShapeModeSelector from './ShapeModeSelector'  // PR #6
 import ColorPicker from './ColorPicker'
 import TextFormatToolbar from './TextFormatToolbar'  // PR #9
+import AlignmentToolbar from '../ui/AlignmentToolbar'  // Phase 3D PR #10
 import Toast from '../ui/Toast'
 import type { Rectangle as RectangleType } from '../../services/canvasService'
 import './Canvas.css'
@@ -103,6 +104,7 @@ const Canvas: React.FC<CanvasProps> = ({
     duplicateRectangle,
     bringToFront,
     sendToBack,
+    alignShapes,  // Phase 3D PR #10
     selectionLocked,
     toastMessage,
     clearToast,
@@ -714,6 +716,34 @@ const Canvas: React.FC<CanvasProps> = ({
         return
       }
       
+      // Alignment shortcuts (Phase 3D PR #10) - Cmd+Shift+Key
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && !isTyping) {
+        if (selectedShapes.size >= 2) {
+          e.preventDefault()
+          
+          switch (e.key.toUpperCase()) {
+            case 'L':
+              alignShapes('left')
+              return
+            case 'H':
+              alignShapes('center-horizontal')
+              return
+            case 'R':
+              alignShapes('right')
+              return
+            case 'T':
+              alignShapes('top')
+              return
+            case 'V':
+              alignShapes('center-vertical')
+              return
+            case 'B':
+              alignShapes('bottom')
+              return
+          }
+        }
+      }
+      
       // Handle rectangle deletion
       if ((e.key === 'Delete' || e.key === 'Backspace') && primarySelectionId) {
         // Don't delete if user is typing in an input field
@@ -822,7 +852,7 @@ const Canvas: React.FC<CanvasProps> = ({
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)
     }
-  }, [primarySelectionId, rectangles, handleRectangleResize, deleteRectangle, isRectangleDragging, isRectangleResizing, getCurrentStagePosition, selectionLocked, selectedShapes, isShiftPressed, isPanning, selectAll, clearSelection, selectionBoxStart, lineCreationStart, setShapeMode])
+  }, [primarySelectionId, rectangles, handleRectangleResize, deleteRectangle, isRectangleDragging, isRectangleResizing, getCurrentStagePosition, selectionLocked, selectedShapes, isShiftPressed, isPanning, selectAll, clearSelection, selectionBoxStart, lineCreationStart, setShapeMode, alignShapes])
 
   // Detect when rectangle is selected after AI command (input was focused)
   useEffect(() => {
@@ -860,6 +890,12 @@ const Canvas: React.FC<CanvasProps> = ({
 
   return (
     <div className="canvas-container">
+      {/* Phase 3D PR #10: Alignment Toolbar */}
+      <AlignmentToolbar
+        selectedCount={selectedShapes.size}
+        onAlign={alignShapes}
+      />
+      
       <div className="canvas-info">
         <div className="canvas-stats">
           {/* PERFORMANCE NOTE: These calculations run on every render. Consider memoizing

@@ -4,6 +4,7 @@ import type Konva from 'konva'
 import type { KonvaEventObject } from 'konva/lib/Node'
 import type { TextShape } from '../../shared/shapes'
 import { getShapeSelectionStyle, isShapeDraggable } from '../../utils/shapeStyleHelpers'
+import * as canvasService from '../../services/canvasService'
 
 interface TextProps {
   textShape: TextShape
@@ -121,6 +122,34 @@ const Text: React.FC<TextProps> = ({
       }
     }
   }, [isEditing, textShape, onTextChange, onEditingChange])
+
+  // Measure and persist text dimensions (debounced for performance)
+  useEffect(() => {
+    if (!textRef.current) return
+
+    const node = textRef.current
+    const width = node.width()
+    const height = node.height()
+
+    // Only update if measurements changed significantly (avoid tiny rendering variations)
+    const currentWidth = textShape.measuredWidth || 0
+    const currentHeight = textShape.measuredHeight || 0
+
+    if (Math.abs(width - currentWidth) > 1 || Math.abs(height - currentHeight) > 1) {
+      // Debounce: wait 500ms after last change before updating Firebase
+      const timeoutId = setTimeout(() => {
+        canvasService.canvasService.updateText(textShape.id, {
+          measuredWidth: width,
+          measuredHeight: height
+        }).catch((err: unknown) => {
+          console.error('Failed to update text measurements:', err)
+          // Non-critical error - alignment will use estimation fallback
+        })
+      }, 500)
+
+      return () => clearTimeout(timeoutId)
+    }
+  }, [textShape.text, textShape.fontSize, textShape.fontWeight, textShape.fontStyle, textShape.measuredWidth, textShape.measuredHeight, textShape.id])
 
   // Get selection styling
   const selectionStyle = getShapeSelectionStyle(textShape.color, isSelected, false)

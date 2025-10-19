@@ -5,6 +5,9 @@ import { useAuth } from './AuthContext'
 import type { ViewportInfo } from '../shared/types'
 import type { Shape, ShapeType, CircleShape, LineShape, TextShape } from '../shared/shapes'
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../utils/constants'
+import { getShapeBounds, getSelectedShapesFromMap, updateShapeProperty } from '../utils/shapeHelpers'
+import { calculateAlignedPosition, calculateDistributedPositions } from '../utils/alignmentHelpers'
+import type { AlignmentType } from '../components/ui/AlignmentToolbar'
 
 interface CanvasContextType {
   rectangles: Rectangle[]
@@ -79,6 +82,9 @@ interface CanvasContextType {
   // Layering operations
   bringToFront: (rectangleId: string) => Promise<void>
   sendToBack: (rectangleId: string) => Promise<void>
+  
+  // Alignment operations (Phase 3D PR #10)
+  alignShapes: (alignType: AlignmentType) => Promise<void>
   
   // Viewport operations (for AI agent)
   getViewportInfo: () => ViewportInfo | null
@@ -1365,6 +1371,82 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     }
   }, [])
 
+  // Align selected shapes (Phase 3D PR #10)
+  const alignShapes = useCallback(async (alignType: AlignmentType): Promise<void> => {
+    if (selectedShapes.size < 2) return
+
+    try {
+      const shapesToAlign = getSelectedShapesFromMap(selectedShapes, rectangles, circles, lines, texts)
+      if (shapesToAlign.length < 2) return
+
+      // Calculate target value based on alignment type
+      const bounds = shapesToAlign.map(getShapeBounds)
+      let targetValue: number
+
+      switch (alignType) {
+        case 'left':
+          targetValue = Math.min(...bounds.map(b => b.x))
+          break
+        case 'center-horizontal': {
+          const minX = Math.min(...bounds.map(b => b.x))
+          const maxX = Math.max(...bounds.map(b => b.x + b.width))
+          targetValue = (minX + maxX) / 2
+          break
+        }
+        case 'right':
+          targetValue = Math.max(...bounds.map(b => b.x + b.width))
+          break
+        case 'top':
+          targetValue = Math.min(...bounds.map(b => b.y))
+          break
+        case 'center-vertical': {
+          const minY = Math.min(...bounds.map(b => b.y))
+          const maxY = Math.max(...bounds.map(b => b.y + b.height))
+          targetValue = (minY + maxY) / 2
+          break
+        }
+        case 'bottom':
+          targetValue = Math.max(...bounds.map(b => b.y + b.height))
+          break
+        case 'distribute-horizontal':
+        case 'distribute-vertical': {
+          // Handle distribution separately
+          const positions = calculateDistributedPositions(
+            shapesToAlign,
+            alignType === 'distribute-horizontal' ? 'horizontal' : 'vertical'
+          )
+
+          // Update all shapes in parallel
+          await Promise.all(
+            Array.from(positions.entries()).map(([shapeId, updates]) => {
+              const shape = shapesToAlign.find(s => s.id === shapeId)
+              if (!shape) return Promise.resolve()
+              return updateShapeProperty(shape, updates, canvasService)
+            })
+          )
+
+          setToastMessage(`Distributed ${shapesToAlign.length} shapes`)
+          return
+        }
+        default:
+          return
+      }
+
+      // Calculate and apply alignment updates in parallel
+      await Promise.all(
+        shapesToAlign.map(shape => {
+          const updates = calculateAlignedPosition(shape, targetValue, alignType)
+          return updateShapeProperty(shape, updates, canvasService)
+        })
+      )
+
+      setToastMessage(`Aligned ${shapesToAlign.length} shapes`)
+    } catch (error) {
+      console.error('Error aligning shapes:', error)
+      setToastMessage('Failed to align shapes')
+    }
+  }, [selectedShapes, rectangles, circles, lines, texts])
+
   const value: CanvasContextType = {
     rectangles,
     circles,  // PR #6
@@ -1417,6 +1499,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     hasClipboardData,
     bringToFront,
     sendToBack,
+    alignShapes,
     getViewportInfo,
     updateViewportInfo,
     clearError,

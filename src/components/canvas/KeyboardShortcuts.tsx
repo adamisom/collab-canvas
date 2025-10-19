@@ -116,6 +116,34 @@ const KeyboardShortcuts: React.FC = () => {
               <div className="shortcut-desc">Delete</div>
             </div>
           </div>
+          
+          <div className="shortcuts-section">
+            <strong>Alignment (2+ shapes):</strong>
+            <div className="shortcut-item">
+              <div className="shortcut-key">⌘/Ctrl+⇧+L</div>
+              <div className="shortcut-desc">Align left</div>
+            </div>
+            <div className="shortcut-item">
+              <div className="shortcut-key">⌘/Ctrl+⇧+H</div>
+              <div className="shortcut-desc">Align center H</div>
+            </div>
+            <div className="shortcut-item">
+              <div className="shortcut-key">⌘/Ctrl+⇧+R</div>
+              <div className="shortcut-desc">Align right</div>
+            </div>
+            <div className="shortcut-item">
+              <div className="shortcut-key">⌘/Ctrl+⇧+T</div>
+              <div className="shortcut-desc">Align top</div>
+            </div>
+            <div className="shortcut-item">
+              <div className="shortcut-key">⌘/Ctrl+⇧+V</div>
+              <div className="shortcut-desc">Align center V</div>
+            </div>
+            <div className="shortcut-item">
+              <div className="shortcut-key">⌘/Ctrl+⇧+B</div>
+              <div className="shortcut-desc">Align bottom</div>
+            </div>
+          </div>
         </div>
       )}
     </div>
