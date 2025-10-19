@@ -10,15 +10,15 @@
 }
 
 .canvas-info {
-  padding: 6px 16px;
+  padding: 4px 16px;
   background: white;
   border-bottom: 1px solid #e2e8f0;
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   flex-wrap: nowrap;
   gap: 16px;
-  min-height: 36px;
+  min-height: 32px;
 }
 
 .canvas-stats {
@@ -565,21 +565,21 @@
 /* PR #6: Shape Mode Selector */
 .shape-mode-selector {
   display: flex;
-  gap: 2px;
+  gap: 1px;
   background: #f1f5f9;
-  padding: 2px;
-  border-radius: 4px;
+  padding: 1px;
+  border-radius: 3px;
 }
 
 .shape-mode-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   background: transparent;
   border: none;
-  border-radius: 3px;
+  border-radius: 2px;
   color: #64748b;
   cursor: pointer;
   transition: all 0.2s;
