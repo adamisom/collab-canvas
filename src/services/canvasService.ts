@@ -11,7 +11,7 @@ import {
 } from './firebaseService'
 import type { DatabaseReference, DataSnapshot } from './firebaseService'
 import { DB_PATHS, RECTANGLE_COLORS, RECTANGLE_CONSTRAINTS, CANVAS_BOUNDS } from '../utils/constants'
-import type { CircleShape, LineShape } from '../shared/shapes'
+import type { CircleShape, LineShape, TextShape } from '../shared/shapes'
 
 export interface Rectangle {
   id: string
@@ -56,6 +56,14 @@ export interface LineInput {
   createdBy: string
 }
 
+export interface TextInput {
+  x: number
+  y: number
+  text?: string
+  color?: string
+  createdBy: string
+}
+
 /**
  * Canvas Service
  * Handles all Firebase Realtime Database operations for shapes (rectangles, circles, etc.)
@@ -71,11 +79,13 @@ export class CanvasService {
   private rectanglesRef: DatabaseReference
   private circlesRef: DatabaseReference  // PR #6
   private linesRef: DatabaseReference  // PR #7
+  private textsRef: DatabaseReference  // PR #8
 
   constructor() {
     this.rectanglesRef = dbRef(firebaseDatabase, DB_PATHS.RECTANGLES)
     this.circlesRef = dbRef(firebaseDatabase, '/circles')  // PR #6
     this.linesRef = dbRef(firebaseDatabase, '/lines')  // PR #7
+    this.textsRef = dbRef(firebaseDatabase, '/texts')  // PR #8
   }
 
   /**
@@ -112,7 +122,13 @@ export class CanvasService {
         maxZ = Math.max(maxZ, lineMax)
       }
 
-      // TODO PR #8: Add text shapes
+      // Check texts (PR #8)
+      const textSnapshot = await dbGet(this.textsRef)
+      if (textSnapshot.exists()) {
+        const texts = Object.values(textSnapshot.val() as Record<string, TextShape>)
+        const textMax = Math.max(...texts.map(t => t.zIndex ?? 0))
+        maxZ = Math.max(maxZ, textMax)
+      }
 
       return maxZ
     } catch (error) {
@@ -850,6 +866,138 @@ export class CanvasService {
       }
     } catch (error) {
       console.error('Error clearing line selections:', error)
+    }
+  }
+
+  // ============================================================================
+  // PR #8: TEXT OPERATIONS
+  // ============================================================================
+
+  async createText(textData: TextInput): Promise<TextShape> {
+    try {
+      const now = Date.now()
+      const newTextRef = dbPush(this.textsRef)
+      
+      if (!newTextRef.key) {
+        throw new Error('Failed to generate text ID')
+      }
+
+      // Get max zIndex across ALL shapes and add 1000
+      const maxZ = await this.getMaxZIndexAcrossAllShapes()
+
+      const text: TextShape = {
+        id: newTextRef.key,
+        type: 'text',
+        x: textData.x,
+        y: textData.y,
+        text: textData.text || 'New Text',
+        fontSize: 16,  // Fixed for PR #8
+        fontFamily: 'Arial',  // Fixed for PR #8
+        color: textData.color || RECTANGLE_COLORS.BLUE,
+        zIndex: maxZ + 1000,
+        createdBy: textData.createdBy,
+        createdAt: now,
+        selectedBy: null,
+        selectedAt: null
+      }
+
+      await dbUpdate(newTextRef, text)
+      return text
+    } catch (error) {
+      console.error('Error creating text:', error)
+      throw error
+    }
+  }
+
+  onTextsChange(callback: (texts: TextShape[]) => void): () => void {
+    return dbOnValue(this.textsRef, (snapshot: DataSnapshot) => {
+      const texts: TextShape[] = []
+      if (snapshot.exists()) {
+        snapshot.forEach((childSnapshot) => {
+          const text = childSnapshot.val() as TextShape
+          texts.push(text)
+        })
+      }
+      callback(texts)
+    })
+  }
+
+  async updateText(textId: string, updates: Partial<TextShape>): Promise<void> {
+    try {
+      const textRef = dbRef(firebaseDatabase, `${DB_PATHS.TEXTS}/${textId}`)
+      await dbUpdate(textRef, updates)
+    } catch (error) {
+      console.error('Error updating text:', error)
+      throw error
+    }
+  }
+
+  async deleteText(textId: string): Promise<void> {
+    try {
+      const textRef = dbRef(firebaseDatabase, `${DB_PATHS.TEXTS}/${textId}`)
+      await dbRemove(textRef)
+    } catch (error) {
+      console.error('Error deleting text:', error)
+      throw error
+    }
+  }
+
+  async selectText(textId: string, userId: string, username: string): Promise<void> {
+    try {
+      const textRef = dbRef(firebaseDatabase, `${DB_PATHS.TEXTS}/${textId}`)
+      await dbUpdate(textRef, {
+        selectedBy: userId,
+        selectedByUsername: username,
+        selectedAt: Date.now()
+      })
+    } catch (error) {
+      console.error('Error selecting text:', error)
+      throw error
+    }
+  }
+
+  async deselectText(textId: string, userId: string): Promise<void> {
+    try {
+      const textRef = dbRef(firebaseDatabase, `${DB_PATHS.TEXTS}/${textId}`)
+      const snapshot = await dbGet(textRef)
+      
+      if (snapshot.exists()) {
+        const text = snapshot.val() as TextShape
+        if (text.selectedBy === userId) {
+          await dbUpdate(textRef, {
+            selectedBy: null,
+            selectedByUsername: null,
+            selectedAt: null
+          })
+        }
+      }
+    } catch (error) {
+      console.error('Error deselecting text:', error)
+      throw error
+    }
+  }
+
+  async clearTextSelection(userId: string): Promise<void> {
+    try {
+      const snapshot = await dbGet(this.textsRef)
+      if (!snapshot.exists()) return
+      
+      const texts = snapshot.val() as Record<string, TextShape>
+      const updates: Record<string, null | string> = {}
+      
+      Object.entries(texts).forEach(([textId, text]) => {
+        if (text.selectedBy === userId) {
+          updates[`${textId}/selectedBy`] = null
+          updates[`${textId}/selectedByUsername`] = null
+          updates[`${textId}/selectedAt`] = null
+        }
+      })
+      
+      if (Object.keys(updates).length > 0) {
+        await dbUpdate(this.textsRef, updates)
+      }
+    } catch (error) {
+      console.error('Error clearing text selections:', error)
     }
   }
 }

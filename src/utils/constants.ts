@@ -17,7 +17,8 @@ export const DB_PATHS = {
   CURSORS: 'cursors', 
   RECTANGLES: 'rectangles',
   CIRCLES: 'circles',  // PR #6
-  LINES: 'lines'  // PR #7
+  LINES: 'lines',  // PR #7
+  TEXTS: 'texts'  // PR #8
 } as const
 
 // Rectangle color options
