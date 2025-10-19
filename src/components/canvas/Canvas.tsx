@@ -10,6 +10,7 @@ import Cursor from './Cursor'
 import Rectangle from './Rectangle'
 import Circle from './Circle'  // PR #6
 import Line from './Line'  // PR #7
+import Text from './Text'  // PR #8
 import SelectionBox from './SelectionBox'
 import ShapeModeSelector from './ShapeModeSelector'  // PR #6
 import ColorPicker from './ColorPicker'
@@ -45,6 +46,9 @@ const Canvas: React.FC<CanvasProps> = ({
   const [lineCreationStart, setLineCreationStart] = useState<{ x: number; y: number } | null>(null)
   const [linePreviewEnd, setLinePreviewEnd] = useState<{ x: number; y: number } | null>(null)
   
+  // NEW PR #8: Text editing state (to disable panning during editing)
+  const [isTextEditing, setIsTextEditing] = useState(false)
+  
   // NEW: Keyboard modifier states
   const [isShiftPressed, setIsShiftPressed] = useState(false)
   const [isPanning, setIsPanning] = useState(false)  // Spacebar held
@@ -66,27 +70,30 @@ const Canvas: React.FC<CanvasProps> = ({
     rectangles, 
     circles,               // PR #6
     lines,                 // PR #7
-    shapeMode,             // PR #6, updated PR #7
+    texts,                 // PR #8
+    shapeMode,             // PR #6, updated PR #7, updated PR #8
     selectedShapes,        // REFACTORED PR #5: Map<string, ShapeType>
     primarySelectionId,    // Last clicked shape
-    primarySelectionType,  // PR #6, updated PR #7
-    setShapeMode,          // PR #6, updated PR #7
+    primarySelectionType,  // PR #6, updated PR #7, updated PR #8
+    setShapeMode,          // PR #6, updated PR #7, updated PR #8
     createRectangle, 
     createCircle,          // PR #6
     createLine,            // PR #7
+    createText,            // PR #8
     updateRectangle, 
     updateCircle,          // PR #6
     updateLine,            // PR #7
     updateLineEndpoints,   // PR #7
+    updateText,            // PR #8
     resizeRectangle, 
     resizeCircle,          // PR #6
     deleteRectangle, 
     selectRectangle,
-    selectShape,           // PR #6, updated PR #7: Unified selection
+    selectShape,           // PR #6, updated PR #7, updated PR #8: Unified selection
     selectMultiple,        // Multi-select operation
     selectAll,             // Select all
     clearSelection,        // Clear selection
-    changeShapeColor,      // PR #6, updated PR #7: Unified color change
+    changeShapeColor,      // PR #6, updated PR #7, updated PR #8: Unified color change
     copySelectedRectangles,  // Copy selected
     pasteRectangles,         // Paste clipboard
     duplicateRectangle,
@@ -460,6 +467,33 @@ const Canvas: React.FC<CanvasProps> = ({
     }
   }, [updateLineEndpoints])
 
+  // PR #8: Text handlers
+  const handleTextClick = useCallback((textId: string) => {
+    selectShape(textId, 'text')
+  }, [selectShape])
+
+  const handleTextDragStart = useCallback(() => {
+    setIsRectangleDragging(true)
+  }, [])
+
+  const handleTextDragEnd = useCallback(async (textId: string, newX: number, newY: number) => {
+    try {
+      await updateText(textId, { x: newX, y: newY })
+    } catch (error) {
+      console.error('Error moving text:', error)
+    } finally {
+      setIsRectangleDragging(false)
+    }
+  }, [updateText])
+
+  const handleTextChange = useCallback(async (textId: string, newText: string) => {
+    try {
+      await updateText(textId, { text: newText })
+    } catch (error) {
+      console.error('Error updating text content:', error)
+    }
+  }, [updateText])
+
   // Handle color change (unified for all shapes)
   const handleColorChange = useCallback(async (color: string) => {
     if (primarySelectionId && primarySelectionType) {
@@ -467,11 +501,12 @@ const Canvas: React.FC<CanvasProps> = ({
     }
   }, [primarySelectionId, primarySelectionType, changeShapeColor])
 
-  // Get selected shape (primary selection) - check rectangles, circles, and lines
+  // Get selected shape (primary selection) - check rectangles, circles, lines, and texts
   const selectedRectangle = rectangles.find(r => r.id === primarySelectionId)
   const selectedCircle = circles.find(c => c.id === primarySelectionId)
   const selectedLine = lines.find(l => l.id === primarySelectionId)
-  const selectedShape = selectedRectangle || selectedCircle || selectedLine
+  const selectedText = texts.find(t => t.id === primarySelectionId)  // PR #8
+  const selectedShape = selectedRectangle || selectedCircle || selectedLine || selectedText  // PR #8: Added text
   
   // Check if multiple selections have mixed colors
   const selectedColors = useMemo(() => {
@@ -480,11 +515,12 @@ const Canvas: React.FC<CanvasProps> = ({
       const rect = rectangles.find(r => r.id === id)
       const circle = circles.find(c => c.id === id)
       const line = lines.find(l => l.id === id)
-      const shape = rect || circle || line
+      const text = texts.find(t => t.id === id)  // PR #8
+      const shape = rect || circle || line || text  // PR #8: Added text
       if (shape) colors.add(shape.color)
     }
     return colors
-  }, [selectedShapes, rectangles, circles, lines])
+  }, [selectedShapes, rectangles, circles, lines, texts])  // PR #8: Added texts dependency
   
   const hasMixedColors = selectedColors.size > 1
   const displayColor = hasMixedColors ? '?' : (selectedShape?.color || '#000000')
@@ -515,6 +551,15 @@ const Canvas: React.FC<CanvasProps> = ({
       return aZ - bZ
     })
   }, [lines])
+
+  // PR #8: Sort texts by zIndex for rendering
+  const sortedTexts = useMemo(() => {
+    return [...texts].sort((a, b) => {
+      const aZ = a.zIndex ?? 0
+      const bZ = b.zIndex ?? 0
+      return aZ - bZ
+    })
+  }, [texts])
 
   // Keep clipboard operation refs updated
   useEffect(() => {
@@ -593,6 +638,12 @@ const Canvas: React.FC<CanvasProps> = ({
       // PR #7: Line mode (L key)
       if (e.key === 'l' && !isTyping) {
         setShapeMode('line')
+        return
+      }
+      
+      // PR #8: Text mode (T key)
+      if (e.key === 't' && !isTyping) {
+        setShapeMode('text')
         return
       }
       
@@ -801,7 +852,7 @@ const Canvas: React.FC<CanvasProps> = ({
             const pos = getCurrentStagePosition()
             return pos ? `${Math.round(pos.x)}, ${Math.round(pos.y)}` : '0, 0'
           })()})</span>
-          <span>Shapes: {rectangles.length + circles.length}</span>
+          <span>Shapes: {rectangles.length + circles.length + lines.length + texts.length}</span>  {/* PR #8: Added texts */}
           <span>Friends: {Object.keys(cursors).length}</span>
           
           {/* PR #6: Shape Mode Selector */}
@@ -834,11 +885,25 @@ const Canvas: React.FC<CanvasProps> = ({
           ref={stageRef}
           width={width}
           height={height}
-          draggable={isPanning && !isRectangleDragging && !isRectangleResizing}  // CHANGED: Only draggable in pan mode
+          draggable={isPanning && !isRectangleDragging && !isRectangleResizing && !isTextEditing}  // PR #8: Disable during text editing
           onWheel={handleWheel}
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
           onMouseDown={handleStageMouseDown}  // CHANGED: Use mousedown for selection box
+          onDblClick={(e) => {
+            // PR #8: Create text on double-click in text mode
+            if (shapeMode === 'text') {
+              e.cancelBubble = true
+              const stage = stageRef.current
+              if (!stage) return
+              const pointer = stage.getPointerPosition()
+              if (!pointer) return
+              const coords = transformToCanvasCoords(pointer.x, pointer.y)
+              if (coords) {
+                createText(coords.x, coords.y, 'New Text')
+              }
+            }
+          }}
           onMouseMove={handleMouseMove}  // CHANGED: Merged cursor broadcasting + selection box
           onMouseUp={handleStageMouseUp}      // NEW: Complete selection box
           className={isPanning ? 'panning' : (isShiftPressed ? 'selection-mode' : (isDragging ? 'dragging' : ''))}  // NEW: CSS classes for cursor
@@ -925,6 +990,22 @@ const Canvas: React.FC<CanvasProps> = ({
                 onResizeEnd={() => {}}
               />
             )}
+            
+            {/* PR #8: Render texts (sorted by zIndex) */}
+            {sortedTexts.map((text) => (
+              <Text
+                key={text.id}
+                textShape={text}
+                isSelected={selectedShapes.has(text.id)}
+                isPrimary={text.id === primarySelectionId}
+                isShiftPressed={isShiftPressed}
+                onClick={handleTextClick}
+                onDragStart={handleTextDragStart}
+                onDragEnd={handleTextDragEnd}
+                onTextChange={handleTextChange}
+                onEditingChange={setIsTextEditing}
+              />
+            ))}
             
             {/* NEW: Render selection box */}
             {selectionBoxStart && selectionBoxEnd && (
