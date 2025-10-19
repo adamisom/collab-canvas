@@ -9,6 +9,44 @@
 
 ---
 
+## Key Architectural Decisions
+
+**These decisions were made to simplify implementation and improve maintainability:**
+
+### **1. Unified Selection State (Breaking from Phase 3B)**
+- **Change**: Use `Map<string, ShapeType>` instead of separate Sets per shape type
+- **Why**: Simpler state management, cleaner bulk operations, easier to add new shapes
+- **Impact**: Refactor `CanvasContext` selection state in PR #5
+
+### **2. Unified Clipboard with Discriminated Union**
+- **Change**: `clipboardShapes: Shape[]` instead of `clipboardRectangles: Rectangle[]`
+- **Why**: Enables copy/paste across different shape types
+- **Impact**: Update clipboard logic in PR #5
+
+### **3. Shape Mode Selector - Design for All 4 Shapes Upfront**
+- **Change**: Design UI for Rectangle, Circle, Line, Text in PR #5 (disable Line/Text initially)
+- **Why**: Avoid redesigning UI 3 times, better UX consistency
+- **Impact**: More comprehensive UI in PR #5, but saves rework later
+
+### **4. Text Editing: DOM Input Overlay**
+- **Choice**: Use positioned `<input>` element over canvas (not Konva's built-in editable text)
+- **Why**: Better UX (native keyboard, standard behavior), worth the extra complexity
+- **Simplifications**: 
+  - Disable pan/zoom during editing (simpler positioning)
+  - Fixed font size initially (no zoom scaling)
+  - Single line only (`<input>` not `<textarea>`)
+  - Basic styling (don't perfectly match canvas text at first)
+- **Complexity**: ~30 lines of code with simplifications (vs ~15 with Konva editable)
+- **Gotchas**: Coordinate transformation, cleanup on unmount, z-index management
+
+### **5. Future Migration Path**
+- **Note**: Phase 3C uses **separate collections** (`/rectangles`, `/circles`, `/lines`, `/texts`)
+- **Later**: Consider migrating to unified `/shapes` collection in Phase 3E for cleaner architecture
+- **Why not now**: Avoid migration complexity, each PR stays independent
+- **When**: After all shapes work, write migration script (see Phase 3E planning)
+
+---
+
 ## Phase Overview
 
 Phase 3C expands from rectangles-only to a multi-shape canvas. We're using the **separate collections approach** for simplicity - each shape type gets its own Firebase collection.
@@ -190,49 +228,106 @@ export default Circle
 ```
 
 #### `/src/components/canvas/ShapeModeSelector.tsx`
-UI for selecting shape type:
+UI for selecting shape type (designed for all 4 shapes upfront):
 
 ```typescript
 import React from 'react'
 import './ShapeModeSelector.css'
 
-type ShapeMode = 'rectangle' | 'circle'
+type ShapeMode = 'rectangle' | 'circle' | 'line' | 'text'
 
 interface ShapeModeSelectorProps {
   mode: ShapeMode
   onModeChange: (mode: ShapeMode) => void
+  enabledModes: ShapeMode[]  // NEW: Which modes are currently available
 }
 
-const ShapeModeSelector: React.FC<ShapeModeSelectorProps> = ({ mode, onModeChange }) => {
-  return (
-    <div className="shape-mode-selector">
-      <button
-        className={`mode-button ${mode === 'rectangle' ? 'active' : ''}`}
-        onClick={() => onModeChange('rectangle')}
-        title="Rectangle (R)"
-      >
+const ShapeModeSelector: React.FC<ShapeModeSelectorProps> = ({ 
+  mode, 
+  onModeChange,
+  enabledModes 
+}) => {
+  const modes: Array<{ type: ShapeMode; label: string; icon: JSX.Element; key: string }> = [
+    {
+      type: 'rectangle',
+      label: 'Rectangle',
+      key: 'R',
+      icon: (
         <svg width="20" height="20" viewBox="0 0 20 20">
           <rect x="2" y="4" width="16" height="12" fill="currentColor" />
         </svg>
-        <span>Rectangle</span>
-      </button>
-      
-      <button
-        className={`mode-button ${mode === 'circle' ? 'active' : ''}`}
-        onClick={() => onModeChange('circle')}
-        title="Circle (C)"
-      >
+      ),
+    },
+    {
+      type: 'circle',
+      label: 'Circle',
+      key: 'C',
+      icon: (
         <svg width="20" height="20" viewBox="0 0 20 20">
           <circle cx="10" cy="10" r="8" fill="currentColor" />
         </svg>
-        <span>Circle</span>
-      </button>
+      ),
+    },
+    {
+      type: 'line',
+      label: 'Line',
+      key: 'L',
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 20 20">
+          <line x1="2" y1="18" x2="18" y2="2" stroke="currentColor" strokeWidth="2" />
+        </svg>
+      ),
+    },
+    {
+      type: 'text',
+      label: 'Text',
+      key: 'T',
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 20 20">
+          <text x="10" y="15" textAnchor="middle" fontSize="14" fill="currentColor">T</text>
+        </svg>
+      ),
+    },
+  ]
+
+  return (
+    <div className="shape-mode-selector">
+      {modes.map((modeInfo) => {
+        const isEnabled = enabledModes.includes(modeInfo.type)
+        const isActive = mode === modeInfo.type
+        
+        return (
+          <button
+            key={modeInfo.type}
+            className={`mode-button ${isActive ? 'active' : ''} ${!isEnabled ? 'disabled' : ''}`}
+            onClick={() => isEnabled && onModeChange(modeInfo.type)}
+            disabled={!isEnabled}
+            title={`${modeInfo.label} (${modeInfo.key})${!isEnabled ? ' - Coming Soon' : ''}`}
+          >
+            {modeInfo.icon}
+            <span>{modeInfo.label}</span>
+          </button>
+        )
+      })}
     </div>
   )
 }
 
 export default ShapeModeSelector
 ```
+
+**Usage in PR #5:**
+```typescript
+// In Canvas.tsx or App.tsx
+<ShapeModeSelector
+  mode={shapeMode}
+  onModeChange={setShapeMode}
+  enabledModes={['rectangle', 'circle']}  // Only these work in PR #5
+/>
+```
+
+**PR #6** adds `'line'` to `enabledModes`.  
+**PR #7** adds `'text'` to `enabledModes`.
 
 ### Files to Update
 
