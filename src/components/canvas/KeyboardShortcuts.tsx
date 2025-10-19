@@ -75,6 +75,10 @@ const KeyboardShortcuts: React.FC = () => {
               <div className="shortcut-key">C</div>
               <div className="shortcut-desc">Circle mode</div>
             </div>
+            <div className="shortcut-item">
+              <div className="shortcut-key">L</div>
+              <div className="shortcut-desc">Line mode</div>
+            </div>
           </div>
           
           <div className="shortcuts-section">

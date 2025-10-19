@@ -9,6 +9,7 @@ import { stopEventPropagation } from '../../utils/eventHelpers'
 import Cursor from './Cursor'
 import Rectangle from './Rectangle'
 import Circle from './Circle'  // PR #6
+import Line from './Line'  // PR #7
 import SelectionBox from './SelectionBox'
 import ShapeModeSelector from './ShapeModeSelector'  // PR #6
 import ColorPicker from './ColorPicker'
@@ -40,6 +41,10 @@ const Canvas: React.FC<CanvasProps> = ({
   const [selectionBoxStart, setSelectionBoxStart] = useState<{ x: number; y: number } | null>(null)
   const [selectionBoxEnd, setSelectionBoxEnd] = useState<{ x: number; y: number } | null>(null)
   
+  // NEW PR #7: Line creation state (two-click creation)
+  const [lineCreationStart, setLineCreationStart] = useState<{ x: number; y: number } | null>(null)
+  const [linePreviewEnd, setLinePreviewEnd] = useState<{ x: number; y: number } | null>(null)
+  
   // NEW: Keyboard modifier states
   const [isShiftPressed, setIsShiftPressed] = useState(false)
   const [isPanning, setIsPanning] = useState(false)  // Spacebar held
@@ -60,24 +65,28 @@ const Canvas: React.FC<CanvasProps> = ({
   const { 
     rectangles, 
     circles,               // PR #6
-    shapeMode,             // PR #6
+    lines,                 // PR #7
+    shapeMode,             // PR #6, updated PR #7
     selectedShapes,        // REFACTORED PR #5: Map<string, ShapeType>
     primarySelectionId,    // Last clicked shape
-    primarySelectionType,  // PR #6
-    setShapeMode,          // PR #6
+    primarySelectionType,  // PR #6, updated PR #7
+    setShapeMode,          // PR #6, updated PR #7
     createRectangle, 
     createCircle,          // PR #6
+    createLine,            // PR #7
     updateRectangle, 
     updateCircle,          // PR #6
+    updateLine,            // PR #7
+    updateLineEndpoints,   // PR #7
     resizeRectangle, 
     resizeCircle,          // PR #6
     deleteRectangle, 
     selectRectangle,
-    selectShape,           // PR #6: Unified selection
+    selectShape,           // PR #6, updated PR #7: Unified selection
     selectMultiple,        // Multi-select operation
     selectAll,             // Select all
     clearSelection,        // Clear selection
-    changeShapeColor,      // PR #6: Unified color change
+    changeShapeColor,      // PR #6, updated PR #7: Unified color change
     copySelectedRectangles,  // Copy selected
     pasteRectangles,         // Paste clipboard
     duplicateRectangle,
@@ -156,6 +165,15 @@ const Canvas: React.FC<CanvasProps> = ({
     const pointer = stage.getPointerPosition()
     if (!pointer) return
     
+    // PR #7: Update line preview end point if creating a line
+    if (lineCreationStart) {
+      const canvasCoords = transformToCanvasCoords(pointer.x, pointer.y)
+      if (canvasCoords) {
+        setLinePreviewEnd(canvasCoords)
+      }
+      return  // Don't broadcast cursor while drawing line preview
+    }
+    
     // Update selection box end point if we're dragging
     if (selectionBoxStart) {
       const canvasCoords = transformToCanvasCoords(pointer.x, pointer.y)
@@ -172,7 +190,7 @@ const Canvas: React.FC<CanvasProps> = ({
     if (canvasCoords) {
       updateCursor(canvasCoords.x, canvasCoords.y)
     }
-  }, [updateCursor, isDragging, isRectangleDragging, isRectangleResizing, selectionBoxStart, transformToCanvasCoords])
+  }, [updateCursor, isDragging, isRectangleDragging, isRectangleResizing, selectionBoxStart, lineCreationStart, transformToCanvasCoords])
 
   // Handle wheel zoom
   const handleWheel = useCallback((e: KonvaEventObject<WheelEvent>) => {
@@ -247,6 +265,19 @@ const Canvas: React.FC<CanvasProps> = ({
     if (isShiftPressed) {
       setSelectionBoxStart(canvasCoords)
       setSelectionBoxEnd(canvasCoords)
+    } else if (shapeMode === 'line') {
+      // PR #7: Two-click line creation
+      if (!lineCreationStart) {
+        // First click: start line
+        setLineCreationStart(canvasCoords)
+        setLinePreviewEnd(canvasCoords)
+        await clearSelection()
+      } else {
+        // Second click: complete line
+        await createLine(lineCreationStart.x, lineCreationStart.y, canvasCoords.x, canvasCoords.y)
+        setLineCreationStart(null)
+        setLinePreviewEnd(null)
+      }
     } else {
       // Otherwise, clear selection and create new shape based on mode
       await clearSelection()
@@ -256,7 +287,7 @@ const Canvas: React.FC<CanvasProps> = ({
         await createCircle(canvasCoords.x, canvasCoords.y)
       }
     }
-  }, [isShiftPressed, shapeMode, transformToCanvasCoords, clearSelection, createRectangle, createCircle])
+  }, [isShiftPressed, shapeMode, lineCreationStart, transformToCanvasCoords, clearSelection, createRectangle, createCircle, createLine])
 
   // NEW: Handle stage mouse up (for selection box completion)
   const handleStageMouseUp = useCallback(async () => {
@@ -402,6 +433,33 @@ const Canvas: React.FC<CanvasProps> = ({
     }
   }, [resizeCircle])
 
+  // PR #7: LINE HANDLERS
+  const handleLineClick = useCallback((lineId: string) => {
+    selectShape(lineId, 'line')
+  }, [selectShape])
+
+  const handleLineDragStart = useCallback(() => {
+    setIsRectangleDragging(true)
+  }, [])
+
+  const handleLineDragEnd = useCallback(async (lineId: string, newX: number, newY: number) => {
+    try {
+      await updateLine(lineId, { x: newX, y: newY })
+    } catch (error) {
+      console.error('Error moving line:', error)
+    } finally {
+      setIsRectangleDragging(false)
+    }
+  }, [updateLine])
+
+  const handleLineEndpointsChange = useCallback(async (lineId: string, newEndX: number, newEndY: number) => {
+    try {
+      await updateLineEndpoints(lineId, newEndX, newEndY)
+    } catch (error) {
+      console.error('Error updating line endpoints:', error)
+    }
+  }, [updateLineEndpoints])
+
   // Handle color change (unified for all shapes)
   const handleColorChange = useCallback(async (color: string) => {
     if (primarySelectionId && primarySelectionType) {
@@ -409,10 +467,11 @@ const Canvas: React.FC<CanvasProps> = ({
     }
   }, [primarySelectionId, primarySelectionType, changeShapeColor])
 
-  // Get selected shape (primary selection) - check both rectangles and circles
+  // Get selected shape (primary selection) - check rectangles, circles, and lines
   const selectedRectangle = rectangles.find(r => r.id === primarySelectionId)
   const selectedCircle = circles.find(c => c.id === primarySelectionId)
-  const selectedShape = selectedRectangle || selectedCircle
+  const selectedLine = lines.find(l => l.id === primarySelectionId)
+  const selectedShape = selectedRectangle || selectedCircle || selectedLine
   
   // Check if multiple selections have mixed colors
   const selectedColors = useMemo(() => {
@@ -420,11 +479,12 @@ const Canvas: React.FC<CanvasProps> = ({
     for (const id of selectedShapes.keys()) {
       const rect = rectangles.find(r => r.id === id)
       const circle = circles.find(c => c.id === id)
-      const shape = rect || circle
+      const line = lines.find(l => l.id === id)
+      const shape = rect || circle || line
       if (shape) colors.add(shape.color)
     }
     return colors
-  }, [selectedShapes, rectangles, circles])
+  }, [selectedShapes, rectangles, circles, lines])
   
   const hasMixedColors = selectedColors.size > 1
   const displayColor = hasMixedColors ? '?' : (selectedShape?.color || '#000000')
@@ -446,6 +506,15 @@ const Canvas: React.FC<CanvasProps> = ({
       return aZ - bZ
     })
   }, [circles])
+
+  // PR #7: Sort lines by zIndex for rendering
+  const sortedLines = useMemo(() => {
+    return [...lines].sort((a, b) => {
+      const aZ = a.zIndex ?? 0
+      const bZ = b.zIndex ?? 0
+      return aZ - bZ
+    })
+  }, [lines])
 
   // Keep clipboard operation refs updated
   useEffect(() => {
@@ -493,8 +562,12 @@ const Canvas: React.FC<CanvasProps> = ({
       
       // NEW: Clear selection (Escape)
       if (e.key === 'Escape' && !isTyping) {
-        // Cancel selection box if active
-        if (selectionBoxStart) {
+        // PR #7: Cancel line creation if active
+        if (lineCreationStart) {
+          setLineCreationStart(null)
+          setLinePreviewEnd(null)
+        } else if (selectionBoxStart) {
+          // Cancel selection box if active
           setSelectionBoxStart(null)
           setSelectionBoxEnd(null)
         } else {
@@ -514,6 +587,12 @@ const Canvas: React.FC<CanvasProps> = ({
       if (e.key === 'c' && !isTyping && !(e.metaKey || e.ctrlKey)) {
         // Only if not Cmd+C/Ctrl+C (which is copy)
         setShapeMode('circle')
+        return
+      }
+      
+      // PR #7: Line mode (L key)
+      if (e.key === 'l' && !isTyping) {
+        setShapeMode('line')
         return
       }
       
@@ -672,7 +751,7 @@ const Canvas: React.FC<CanvasProps> = ({
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)
     }
-  }, [primarySelectionId, rectangles, handleRectangleResize, deleteRectangle, isRectangleDragging, isRectangleResizing, getCurrentStagePosition, selectionLocked, selectedShapes, isShiftPressed, isPanning, selectAll, clearSelection, selectionBoxStart, setShapeMode])
+  }, [primarySelectionId, rectangles, handleRectangleResize, deleteRectangle, isRectangleDragging, isRectangleResizing, getCurrentStagePosition, selectionLocked, selectedShapes, isShiftPressed, isPanning, selectAll, clearSelection, selectionBoxStart, lineCreationStart, setShapeMode])
 
   // Detect when rectangle is selected after AI command (input was focused)
   useEffect(() => {
@@ -798,6 +877,54 @@ const Canvas: React.FC<CanvasProps> = ({
                 onResizeEnd={handleResizeEnd}
               />
             ))}
+            
+            {/* PR #7: Render lines (sorted by zIndex) */}
+            {sortedLines.map((line) => (
+              <Line
+                key={line.id}
+                line={line}
+                isSelected={selectedShapes.has(line.id)}
+                isPrimary={line.id === primarySelectionId}
+                isShiftPressed={isShiftPressed}
+                onClick={handleLineClick}
+                onDragStart={handleLineDragStart}
+                onDragEnd={handleLineDragEnd}
+                onEndpointsChange={handleLineEndpointsChange}
+                onResizeStart={handleResizeStart}
+                onResizeEnd={handleResizeEnd}
+              />
+            ))}
+            
+            {/* PR #7: Render line preview during creation */}
+            {lineCreationStart && linePreviewEnd && (
+              <Line
+                line={{
+                  id: 'preview',
+                  type: 'line',
+                  x: lineCreationStart.x,
+                  y: lineCreationStart.y,
+                  endX: linePreviewEnd.x,
+                  endY: linePreviewEnd.y,
+                  strokeWidth: 4,
+                  color: '#3b82f6',
+                  hasArrow: false,
+                  zIndex: 999999,
+                  createdBy: '',
+                  createdAt: 0,
+                  selectedBy: null,
+                  selectedAt: null
+                }}
+                isSelected={false}
+                isPrimary={false}
+                isShiftPressed={false}
+                onClick={() => {}}
+                onDragStart={() => {}}
+                onDragEnd={() => {}}
+                onEndpointsChange={() => {}}
+                onResizeStart={() => {}}
+                onResizeEnd={() => {}}
+              />
+            )}
             
             {/* NEW: Render selection box */}
             {selectionBoxStart && selectionBoxEnd && (
