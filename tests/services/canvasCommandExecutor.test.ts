@@ -38,7 +38,7 @@ describe('CanvasCommandExecutor', () => {
     // Create mock context
     mockContext = {
       rectangles: [...mockRectangles],
-      selectedRectangleId: 'rect1',
+      primarySelectionId: 'rect1',
       getViewportInfo: vi.fn(() => mockViewportInfo),
       createRectangle: mockCreateRectangle,
       updateRectangle: mockUpdateRectangle,
@@ -398,7 +398,7 @@ describe('CanvasCommandExecutor', () => {
     })
 
     it('should return null if no shape is selected', () => {
-      mockContext.selectedRectangleId = null
+      mockContext.primarySelectionId = null
       const selected = executor.getSelectedShape()
 
       expect(selected).toBeNull()
@@ -427,7 +427,7 @@ describe('CanvasCommandExecutor', () => {
     })
 
     it('should throw error if no rectangle ID provided for modification', async () => {
-      mockContext.selectedRectangleId = null
+      mockContext.primarySelectionId = null
 
       await expect(
         executor.executeCommand({

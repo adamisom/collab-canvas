@@ -95,7 +95,7 @@ export class AIAgent {
     return {
       canvasState: this.executor.getCanvasState(),
       viewportInfo: viewportInfo || undefined,
-      selectedShapeId: this.context.selectedRectangleId
+      selectedShapeId: this.context.primarySelectionId  // CHANGED: Use primary selection for AI
     }
   }
 

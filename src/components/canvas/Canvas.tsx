@@ -37,8 +37,8 @@ const Canvas: React.FC<CanvasProps> = ({
   const justUsedAICommandRef = useRef(false)
   
   // Refs for clipboard operations (to avoid dependency array issues)
-  const copyRectangleRef = useRef<(rectangleId: string) => void>()
-  const pasteRectangleRef = useRef<() => Promise<RectangleType | null>>()
+  const copySelectedRectanglesRef = useRef<() => void>()  // CHANGED
+  const pasteRectanglesRef = useRef<() => Promise<void>>()  // CHANGED
   const duplicateRectangleRef = useRef<(rectangleId: string) => Promise<RectangleType | null>>()
   
   // Refs for layering operations
@@ -48,15 +48,17 @@ const Canvas: React.FC<CanvasProps> = ({
   // Get canvas context
   const { 
     rectangles, 
-    selectedRectangleId, 
+    selectedRectangleIds,  // CHANGED: From single to multi
+    primarySelectionId,    // NEW
     createRectangle, 
     updateRectangle, 
     resizeRectangle, 
     deleteRectangle, 
     selectRectangle,
+    clearSelection,        // NEW
     changeRectangleColor,
-    copyRectangle,
-    pasteRectangle,
+    copySelectedRectangles,  // CHANGED
+    pasteRectangles,         // CHANGED
     duplicateRectangle,
     bringToFront,
     sendToBack,
@@ -196,8 +198,8 @@ const Canvas: React.FC<CanvasProps> = ({
   const handleStageClick = useCallback(async (e: KonvaEventObject<MouseEvent>) => {
     // Only handle clicks on the stage background (not on shapes)
     if (e.target === e.target.getStage()) {
-      // Deselect any selected rectangle
-      await selectRectangle(null)
+      // Deselect any selected rectangles
+      await clearSelection()
       
       // Create new rectangle at click position
       const stage = e.target.getStage()
@@ -216,7 +218,7 @@ const Canvas: React.FC<CanvasProps> = ({
         }
       }
     }
-  }, [createRectangle, selectRectangle, getCurrentStagePosition, getCurrentStageScale])
+  }, [createRectangle, clearSelection, getCurrentStagePosition, getCurrentStageScale])
 
   // Handle rectangle click (selection/deselection)
   const handleRectangleClick = useCallback(async (rectangle: RectangleType) => {
@@ -225,20 +227,20 @@ const Canvas: React.FC<CanvasProps> = ({
       document.activeElement.blur()
     }
     
-    // If the rectangle is already selected
-    if (selectedRectangleId === rectangle.id) {
+    // If the rectangle is already the primary selection
+    if (primarySelectionId === rectangle.id) {
       // Don't deselect if user just used AI command (first click after AI action)
       if (justUsedAICommandRef.current) {
         justUsedAICommandRef.current = false
         return
       }
       // Otherwise, deselect it (toggle behavior)
-      await selectRectangle(null)
+      await clearSelection()
     } else {
       // Otherwise, select it
       await selectRectangle(rectangle.id)
     }
-  }, [selectRectangle, selectedRectangleId])
+  }, [clearSelection, selectRectangle, primarySelectionId])
 
   // Handle rectangle drag start
   const handleRectangleDragStart = useCallback(async (rectangle: RectangleType) => {
@@ -283,13 +285,13 @@ const Canvas: React.FC<CanvasProps> = ({
 
   // Handle color change
   const handleColorChange = useCallback(async (color: string) => {
-    if (selectedRectangleId) {
-      await changeRectangleColor(selectedRectangleId, color)
+    if (primarySelectionId) {
+      await changeRectangleColor(primarySelectionId, color)
     }
-  }, [selectedRectangleId, changeRectangleColor])
+  }, [primarySelectionId, changeRectangleColor])
 
-  // Get selected rectangle
-  const selectedRectangle = rectangles.find(r => r.id === selectedRectangleId)
+  // Get selected rectangle (primary selection)
+  const selectedRectangle = rectangles.find(r => r.id === primarySelectionId)
 
   // Sort rectangles by zIndex for rendering (lower zIndex = render first = behind)
   const sortedRectangles = useMemo(() => {
@@ -302,10 +304,10 @@ const Canvas: React.FC<CanvasProps> = ({
 
   // Keep clipboard operation refs updated
   useEffect(() => {
-    copyRectangleRef.current = copyRectangle
-    pasteRectangleRef.current = pasteRectangle
+    copySelectedRectanglesRef.current = copySelectedRectangles  // CHANGED
+    pasteRectanglesRef.current = pasteRectangles        // CHANGED
     duplicateRectangleRef.current = duplicateRectangle
-  }, [copyRectangle, pasteRectangle, duplicateRectangle])
+  }, [copySelectedRectangles, pasteRectangles, duplicateRectangle])
 
   // Keep layering operation refs updated
   useEffect(() => {
@@ -332,9 +334,9 @@ const Canvas: React.FC<CanvasProps> = ({
         const selection = window.getSelection()
         const hasTextSelection = selection && selection.toString().length > 0
         
-        if (selectedRectangleId && !hasTextSelection) {
+        if (selectedRectangleIds.size > 0 && !hasTextSelection) {
           e.preventDefault()
-          copyRectangleRef.current?.(selectedRectangleId)
+          copySelectedRectanglesRef.current?.()
         }
         return
       }
@@ -342,46 +344,46 @@ const Canvas: React.FC<CanvasProps> = ({
       // Paste: Cmd+V (Mac) or Ctrl+V (Windows/Linux)
       if ((e.metaKey || e.ctrlKey) && e.key === 'v' && !isTyping) {
         e.preventDefault()
-        pasteRectangleRef.current?.()
+        pasteRectanglesRef.current?.()
         return
       }
       
       // Duplicate: Cmd+D (Mac) or Ctrl+D (Windows/Linux)
       if ((e.metaKey || e.ctrlKey) && e.key === 'd' && !isTyping) {
-        if (selectedRectangleId) {
+        if (primarySelectionId) {
           e.preventDefault() // Prevent browser bookmark shortcut
-          duplicateRectangleRef.current?.(selectedRectangleId)
+          duplicateRectangleRef.current?.(primarySelectionId)
         }
         return
       }
       
       // Bring to front: Cmd+] (Mac) or Ctrl+] (Windows/Linux)
       if ((e.metaKey || e.ctrlKey) && e.key === ']' && !isTyping) {
-        if (selectedRectangleId) {
+        if (primarySelectionId) {
           e.preventDefault()
-          bringToFrontRef.current?.(selectedRectangleId)
+          bringToFrontRef.current?.(primarySelectionId)
         }
         return
       }
       
       // Send to back: Cmd+[ (Mac) or Ctrl+[ (Windows/Linux)
       if ((e.metaKey || e.ctrlKey) && e.key === '[' && !isTyping) {
-        if (selectedRectangleId) {
+        if (primarySelectionId) {
           e.preventDefault()
-          sendToBackRef.current?.(selectedRectangleId)
+          sendToBackRef.current?.(primarySelectionId)
         }
         return
       }
       
       // Handle rectangle deletion
-      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedRectangleId) {
+      if ((e.key === 'Delete' || e.key === 'Backspace') && primarySelectionId) {
         // Don't delete if user is typing in an input field
         if (isTyping) return
         
         // Prevent deletion during active operations
         if (!isRectangleDragging && !isRectangleResizing) {
           e.preventDefault()
-          deleteRectangle(selectedRectangleId)
+          deleteRectangle(primarySelectionId)
           return
         }
       }
@@ -390,11 +392,11 @@ const Canvas: React.FC<CanvasProps> = ({
       const moveAmount = 50
       
       // Check if we're resizing a selected rectangle
-      if (selectedRectangleId && (e.shiftKey || e.ctrlKey)) {
+      if (primarySelectionId && (e.shiftKey || e.ctrlKey)) {
         // Don't resize if user is typing in an input field
         if (isTyping) return
         
-        const selectedRect = rectangles.find(r => r.id === selectedRectangleId)
+        const selectedRect = rectangles.find(r => r.id === primarySelectionId)
         if (selectedRect) {
           e.preventDefault() // Prevent default browser behavior
           
@@ -467,11 +469,11 @@ const Canvas: React.FC<CanvasProps> = ({
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [selectedRectangleId, rectangles, handleRectangleResize, deleteRectangle, isRectangleDragging, isRectangleResizing, getCurrentStagePosition, selectionLocked])
+  }, [primarySelectionId, rectangles, handleRectangleResize, deleteRectangle, isRectangleDragging, isRectangleResizing, getCurrentStagePosition, selectionLocked, selectedRectangleIds])
 
   // Detect when rectangle is selected after AI command (input was focused)
   useEffect(() => {
-    if (selectedRectangleId) {
+    if (primarySelectionId) {
       // If an input/textarea is currently focused, user likely just used AI command
       const activeElement = document.activeElement
       if (activeElement instanceof HTMLInputElement || activeElement instanceof HTMLTextAreaElement) {
@@ -485,7 +487,7 @@ const Canvas: React.FC<CanvasProps> = ({
         return () => clearTimeout(timeout)
       }
     }
-  }, [selectedRectangleId])
+  }, [primarySelectionId])
 
   // Update viewport info on mount and window resize
   useEffect(() => {
@@ -558,7 +560,7 @@ const Canvas: React.FC<CanvasProps> = ({
               <Rectangle
                 key={rectangle.id}
                 rectangle={rectangle}
-                isSelected={rectangle.id === selectedRectangleId}
+                isSelected={selectedRectangleIds.has(rectangle.id)}
                 onClick={handleRectangleClick}
                 onDragStart={handleRectangleDragStart}
                 onDragEnd={handleRectangleDragEnd}

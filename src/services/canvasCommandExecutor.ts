@@ -36,7 +36,7 @@ import type { Rectangle } from './canvasService'
  */
 export interface CanvasContextMethods {
   rectangles: Rectangle[]
-  selectedRectangleId: string | null
+  primarySelectionId: string | null  // CHANGED: AI operates on primary selection
   getViewportInfo: () => ViewportInfo | null
   createRectangle: (x: number, y: number) => Promise<Rectangle | null>
   updateRectangle: (rectangleId: string, updates: Partial<Rectangle>) => Promise<void>
@@ -46,7 +46,7 @@ export interface CanvasContextMethods {
   bringToFront: (rectangleId: string) => Promise<void>
   sendToBack: (rectangleId: string) => Promise<void>
   changeRectangleColor: (rectangleId: string, color: string) => Promise<void>
-  selectRectangle: (rectangleId: string | null) => Promise<void>
+  selectRectangle: (rectangleId: string, additive?: boolean) => Promise<void>  // CHANGED: selectRectangle no longer takes null
   setSelectionLocked: (locked: boolean) => void
 }
 
@@ -84,7 +84,7 @@ export class CanvasCommandExecutor {
    * Get selected shape info (or null if none selected)
    */
   getSelectedShape(): SelectedShape | null {
-    const selectedId = this.context.selectedRectangleId
+    const selectedId = this.context.primarySelectionId
     if (!selectedId) return null
 
     const rectangle = this.context.rectangles.find(r => r.id === selectedId)
@@ -214,7 +214,7 @@ export class CanvasCommandExecutor {
    */
   private async executeChangeColor(params: ChangeColorParams, createdRectangleId?: string): Promise<void> {
     // Use provided shapeId, or createdRectangleId from multi-step, or fall back to selected rectangle
-    const shapeId = createdRectangleId || params.shapeId || this.context.selectedRectangleId
+    const shapeId = createdRectangleId || params.shapeId || this.context.primarySelectionId
 
     // Validate shapeId exists
     if (!shapeId) {
@@ -239,7 +239,7 @@ export class CanvasCommandExecutor {
    */
   private async executeMoveRectangle(params: MoveRectangleParams, createdRectangleId?: string): Promise<void> {
     // Use provided shapeId, or createdRectangleId from multi-step, or fall back to selected rectangle
-    const shapeId = createdRectangleId || params.shapeId || this.context.selectedRectangleId
+    const shapeId = createdRectangleId || params.shapeId || this.context.primarySelectionId
 
     // Validate shapeId exists
     if (!shapeId) {
@@ -262,7 +262,7 @@ export class CanvasCommandExecutor {
    */
   private async executeResizeRectangle(params: ResizeRectangleParams, createdRectangleId?: string): Promise<void> {
     // Use provided shapeId, or createdRectangleId from multi-step, or fall back to selected rectangle
-    const shapeId = createdRectangleId || params.shapeId || this.context.selectedRectangleId
+    const shapeId = createdRectangleId || params.shapeId || this.context.primarySelectionId
 
     // Validate shapeId exists
     if (!shapeId) {
@@ -296,7 +296,7 @@ export class CanvasCommandExecutor {
    */
   private async executeDeleteRectangle(params: DeleteRectangleParams, createdRectangleId?: string): Promise<void> {
     // Use provided shapeId, or createdRectangleId from multi-step, or fall back to selected rectangle
-    const shapeId = createdRectangleId || params.shapeId || this.context.selectedRectangleId
+    const shapeId = createdRectangleId || params.shapeId || this.context.primarySelectionId
 
     // Validate shapeId exists
     if (!shapeId) {
@@ -316,7 +316,7 @@ export class CanvasCommandExecutor {
    */
   private async executeDuplicateRectangle(params: DuplicateRectangleParams, createdRectangleId?: string): Promise<void> {
     // Use provided shapeId, or createdRectangleId from multi-step, or fall back to selected rectangle
-    const shapeId = createdRectangleId || params.shapeId || this.context.selectedRectangleId
+    const shapeId = createdRectangleId || params.shapeId || this.context.primarySelectionId
 
     // Validate shapeId exists
     if (!shapeId) {
@@ -336,7 +336,7 @@ export class CanvasCommandExecutor {
    */
   private async executeBringToFront(params: BringToFrontParams, createdRectangleId?: string): Promise<void> {
     // Use provided shapeId, or createdRectangleId from multi-step, or fall back to selected rectangle
-    const shapeId = createdRectangleId || params.shapeId || this.context.selectedRectangleId
+    const shapeId = createdRectangleId || params.shapeId || this.context.primarySelectionId
 
     // Validate shapeId exists
     if (!shapeId) {
@@ -356,7 +356,7 @@ export class CanvasCommandExecutor {
    */
   private async executeSendToBack(params: SendToBackParams, createdRectangleId?: string): Promise<void> {
     // Use provided shapeId, or createdRectangleId from multi-step, or fall back to selected rectangle
-    const shapeId = createdRectangleId || params.shapeId || this.context.selectedRectangleId
+    const shapeId = createdRectangleId || params.shapeId || this.context.primarySelectionId
 
     // Validate shapeId exists
     if (!shapeId) {
