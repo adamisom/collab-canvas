@@ -478,7 +478,7 @@ export class CanvasCommandExecutor {
       throw new Error('Distribution requires at least 3 shapes selected')
     }
 
-    await this.context.alignShapes(alignType as any)
+    await this.context.alignShapes(alignType as 'left' | 'center-horizontal' | 'right' | 'top' | 'center-vertical' | 'bottom')
   }
 
   /**
@@ -493,7 +493,7 @@ export class CanvasCommandExecutor {
       throw new Error(`Invalid shape type: ${shapeType}`)
     }
 
-    await this.context.selectAllOfType(shapeType as any)
+    await this.context.selectAllOfType(shapeType as 'rectangle' | 'circle' | 'line' | 'text')
   }
 
   /**

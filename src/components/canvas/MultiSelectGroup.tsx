@@ -1,7 +1,6 @@
 import React, { useRef, useState } from 'react'
 import { Rect } from 'react-konva'
 import type Konva from 'konva'
-import type { KonvaEventObject } from 'konva/lib/Node'
 import type { Rectangle } from '../../services/canvasService'
 
 interface MultiSelectGroupProps {
@@ -35,14 +34,14 @@ const MultiSelectGroup: React.FC<MultiSelectGroupProps> = ({ rectangles, onGroup
   const x = isDragging && dragStartPos ? dragStartPos.x : minX
   const y = isDragging && dragStartPos ? dragStartPos.y : minY
 
-  const handleDragStart = (_e: KonvaEventObject<DragEvent>) => {
+  const handleDragStart = () => {
     // Store the starting position
     setDragStartPos({ x: minX, y: minY })
     setIsDragging(true)
     onGroupDragStart()
   }
 
-  const handleDragEnd = (_e: KonvaEventObject<DragEvent>) => {
+  const handleDragEnd = () => {
     if (!dragStartPos || !rectRef.current) return
 
     const newX = rectRef.current.x()

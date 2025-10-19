@@ -57,7 +57,6 @@ const Canvas: React.FC<CanvasProps> = ({
   
   // NEW: Keyboard modifier states
   const [isShiftPressed, setIsShiftPressed] = useState(false)
-  const [isPanning, setIsPanning] = useState(false)  // Spacebar held
   
   // Phase 3D PR #11: Lasso selection state
   const [isLassoMode, setIsLassoMode] = useState(false)
@@ -409,15 +408,15 @@ const Canvas: React.FC<CanvasProps> = ({
     
     // Cmd/Ctrl+Click: Add/remove from multi-select (toggle)
     if (cmdOrCtrlPressed) {
-      const isAlreadySelected = selectedRectangleIds.has(rectangle.id)
+      const isAlreadySelected = selectedShapes.has(rectangle.id)
       
       if (isAlreadySelected) {
         // Remove from selection
-        const newSelection = Array.from(selectedRectangleIds).filter(id => id !== rectangle.id)
+        const newSelection = Array.from(selectedShapes.keys()).filter(id => id !== rectangle.id)
         await selectMultiple(newSelection)
       } else {
         // Add to selection
-        const newSelection = Array.from(selectedRectangleIds)
+        const newSelection = Array.from(selectedShapes.keys())
         newSelection.push(rectangle.id)
         await selectMultiple(newSelection)
       }
@@ -438,7 +437,7 @@ const Canvas: React.FC<CanvasProps> = ({
       // Otherwise, select it
       await selectRectangle(rectangle.id)
     }
-  }, [clearSelection, selectRectangle, selectMultiple, primarySelectionId, selectedRectangleIds])
+  }, [clearSelection, selectRectangle, selectMultiple, primarySelectionId, selectedShapes])
 
   // Handle rectangle drag start
   const handleRectangleDragStart = useCallback(async (rectangle: RectangleType) => {
@@ -457,7 +456,7 @@ const Canvas: React.FC<CanvasProps> = ({
   }, [updateRectangle])
 
   // NEW: Handle multi-select group drag end (Konva Group approach)
-  const handleMultiSelectGroupDragEnd = useCallback(async (_e: KonvaEventObject<DragEvent>) => {
+  const handleMultiSelectGroupDragEnd = useCallback(async () => {
     if (!multiSelectGroupRef.current) return
     
     const group = multiSelectGroupRef.current
@@ -762,12 +761,6 @@ const Canvas: React.FC<CanvasProps> = ({
         setIsShiftPressed(true)
       }
       
-      // NEW: Track Spacebar for pan mode
-      if (e.key === ' ' && !isTyping && !isPanning) {
-        e.preventDefault()  // Prevent page scroll
-        setIsPanning(true)
-      }
-      
       // NEW: Select All (Cmd/Ctrl+A)
       if ((e.metaKey || e.ctrlKey) && e.key === 'a' && !isTyping) {
         e.preventDefault()
@@ -1034,10 +1027,6 @@ const Canvas: React.FC<CanvasProps> = ({
             stageRef.current.x(0)
             stageRef.current.y(0)
             sendViewportInfo() // Update AI agent viewport info
-            // Trigger info bar update
-            if ((window as any).__canvasInfoUpdate) {
-              (window as any).__canvasInfoUpdate()
-            }
             return
           default:
             return
@@ -1046,10 +1035,6 @@ const Canvas: React.FC<CanvasProps> = ({
         stageRef.current.x(newPosition.x)
         stageRef.current.y(newPosition.y)
         sendViewportInfo() // Update AI agent viewport info
-        // Trigger info bar update
-        if ((window as any).__canvasInfoUpdate) {
-          (window as any).__canvasInfoUpdate()
-        }
       }
     }
 
@@ -1057,11 +1042,6 @@ const Canvas: React.FC<CanvasProps> = ({
       // NEW: Release Shift key
       if (e.key === 'Shift') {
         setIsShiftPressed(false)
-      }
-      
-      // NEW: Release Spacebar (pan mode)
-      if (e.key === ' ') {
-        setIsPanning(false)
       }
     }
 
@@ -1071,7 +1051,7 @@ const Canvas: React.FC<CanvasProps> = ({
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)
     }
-  }, [primarySelectionId, rectangles, circles, lines, texts, primarySelectionType, handleRectangleResize, deleteRectangle, deleteSelectedRectangles, isRectangleDragging, isRectangleResizing, getCurrentStagePosition, selectionLocked, selectedShapes, isShiftPressed, selectAll, clearSelection, selectionBoxStart, lineCreationStart, setShapeMode, alignShapes, isLassoMode, rotateShape, sendViewportInfo])
+  }, [primarySelectionId, rectangles, circles, lines, texts, primarySelectionType, handleRectangleResize, deleteRectangle, deleteSelectedRectangles, isRectangleDragging, isRectangleResizing, getCurrentStagePosition, selectionLocked, selectedShapes, isShiftPressed, selectAll, clearSelection, selectionBoxStart, lineCreationStart, setShapeMode, alignShapes, isLassoMode, rotateShape, sendViewportInfo, showToast])
 
   // Detect when rectangle is selected after AI command (input was focused)
   useEffect(() => {

@@ -21,7 +21,6 @@ const RotateHandle: React.FC<RotateHandleProps> = ({
   shapeId,
   centerX,
   centerY,
-  currentRotation: _currentRotation,  // Prefix with _ to indicate intentionally unused
   isShiftPressed,
   onRotate
 }) => {

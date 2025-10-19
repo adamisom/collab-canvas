@@ -73,14 +73,6 @@ const CanvasInfo: React.FC<CanvasInfoProps> = ({
     }
   }, [stageRef, triggerUpdate])
 
-  // Expose triggerUpdate method via window for keyboard shortcuts
-  useEffect(() => {
-    (window as any).__canvasInfoUpdate = triggerUpdate
-    return () => {
-      delete (window as any).__canvasInfoUpdate
-    }
-  }, [triggerUpdate])
-
   return (
     <div className="canvas-info">
       <div className="canvas-stats">
