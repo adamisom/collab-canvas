@@ -2,8 +2,8 @@ import React from 'react'
 import './Canvas.css'
 
 interface ShapeModeSelectorProps {
-  mode: 'rectangle' | 'circle'
-  onModeChange: (mode: 'rectangle' | 'circle') => void
+  mode: 'rectangle' | 'circle' | 'line'
+  onModeChange: (mode: 'rectangle' | 'circle' | 'line') => void
 }
 
 const ShapeModeSelector: React.FC<ShapeModeSelectorProps> = ({ mode, onModeChange }) => {
@@ -27,6 +27,16 @@ const ShapeModeSelector: React.FC<ShapeModeSelectorProps> = ({ mode, onModeChang
       >
         <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
           <circle cx="10" cy="10" r="7" stroke="currentColor" strokeWidth="2" fill="none" />
+        </svg>
+      </button>
+      <button
+        className={`shape-mode-btn ${mode === 'line' ? 'active' : ''}`}
+        onClick={() => onModeChange('line')}
+        title="Line mode (L)"
+        aria-label="Line mode"
+      >
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <line x1="3" y1="15" x2="17" y2="5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
         </svg>
       </button>
     </div>

@@ -1,15 +1,16 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react'
 import { canvasService } from '../services/canvasService'
-import type { Rectangle, RectangleInput, CircleInput } from '../services/canvasService'
+import type { Rectangle, RectangleInput, CircleInput, LineInput } from '../services/canvasService'
 import { useAuth } from './AuthContext'
 import type { ViewportInfo } from '../shared/types'
-import type { Shape, ShapeType, CircleShape } from '../shared/shapes'
+import type { Shape, ShapeType, CircleShape, LineShape } from '../shared/shapes'
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../utils/constants'
 
 interface CanvasContextType {
   rectangles: Rectangle[]
   circles: CircleShape[]  // PR #6
-  shapeMode: 'rectangle' | 'circle'  // PR #6
+  lines: LineShape[]  // PR #7
+  shapeMode: 'rectangle' | 'circle' | 'line'  // PR #7: Added 'line'
   selectedShapes: Map<string, ShapeType> // REFACTORED: Phase 3C PR #5 - unified selection
   primarySelectionId: string | null  // Last clicked shape
   primarySelectionType: ShapeType | null  // NEW: Type of primary selection
@@ -19,7 +20,7 @@ interface CanvasContextType {
   selectionLocked: boolean
   
   // Shape mode operations (PR #6)
-  setShapeMode: (mode: 'rectangle' | 'circle') => void
+  setShapeMode: (mode: 'rectangle' | 'circle' | 'line') => void  // PR #7: Added 'line'
   
   // Rectangle operations
   createRectangle: (x: number, y: number) => Promise<Rectangle | null>
@@ -34,6 +35,13 @@ interface CanvasContextType {
   resizeCircle: (circleId: string, radius: number, x?: number, y?: number) => Promise<void>
   deleteCircle: (circleId: string) => Promise<void>
   changeCircleColor: (circleId: string, color: string) => Promise<void>
+  
+  // Line operations (PR #7)
+  createLine: (x: number, y: number, endX: number, endY: number, hasArrow?: boolean) => Promise<LineShape | null>
+  updateLine: (lineId: string, updates: Partial<LineShape>) => Promise<void>
+  updateLineEndpoints: (lineId: string, endX: number, endY: number) => Promise<void>
+  deleteLine: (lineId: string) => Promise<void>
+  changeLineColor: (lineId: string, color: string) => Promise<void>
   
   // Unified shape operations (PR #6)
   selectShape: (shapeId: string, shapeType: ShapeType, additive?: boolean) => Promise<void>
@@ -91,7 +99,8 @@ interface CanvasProviderProps {
 export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
   const [rectangles, setRectangles] = useState<Rectangle[]>([])
   const [circles, setCircles] = useState<CircleShape[]>([])  // PR #6
-  const [shapeMode, setShapeMode] = useState<'rectangle' | 'circle'>('rectangle')  // PR #6
+  const [lines, setLines] = useState<LineShape[]>([])  // PR #7
+  const [shapeMode, setShapeMode] = useState<'rectangle' | 'circle' | 'line'>('rectangle')  // PR #7: Added 'line'
   const [selectedShapes, setSelectedShapes] = useState<Map<string, ShapeType>>(new Map())  // REFACTORED: PR #5
   const [primarySelectionId, setPrimarySelectionId] = useState<string | null>(null)
   const [primarySelectionType, setPrimarySelectionType] = useState<ShapeType | null>(null)  // NEW: PR #5
@@ -126,6 +135,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     if (!user) {
       setRectangles([])
       setCircles([])  // PR #6
+      setLines([])  // PR #7
       setSelectedShapes(new Map())
       setPrimarySelectionId(null)
       setPrimarySelectionType(null)
@@ -205,9 +215,43 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       }
     })
 
+    // PR #7: Set up real-time listener for lines
+    const unsubscribeLines = canvasService.onLinesChange((newLines) => {
+      setLines(newLines)
+      
+      // Similar cleanup logic for lines
+      const currentSelectedShapes = selectedShapesRef.current
+      const currentPrimaryId = primarySelectionIdRef.current
+      
+      if (currentSelectedShapes.size > 0) {
+        const existingLineIds = new Set(newLines.map(l => l.id))
+        const updatedSelection = new Map<string, ShapeType>()
+        
+        for (const [id, type] of currentSelectedShapes) {
+          if (type === 'line' && existingLineIds.has(id)) {
+            updatedSelection.set(id, type)
+          } else if (type !== 'line') {
+            updatedSelection.set(id, type)
+          }
+        }
+        
+        if (updatedSelection.size !== currentSelectedShapes.size) {
+          setSelectedShapes(updatedSelection)
+        }
+        
+        // Clear primary if it no longer exists and was a line
+        if (currentPrimaryId && primarySelectionTypeRef.current === 'line' && !existingLineIds.has(currentPrimaryId)) {
+          const firstId = updatedSelection.size > 0 ? Array.from(updatedSelection.keys())[0] : null
+          setPrimarySelectionId(firstId)
+          setPrimarySelectionType(firstId ? updatedSelection.get(firstId) || null : null)
+        }
+      }
+    })
+
     return () => {
       unsubscribeRectangles()
       unsubscribeCircles()  // PR #6
+      unsubscribeLines()  // PR #7
     }
   }, [user])
 
@@ -680,6 +724,113 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
   }, [])
 
   // ============================================================================
+  // PR #7: LINE OPERATIONS
+  // ============================================================================
+
+  // Create a new line
+  const createLine = useCallback(async (
+    x: number,
+    y: number,
+    endX: number,
+    endY: number,
+    hasArrow: boolean = false
+  ): Promise<LineShape | null> => {
+    if (!user) {
+      setError('Must be logged in to create lines')
+      return null
+    }
+
+    try {
+      const lineInput: LineInput = {
+        x,
+        y,
+        endX,
+        endY,
+        hasArrow,
+        createdBy: user.uid
+      }
+
+      const newLine = await canvasService.createLine(lineInput)
+      
+      // Select the newly created line (single selection)
+      const newSelection = new Map<string, ShapeType>()
+      newSelection.set(newLine.id, 'line')
+      setSelectedShapes(newSelection)
+      setPrimarySelectionId(newLine.id)
+      setPrimarySelectionType('line')
+      
+      return newLine
+    } catch (error) {
+      console.error('Error creating line:', error)
+      setError('Failed to create line')
+      return null
+    }
+  }, [user])
+
+  // Update an existing line
+  const updateLine = useCallback(async (
+    lineId: string, 
+    updates: Partial<LineShape>
+  ): Promise<void> => {
+    try {
+      await canvasService.updateLine(lineId, updates)
+    } catch (error) {
+      console.error('Error updating line:', error)
+      setError('Failed to update line')
+    }
+  }, [])
+
+  // Update line endpoints
+  const updateLineEndpoints = useCallback(async (
+    lineId: string, 
+    endX: number, 
+    endY: number
+  ): Promise<void> => {
+    try {
+      await canvasService.updateLineEndpoints(lineId, endX, endY)
+    } catch (error) {
+      console.error('Error updating line endpoints:', error)
+      setError('Failed to update line endpoints')
+    }
+  }, [])
+
+  // Delete a line
+  const deleteLine = useCallback(async (lineId: string): Promise<void> => {
+    try {
+      await canvasService.deleteLine(lineId)
+      
+      // Remove from selection if deleted
+      if (selectedShapes.has(lineId)) {
+        setSelectedShapes(prev => {
+          const next = new Map(prev)
+          next.delete(lineId)
+          return next
+        })
+        
+        // Update primary if it was deleted
+        if (primarySelectionId === lineId) {
+          const remaining = Array.from(selectedShapes.keys()).filter(id => id !== lineId)
+          setPrimarySelectionId(remaining.length > 0 ? remaining[0] : null)
+          setPrimarySelectionType(remaining.length > 0 ? selectedShapes.get(remaining[0]) || null : null)
+        }
+      }
+    } catch (error) {
+      console.error('Error deleting line:', error)
+      setError('Failed to delete line')
+    }
+  }, [selectedShapes, primarySelectionId])
+
+  // Change line color
+  const changeLineColor = useCallback(async (lineId: string, color: string) => {
+    try {
+      await canvasService.updateLine(lineId, { color })
+    } catch (error) {
+      console.error('Error changing line color:', error)
+      setError('Failed to change line color')
+    }
+  }, [])
+
+  // ============================================================================
   // PR #6: UNIFIED SHAPE OPERATIONS (type-discriminated)
   // ============================================================================
 
@@ -762,26 +913,99 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
           setPrimarySelectionType('circle')
         }
       }
-    }
-  }, [user, username, circles, selectedShapes, primarySelectionId, selectionLocked, showToast, selectRectangle])
+    } else if (shapeType === 'line') {
+      // PR #7: Line selection logic (similar to circle)
+      const line = lines.find(l => l.id === shapeId)
+      if (!line) {
+        showToast('Line not found')
+        return
+      }
 
-  // Unified deleteShape (handles rectangles, circles, etc.)
+      if (line.selectedBy && line.selectedBy !== user.uid) {
+        showToast(`Line is currently selected by ${line.selectedByUsername || 'another user'}`)
+        return
+      }
+
+      if (!additive) {
+        // Clear all previous selections
+        for (const [prevId, prevType] of selectedShapes) {
+          if (prevType === 'rectangle') {
+            await canvasService.deselectRectangle(prevId, user.uid)
+          } else if (prevType === 'circle') {
+            await canvasService.deselectCircle(prevId, user.uid)
+          } else if (prevType === 'line') {
+            await canvasService.deselectLine(prevId, user.uid)
+          }
+        }
+
+        // Select this one
+        const newSelection = new Map<string, ShapeType>()
+        newSelection.set(shapeId, 'line')
+        setSelectedShapes(newSelection)
+        setPrimarySelectionId(shapeId)
+        setPrimarySelectionType('line')
+        await canvasService.selectLine(shapeId, user.uid, username)
+      } else {
+        // Additive selection (toggle)
+        const isCurrentlySelected = selectedShapes.has(shapeId)
+
+        if (isCurrentlySelected) {
+          // Remove from selection
+          await canvasService.deselectLine(shapeId, user.uid)
+
+          setSelectedShapes(prev => {
+            const next = new Map(prev)
+            next.delete(shapeId)
+
+            if (shapeId === primarySelectionId) {
+              if (next.size > 0) {
+                const newPrimary = Array.from(next.keys())[0]
+                setPrimarySelectionId(newPrimary)
+                setPrimarySelectionType(next.get(newPrimary) || null)
+              } else {
+                setPrimarySelectionId(null)
+                setPrimarySelectionType(null)
+              }
+            }
+            return next
+          })
+        } else {
+          // Add to selection
+          await canvasService.selectLine(shapeId, user.uid, username)
+
+          setSelectedShapes(prev => {
+            const next = new Map(prev)
+            next.set(shapeId, 'line')
+            return next
+          })
+          setPrimarySelectionId(shapeId)
+          setPrimarySelectionType('line')
+        }
+      }
+    }
+  }, [user, username, circles, lines, selectedShapes, primarySelectionId, selectionLocked, showToast, selectRectangle])
+
+  // Unified deleteShape (handles rectangles, circles, lines, etc.)
   const deleteShape = useCallback(async (shapeId: string, shapeType: ShapeType) => {
     if (shapeType === 'rectangle') {
       await deleteRectangle(shapeId)
     } else if (shapeType === 'circle') {
       await deleteCircle(shapeId)
+    } else if (shapeType === 'line') {
+      await deleteLine(shapeId)
     }
-  }, [deleteRectangle, deleteCircle])
+  }, [deleteRectangle, deleteCircle, deleteLine])
 
-  // Unified changeShapeColor (handles rectangles, circles, etc.)
+  // Unified changeShapeColor (handles rectangles, circles, lines, etc.)
   const changeShapeColor = useCallback(async (shapeId: string, shapeType: ShapeType, color: string) => {
     if (shapeType === 'rectangle') {
       await changeRectangleColor(shapeId, color)
     } else if (shapeType === 'circle') {
       await changeCircleColor(shapeId, color)
+    } else if (shapeType === 'line') {
+      await changeLineColor(shapeId, color)
     }
-  }, [changeRectangleColor, changeCircleColor])
+  }, [changeRectangleColor, changeCircleColor, changeLineColor])
 
   // REFACTORED PR #5: Copy all selected shapes to clipboard (currently only rectangles)
   const copySelectedRectangles = useCallback(() => {
@@ -957,7 +1181,8 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
   const value: CanvasContextType = {
     rectangles,
     circles,  // PR #6
-    shapeMode,  // PR #6
+    lines,  // PR #7
+    shapeMode,  // PR #6, updated PR #7
     selectedShapes,
     primarySelectionId,
     primarySelectionType,
@@ -965,7 +1190,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     error,
     toastMessage,
     selectionLocked,
-    setShapeMode,  // PR #6
+    setShapeMode,  // PR #6, updated PR #7
     createRectangle,
     updateRectangle,
     resizeRectangle,
@@ -976,9 +1201,14 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     resizeCircle,  // PR #6
     deleteCircle,  // PR #6
     changeCircleColor,  // PR #6
-    selectShape,  // PR #6
-    deleteShape,  // PR #6
-    changeShapeColor,  // PR #6
+    createLine,  // PR #7
+    updateLine,  // PR #7
+    updateLineEndpoints,  // PR #7
+    deleteLine,  // PR #7
+    changeLineColor,  // PR #7
+    selectShape,  // PR #6, updated PR #7
+    deleteShape,  // PR #6, updated PR #7
+    changeShapeColor,  // PR #6, updated PR #7
     selectRectangle,
     selectMultiple,
     selectAll,
