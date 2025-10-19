@@ -76,7 +76,7 @@ const ColorPicker: React.FC<ColorPickerProps> = ({ selectedColor, onColorChange 
         {RECTANGLE_COLOR_OPTIONS.map((colorOption) => (
           <button
             key={colorOption.value}
-            className={`color-option ${!isMixed && selectedColor === colorOption.value ? 'selected' : ''}`}  // CHANGED: Don't highlight when mixed
+            className="color-option"
             style={{ backgroundColor: colorOption.value }}
             onClick={() => handleQuickColorClick(colorOption.value)}
             title={colorOption.name}
