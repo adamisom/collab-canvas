@@ -69,11 +69,18 @@ selectAll(): void
 ### What This PR Delivers
 
 **Multi-Select Methods:**
-1. **Click** - Select single (clear others)
-2. **Cmd/Ctrl+Click** - Add/remove from selection (toggle)
-3. **Shift+Click** - Select range (all rectangles between two clicks)
-4. **Drag Selection Box** - Select all within dragged rectangle
-5. **Cmd/Ctrl+A** - Select all rectangles
+1. **Click on rectangle** - Select single (clear others)
+2. **Cmd/Ctrl+Click on rectangle** - Add/remove from selection (toggle)
+3. **Drag selection box on canvas** - Select all within dragged rectangle
+4. **Cmd/Ctrl+A** - Select all rectangles
+5. **Escape** - Clear selection
+
+**Canvas Interaction Model:**
+- **Click on empty space** - Create new rectangle (unchanged from Phase 3A)
+- **Drag on empty space** - Draw selection box (detect if mouse moves >5px)
+- **Spacebar + Drag** - Pan canvas (new pan mode)
+- **Scroll wheel** - Zoom in/out (unchanged)
+- **Arrow keys** - Navigate canvas (unchanged)
 
 **Visual Feedback:**
 - All selected rectangles: Red border (3px)
@@ -91,21 +98,31 @@ selectAll(): void
 ### Implementation Strategy
 
 **Selection State Management:**
-- `selectedRectangleIds: Set<string>` - All selected rectangle IDs
-- `primarySelectionId: string | null` - Last clicked (shows resize handles)
-- Firebase selection tracking: Keep per-user as-is (each user has own selection)
+- `selectedRectangleIds: Set<string>` - All selected rectangle IDs (local state)
+- `primarySelectionId: string | null` - Last clicked rectangle (shows resize handles)
+- **Firebase**: Use existing `selectedBy` field on each rectangle - no schema changes needed
+  - When selecting rectangles, set `selectedBy: userId` on each
+  - When deselecting, clear `selectedBy` on each
+  - Exclusive selection: Can't select rectangles with `selectedBy !== currentUser`
+  - Filter rectangles by `selectedBy === userId` to reconstruct selection
 
 **Clipboard Updates:**
 - Change `clipboardRectangle` to `clipboardRectangles: Rectangle[]` (plural)
-- Copy stores all selected
-- Paste creates all with offset
-- Multiple pastes work (stagger offsets)
+- Copy stores all selected rectangles
+- Paste creates all with same relative positions maintained
+- Calculate bounding box of clipboard items, apply uniform offset to preserve spatial relationships
 
 **Drag Selection Box:**
-- Track mouse down/move/up on stage
+- Detect click vs drag: If mouse moves >5px before mouseup, it's a drag
+- Track mouse down/move/up on stage  
 - Draw transparent blue rectangle during drag
-- On mouse up, select all rectangles within bounds
+- On mouse up, select all rectangles whose bounds are fully within selection box
 - Cancel with Escape key
+
+**Pan Mode (New):**
+- Hold Spacebar to enter pan mode (cursor changes to hand icon)
+- Spacebar + Drag moves the canvas viewport
+- Release Spacebar to exit pan mode
 
 ### Files to Create
 
@@ -328,7 +345,7 @@ const copySelectedRectangles = useCallback(() => {
   showToast(`Copied ${count} rectangle${count > 1 ? 's' : ''}`)
 }, [rectangles, selectedRectangleIds, showToast])
 
-// UPDATED from PR #1: Paste now works with multiple
+// UPDATED from PR #1: Paste now works with multiple and preserves relative positions
 const pasteRectangles = useCallback(async () => {
   if (!user) {
     setError('You must be signed in to paste')
@@ -344,14 +361,23 @@ const pasteRectangles = useCallback(async () => {
     const PASTE_OFFSET = 20
     const newIds: string[] = []
     
-    // Paste all rectangles with offset
+    // Calculate bounding box of all clipboard rectangles
+    const minX = Math.min(...clipboardRectangles.map(r => r.x))
+    const minY = Math.min(...clipboardRectangles.map(r => r.y))
+    
+    // Paste all rectangles with same relative positions
     for (const original of clipboardRectangles) {
+      // Calculate position relative to group's top-left
+      const relativeX = original.x - minX
+      const relativeY = original.y - minY
+      
+      // Apply uniform offset to entire group
       const newX = Math.min(
-        original.x + PASTE_OFFSET,
+        minX + PASTE_OFFSET + relativeX,
         CANVAS_WIDTH - original.width
       )
       const newY = Math.min(
-        original.y + PASTE_OFFSET,
+        minY + PASTE_OFFSET + relativeY,
         CANVAS_HEIGHT - original.height
       )
       
@@ -360,28 +386,27 @@ const pasteRectangles = useCallback(async () => {
         y: newY,
         width: original.width,
         height: original.height,
-        color: original.color,
-        createdBy: user.uid,
-        createdAt: Date.now()
+        color: original.color
       }
       
-      const pasted = await canvasService.createRectangle(input)
-      if (pasted) {
-        newIds.push(pasted.id)
+      const newRectangle = await canvasService.createRectangle(input)
+      if (newRectangle) {
+        newIds.push(newRectangle.id)
+        // Select the newly pasted rectangle
+        await canvasService.selectRectangle(newRectangle.id, user.uid, username!)
       }
     }
     
-    // Select all pasted rectangles
+    // Select all newly pasted rectangles
     setSelectedRectangleIds(new Set(newIds))
     setPrimarySelectionId(newIds[newIds.length - 1] || null)
     
     const count = newIds.length
     showToast(`Pasted ${count} rectangle${count > 1 ? 's' : ''}`)
-  } catch (err: any) {
-    console.error('Error pasting rectangles:', err)
-    setError(err.message || 'Failed to paste rectangles')
+  } catch (err) {
+    setError(err instanceof Error ? err.message : 'Failed to paste rectangles')
   }
-}, [user, clipboardRectangles, showToast])
+}, [user, username, clipboardRectangles, showToast, setError])
 
 // duplicateRectangle stays the same (single selection only)
 // Layer operations stay the same (work on primary selection)
@@ -718,11 +743,23 @@ interface EnhancedColorPickerProps {
 const EnhancedColorPicker: React.FC<EnhancedColorPickerProps> = ({
   selectedRectangleIds
 }) => {
-  const { changeSelectedRectanglesColor } = useCanvas()  // Use bulk operation
+  const { rectangles, changeSelectedRectanglesColor } = useCanvas()
   const { user } = useAuth()
   const [hexInput, setHexInput] = useState('')
   const [colorHistory, setColorHistory] = useState<string[]>([])
   const [showHistory, setShowHistory] = useState(false)
+  
+  // Get colors of all selected rectangles
+  const selectedColors = Array.from(selectedRectangleIds)
+    .map(id => rectangles.find(r => r.id === id)?.color)
+    .filter(Boolean) as string[]
+  
+  const hasMixedColors = selectedColors.length > 1 && 
+    !selectedColors.every(c => c === selectedColors[0])
+  
+  const singleColor = !hasMixedColors && selectedColors.length > 0 
+    ? selectedColors[0] 
+    : null
 
   const handleQuickColor = async (color: string) => {
     if (selectedRectangleIds.size > 0) {
@@ -730,6 +767,31 @@ const EnhancedColorPicker: React.FC<EnhancedColorPickerProps> = ({
       addToHistory(color)
     }
   }
+  
+  return (
+    <div className="color-picker">
+      {/* Show current color or "?" for mixed */}
+      <div className="current-color">
+        {hasMixedColors ? (
+          <div className="color-preview mixed">?</div>
+        ) : singleColor ? (
+          <div className="color-preview" style={{ backgroundColor: singleColor }} />
+        ) : null}
+      </div>
+      
+      {/* Quick color options */}
+      {/* ... rest of color picker */}
+      
+      {selectedRectangleIds.size > 1 && (
+        <div className="selection-count">
+          {selectedRectangleIds.size} rectangles selected
+        </div>
+      )}
+      
+      {/* ... color history */}
+    </div>
+  )
+}
 
   const handleHexSubmit = async () => {
     if (selectedRectangleIds.size === 0) return
@@ -808,10 +870,15 @@ const SHORTCUTS: Shortcut[] = [
   // Selection (NEW category)
   { keys: 'Click', description: 'Select single rectangle', category: 'Selection' },
   { keys: 'Cmd/Ctrl+Click', description: 'Add/remove from selection', category: 'Selection' },
-  { keys: 'Shift+Click', description: 'Select range', category: 'Selection' },
   { keys: 'Drag on canvas', description: 'Select multiple (box)', category: 'Selection' },
   { keys: 'Cmd/Ctrl+A', description: 'Select all', category: 'Selection' },
   { keys: 'Escape', description: 'Clear selection', category: 'Selection' },
+  
+  // Canvas Navigation (NEW category)
+  { keys: 'Space+Drag', description: 'Pan canvas', category: 'Navigation' },
+  { keys: 'Scroll wheel', description: 'Zoom in/out', category: 'Navigation' },
+  { keys: 'Arrow keys', description: 'Navigate canvas', category: 'Navigation' },
+  { keys: '0', description: 'Reset zoom', category: 'Navigation' },
   
   // Update existing clipboard shortcuts
   { keys: 'Cmd/Ctrl+C', description: 'Copy selected (works with multiple)', category: 'Clipboard' },
@@ -846,15 +913,16 @@ const captureSnapshot = useCallback((): CommandSnapshot => {
 ### Testing Checklist
 
 **Manual Testing - Selection Methods:**
-- [ ] Click selects single rectangle (clears others)
+- [ ] Click rectangle selects single (clears others)
 - [ ] Cmd/Ctrl+Click adds rectangle to selection
 - [ ] Cmd/Ctrl+Click removes rectangle from selection (toggle)
-- [ ] Shift+Click selects range (all between two clicks)
-- [ ] Drag on canvas creates selection box
+- [ ] Click on empty space (no drag) creates new rectangle
+- [ ] Drag on empty space creates selection box (detect >5px movement)
 - [ ] Drag selection box selects all rectangles fully within bounds
 - [ ] Cmd/Ctrl+A selects all rectangles
 - [ ] Escape clears selection
-- [ ] Click on canvas (empty space) clears selection (when not dragging)
+- [ ] Spacebar+Drag pans the canvas (cursor shows hand icon)
+- [ ] Release Spacebar exits pan mode
 
 **Manual Testing - Visual Feedback:**
 - [ ] All selected rectangles show red border (3px)
