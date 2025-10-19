@@ -57,19 +57,19 @@ const Canvas: React.FC<CanvasProps> = ({
   // Get canvas context
   const { 
     rectangles, 
-    selectedRectangleIds,  // CHANGED: From single to multi
-    primarySelectionId,    // NEW
+    selectedShapes,        // REFACTORED PR #5: Map<string, ShapeType>
+    primarySelectionId,    // Last clicked shape
     createRectangle, 
     updateRectangle, 
     resizeRectangle, 
     deleteRectangle, 
     selectRectangle,
-    selectMultiple,        // NEW
-    selectAll,             // NEW
-    clearSelection,        // NEW
+    selectMultiple,        // Multi-select operation
+    selectAll,             // Select all
+    clearSelection,        // Clear selection
     changeRectangleColor,
-    copySelectedRectangles,  // CHANGED
-    pasteRectangles,         // CHANGED
+    copySelectedRectangles,  // Copy selected
+    pasteRectangles,         // Paste clipboard
     duplicateRectangle,
     bringToFront,
     sendToBack,
@@ -355,15 +355,15 @@ const Canvas: React.FC<CanvasProps> = ({
   // Get selected rectangle (primary selection)
   const selectedRectangle = rectangles.find(r => r.id === primarySelectionId)
   
-  // NEW: Check if multiple selections have mixed colors
+  // Check if multiple selections have mixed colors
   const selectedColors = useMemo(() => {
     const colors = new Set<string>()
-    for (const id of selectedRectangleIds) {
+    for (const id of selectedShapes.keys()) {
       const rect = rectangles.find(r => r.id === id)
       if (rect) colors.add(rect.color)
     }
     return colors
-  }, [selectedRectangleIds, rectangles])
+  }, [selectedShapes, rectangles])
   
   const hasMixedColors = selectedColors.size > 1
   const displayColor = hasMixedColors ? '?' : (selectedRectangle?.color || '#000000')
@@ -440,7 +440,7 @@ const Canvas: React.FC<CanvasProps> = ({
         const selection = window.getSelection()
         const hasTextSelection = selection && selection.toString().length > 0
         
-        if (selectedRectangleIds.size > 0 && !hasTextSelection) {
+        if (selectedShapes.size > 0 && !hasTextSelection) {
           e.preventDefault()
           copySelectedRectanglesRef.current?.()
         }
@@ -589,7 +589,7 @@ const Canvas: React.FC<CanvasProps> = ({
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)
     }
-  }, [primarySelectionId, rectangles, handleRectangleResize, deleteRectangle, isRectangleDragging, isRectangleResizing, getCurrentStagePosition, selectionLocked, selectedRectangleIds, isShiftPressed, isPanning, selectAll, clearSelection, selectionBoxStart])
+  }, [primarySelectionId, rectangles, handleRectangleResize, deleteRectangle, isRectangleDragging, isRectangleResizing, getCurrentStagePosition, selectionLocked, selectedShapes, isShiftPressed, isPanning, selectAll, clearSelection, selectionBoxStart])
 
   // Detect when rectangle is selected after AI command (input was focused)
   useEffect(() => {
@@ -681,9 +681,9 @@ const Canvas: React.FC<CanvasProps> = ({
               <Rectangle
                 key={rectangle.id}
                 rectangle={rectangle}
-                isSelected={selectedRectangleIds.has(rectangle.id)}
-                isPrimary={rectangle.id === primarySelectionId}  // NEW
-                isShiftPressed={isShiftPressed}  // NEW
+                isSelected={selectedShapes.has(rectangle.id)}
+                isPrimary={rectangle.id === primarySelectionId}
+                isShiftPressed={isShiftPressed}
                 onClick={handleRectangleClick}
                 onDragStart={handleRectangleDragStart}
                 onDragEnd={handleRectangleDragEnd}

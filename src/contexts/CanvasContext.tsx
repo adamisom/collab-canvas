@@ -3,12 +3,14 @@ import { canvasService } from '../services/canvasService'
 import type { Rectangle, RectangleInput } from '../services/canvasService'
 import { useAuth } from './AuthContext'
 import type { ViewportInfo } from '../shared/types'
+import type { Shape, ShapeType } from '../shared/shapes'
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../utils/constants'
 
 interface CanvasContextType {
   rectangles: Rectangle[]
-  selectedRectangleIds: Set<string> // CHANGED: From single to multi
-  primarySelectionId: string | null  // NEW: Last clicked rectangle
+  selectedShapes: Map<string, ShapeType> // REFACTORED: Phase 3C PR #5 - unified selection
+  primarySelectionId: string | null  // Last clicked shape
+  primarySelectionType: ShapeType | null  // NEW: Type of primary selection
   loading: boolean
   error: string | null
   toastMessage: string | null
@@ -32,9 +34,9 @@ interface CanvasContextType {
   deleteSelectedRectangles: () => Promise<void>
   changeSelectedRectanglesColor: (color: string) => Promise<void>
   
-  // Clipboard operations (UPDATED)
-  copySelectedRectangles: () => void  // Was: copyRectangle(id)
-  pasteRectangles: () => Promise<void>  // Was: pasteRectangle()
+  // Clipboard operations (REFACTORED: PR #5)
+  copySelectedRectangles: () => void  // Works with all selected shapes
+  pasteRectangles: () => Promise<void>  // Handles Shape[] discriminated union
   duplicateRectangle: (rectangleId: string) => Promise<Rectangle | null>  // Unchanged (single only)
   hasClipboardData: () => boolean
   
@@ -71,17 +73,19 @@ interface CanvasProviderProps {
 
 export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
   const [rectangles, setRectangles] = useState<Rectangle[]>([])
-  const [selectedRectangleIds, setSelectedRectangleIds] = useState<Set<string>>(new Set())  // CHANGED: From single to Set
-  const [primarySelectionId, setPrimarySelectionId] = useState<string | null>(null)  // NEW
+  const [selectedShapes, setSelectedShapes] = useState<Map<string, ShapeType>>(new Map())  // REFACTORED: PR #5
+  const [primarySelectionId, setPrimarySelectionId] = useState<string | null>(null)
+  const [primarySelectionType, setPrimarySelectionType] = useState<ShapeType | null>(null)  // NEW: PR #5
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const [selectionLocked, setSelectionLocked] = useState(false)
-  const [clipboardRectangles, setClipboardRectangles] = useState<Rectangle[]>([])  // CHANGED: From single to array
+  const [clipboardShapes, setClipboardShapes] = useState<Shape[]>([])  // REFACTORED: PR #5
   
   // Use ref to access current selection state in Firebase callback
-  const selectedRectangleIdsRef = useRef<Set<string>>(new Set())
+  const selectedShapesRef = useRef<Map<string, ShapeType>>(new Map())  // REFACTORED: PR #5
   const primarySelectionIdRef = useRef<string | null>(null)
+  const primarySelectionTypeRef = useRef<ShapeType | null>(null)  // NEW: PR #5
   
   // Use ref to track previous user ID for cleanup
   const prevUserIdRef = useRef<string | null>(null)
@@ -91,9 +95,10 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
   
   // Keep refs in sync with state
   useEffect(() => {
-    selectedRectangleIdsRef.current = selectedRectangleIds
+    selectedShapesRef.current = selectedShapes
     primarySelectionIdRef.current = primarySelectionId
-  }, [selectedRectangleIds, primarySelectionId])
+    primarySelectionTypeRef.current = primarySelectionType
+  }, [selectedShapes, primarySelectionId, primarySelectionType])
   
   const { user, username } = useAuth()
 
@@ -101,8 +106,9 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
   useEffect(() => {
     if (!user) {
       setRectangles([])
-      setSelectedRectangleIds(new Set())
+      setSelectedShapes(new Map())
       setPrimarySelectionId(null)
+      setPrimarySelectionType(null)
       setLoading(false)
       return
     }
@@ -115,23 +121,30 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       setRectangles(newRectangles)
       setLoading(false)
       
-      // Clear selections for rectangles that no longer exist
-      const currentSelectedIds = selectedRectangleIdsRef.current
+      // Clear selections for shapes that no longer exist
+      const currentSelectedShapes = selectedShapesRef.current
       const currentPrimaryId = primarySelectionIdRef.current
       
-      if (currentSelectedIds.size > 0) {
+      if (currentSelectedShapes.size > 0) {
         const existingIds = new Set(newRectangles.map(r => r.id))
-        const updatedSelection = new Set(
-          Array.from(currentSelectedIds).filter(id => existingIds.has(id))
-        )
+        const updatedSelection = new Map<string, ShapeType>()
         
-        if (updatedSelection.size !== currentSelectedIds.size) {
-          setSelectedRectangleIds(updatedSelection)
+        // Keep only selections that still exist (rectangles only for now)
+        for (const [id, type] of currentSelectedShapes) {
+          if (type === 'rectangle' && existingIds.has(id)) {
+            updatedSelection.set(id, type)
+          }
+        }
+        
+        if (updatedSelection.size !== currentSelectedShapes.size) {
+          setSelectedShapes(updatedSelection)
         }
         
         // Clear primary if it no longer exists
         if (currentPrimaryId && !existingIds.has(currentPrimaryId)) {
-          setPrimarySelectionId(updatedSelection.size > 0 ? Array.from(updatedSelection)[0] : null)
+          const firstId = updatedSelection.size > 0 ? Array.from(updatedSelection.keys())[0] : null
+          setPrimarySelectionId(firstId)
+          setPrimarySelectionType(firstId ? updatedSelection.get(firstId) || null : null)
         }
       }
     })
@@ -155,9 +168,10 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
   // Clear clipboard and selection on sign out
   useEffect(() => {
     if (!user) {
-      setClipboardRectangles([])
-      setSelectedRectangleIds(new Set())
+      setClipboardShapes([])
+      setSelectedShapes(new Map())
       setPrimarySelectionId(null)
+      setPrimarySelectionType(null)
     }
   }, [user])
 
@@ -180,8 +194,11 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       const newRectangle = await canvasService.createRectangle(rectangleInput)
       
       // Select the newly created rectangle (single selection)
-      setSelectedRectangleIds(new Set([newRectangle.id]))
+      const newSelection = new Map<string, ShapeType>()
+      newSelection.set(newRectangle.id, 'rectangle')
+      setSelectedShapes(newSelection)
       setPrimarySelectionId(newRectangle.id)
+      setPrimarySelectionType('rectangle')
       
       return newRectangle
     } catch (error) {
@@ -226,24 +243,25 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       await canvasService.deleteRectangle(rectangleId)
       
       // Remove from selection if deleted
-      if (selectedRectangleIds.has(rectangleId)) {
-        setSelectedRectangleIds(prev => {
-          const next = new Set(prev)
+      if (selectedShapes.has(rectangleId)) {
+        setSelectedShapes(prev => {
+          const next = new Map(prev)
           next.delete(rectangleId)
           return next
         })
         
         // Update primary if it was deleted
         if (primarySelectionId === rectangleId) {
-          const remaining = Array.from(selectedRectangleIds).filter(id => id !== rectangleId)
+          const remaining = Array.from(selectedShapes.keys()).filter(id => id !== rectangleId)
           setPrimarySelectionId(remaining.length > 0 ? remaining[0] : null)
+          setPrimarySelectionType(remaining.length > 0 ? selectedShapes.get(remaining[0]) || null : null)
         }
       }
     } catch (error) {
       console.error('Error deleting rectangle:', error)
       setError('Failed to delete rectangle')
     }
-  }, [selectedRectangleIds, primarySelectionId])
+  }, [selectedShapes, primarySelectionId])
 
   // NEW: Helper to show toast messages
   const showToast = useCallback((message: string) => {
@@ -284,33 +302,38 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
 
     if (!additive) {
       // Clear all previous selections
-      for (const prevId of selectedRectangleIds) {
+      for (const prevId of selectedShapes.keys()) {
         await canvasService.deselectRectangle(prevId, user.uid)
       }
 
       // Select this one
-      setSelectedRectangleIds(new Set([rectangleId]))
+      const newSelection = new Map<string, ShapeType>()
+      newSelection.set(rectangleId, 'rectangle')
+      setSelectedShapes(newSelection)
       setPrimarySelectionId(rectangleId)
+      setPrimarySelectionType('rectangle')
       await canvasService.selectRectangle(rectangleId, user.uid, username)
     } else {
       // Add/remove from selection (toggle)
-      const isCurrentlySelected = selectedRectangleIds.has(rectangleId)
+      const isCurrentlySelected = selectedShapes.has(rectangleId)
 
       if (isCurrentlySelected) {
         // Remove from selection
         await canvasService.deselectRectangle(rectangleId, user.uid)
 
-        setSelectedRectangleIds(prev => {
-          const next = new Set(prev)
+        setSelectedShapes(prev => {
+          const next = new Map(prev)
           next.delete(rectangleId)
 
           // If removing primary, set new primary
           if (rectangleId === primarySelectionId) {
             if (next.size > 0) {
-              const newPrimary = Array.from(next)[0]
+              const newPrimary = Array.from(next.keys())[0]
               setPrimarySelectionId(newPrimary)
+              setPrimarySelectionType(next.get(newPrimary) || null)
             } else {
               setPrimarySelectionId(null)
+              setPrimarySelectionType(null)
             }
           }
           return next
@@ -319,11 +342,16 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
         // Add to selection
         await canvasService.selectRectangle(rectangleId, user.uid, username)
 
-        setSelectedRectangleIds(prev => new Set(prev).add(rectangleId))
+        setSelectedShapes(prev => {
+          const next = new Map(prev)
+          next.set(rectangleId, 'rectangle')
+          return next
+        })
         setPrimarySelectionId(rectangleId)
+        setPrimarySelectionType('rectangle')
       }
     }
-  }, [user, username, rectangles, selectedRectangleIds, primarySelectionId, selectionLocked, showToast])
+  }, [user, username, rectangles, selectedShapes, primarySelectionId, selectionLocked, showToast])
 
   // NEW: Select multiple rectangles (used by drag selection box)
   const selectMultiple = useCallback(async (rectangleIds: string[]) => {
@@ -334,16 +362,17 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     if (rectangleIds.length > 25) {
       showToast('Selection too large (max 25 rectangles)')
       // Clear selection
-      for (const prevId of selectedRectangleIds) {
+      for (const prevId of selectedShapes.keys()) {
         await canvasService.deselectRectangle(prevId, user.uid)
       }
-      setSelectedRectangleIds(new Set())
+      setSelectedShapes(new Map())
       setPrimarySelectionId(null)
+      setPrimarySelectionType(null)
       return
     }
 
     // Clear previous selections
-    for (const prevId of selectedRectangleIds) {
+    for (const prevId of selectedShapes.keys()) {
       await canvasService.deselectRectangle(prevId, user.uid)
     }
 
@@ -363,15 +392,18 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       }
     }
 
-    setSelectedRectangleIds(new Set(selected))
+    const newSelection = new Map<string, ShapeType>()
+    selected.forEach(id => newSelection.set(id, 'rectangle'))
+    setSelectedShapes(newSelection)
     setPrimarySelectionId(selected[selected.length - 1] || null)
+    setPrimarySelectionType(selected.length > 0 ? 'rectangle' : null)
 
     if (skipped.length > 0) {
       showToast(`Selected ${selected.length}, ${skipped.length} already taken by other users`)
     } else if (selected.length > 0) {
       showToast(`Selected ${selected.length} rectangles`)
     }
-  }, [selectionLocked, user, username, rectangles, selectedRectangleIds, showToast])
+  }, [selectionLocked, user, username, rectangles, selectedShapes, showToast])
 
   // NEW: Select all available rectangles (skip those selected by others)
   const selectAll = useCallback(async () => {
@@ -390,7 +422,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     }
 
     // Clear previous selections
-    for (const prevId of selectedRectangleIds) {
+    for (const prevId of selectedShapes.keys()) {
       await canvasService.deselectRectangle(prevId, user.uid)
     }
 
@@ -399,28 +431,32 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       await canvasService.selectRectangle(id, user.uid, username)
     }
 
-    setSelectedRectangleIds(new Set(availableIds))
+    const newSelection = new Map<string, ShapeType>()
+    availableIds.forEach(id => newSelection.set(id, 'rectangle'))
+    setSelectedShapes(newSelection)
     setPrimarySelectionId(availableIds[availableIds.length - 1] || null)
+    setPrimarySelectionType(availableIds.length > 0 ? 'rectangle' : null)
 
     showToast(`Selected all ${availableIds.length} rectangles`)
-  }, [selectionLocked, user, username, rectangles, selectedRectangleIds, showToast])
+  }, [selectionLocked, user, username, rectangles, selectedShapes, showToast])
 
   // NEW: Clear selection
   const clearSelection = useCallback(async () => {
     if (!user) return
 
     // Clear all selections in Firebase
-    for (const id of selectedRectangleIds) {
+    for (const id of selectedShapes.keys()) {
       await canvasService.deselectRectangle(id, user.uid)
     }
 
-    setSelectedRectangleIds(new Set())
+    setSelectedShapes(new Map())
     setPrimarySelectionId(null)
-  }, [user, selectedRectangleIds])
+    setPrimarySelectionType(null)
+  }, [user, selectedShapes])
 
   // NEW: Delete all selected rectangles
   const deleteSelectedRectangles = useCallback(async () => {
-    const idsToDelete = Array.from(selectedRectangleIds)
+    const idsToDelete = Array.from(selectedShapes.keys())
     if (idsToDelete.length === 0) return
 
     // Delete all sequentially
@@ -428,16 +464,17 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       await canvasService.deleteRectangle(id)
     }
 
-    setSelectedRectangleIds(new Set())
+    setSelectedShapes(new Map())
     setPrimarySelectionId(null)
+    setPrimarySelectionType(null)
 
     const count = idsToDelete.length
     showToast(`Deleted ${count} rectangle${count > 1 ? 's' : ''}`)
-  }, [selectedRectangleIds, showToast])
+  }, [selectedShapes, showToast])
 
   // NEW: Change color of all selected rectangles
   const changeSelectedRectanglesColor = useCallback(async (color: string) => {
-    const idsToUpdate = Array.from(selectedRectangleIds)
+    const idsToUpdate = Array.from(selectedShapes.keys())
     if (idsToUpdate.length === 0) return
 
     // Update all sequentially
@@ -447,7 +484,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
 
     const count = idsToUpdate.length
     showToast(`Changed color of ${count} rectangle${count > 1 ? 's' : ''}`)
-  }, [selectedRectangleIds, showToast])
+  }, [selectedShapes, showToast])
 
   // Clear any error messages
   const clearError = useCallback(() => {
@@ -485,41 +522,51 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     }
   }, [user])
 
-  // UPDATED: Copy all selected rectangles to clipboard
+  // REFACTORED PR #5: Copy all selected shapes to clipboard (currently only rectangles)
   const copySelectedRectangles = useCallback(() => {
-    const selected = rectangles.filter(r => selectedRectangleIds.has(r.id))
+    const selected = rectangles.filter(r => selectedShapes.has(r.id))
     if (selected.length === 0) {
       showToast('No rectangles selected to copy')
       return
     }
 
-    setClipboardRectangles(selected)
+    // Store as Shape[] (rectangles implement Rectangle interface which extends BaseShape)
+    setClipboardShapes(selected as Shape[])
     const count = selected.length
     showToast(`Copied ${count} rectangle${count > 1 ? 's' : ''}`)
-  }, [rectangles, selectedRectangleIds, showToast])
+  }, [rectangles, selectedShapes, showToast])
 
-  // UPDATED: Paste all clipboard rectangles with relative positioning
+  // REFACTORED PR #5: Paste all clipboard shapes (type-discriminated handling)
   const pasteRectangles = useCallback(async (): Promise<void> => {
     if (!user || !username) {
       setError('You must be signed in to paste')
       return
     }
 
-    if (clipboardRectangles.length === 0) {
+    if (clipboardShapes.length === 0) {
       showToast('Nothing to paste')
       return
     }
 
     try {
       const PASTE_OFFSET = 20
-      const newIds: string[] = []
+      const newSelection = new Map<string, ShapeType>()
+
+      // For now, only handle rectangles (Phase 3C PR #5)
+      // In future PRs, we'll add circle, line, text handling
+      const rectanglesToPaste = clipboardShapes.filter(s => s.type === 'rectangle') as Rectangle[]
+
+      if (rectanglesToPaste.length === 0) {
+        showToast('Clipboard contains no rectangles')
+        return
+      }
 
       // Calculate bounding box of all clipboard rectangles
-      const minX = Math.min(...clipboardRectangles.map(r => r.x))
-      const minY = Math.min(...clipboardRectangles.map(r => r.y))
+      const minX = Math.min(...rectanglesToPaste.map(r => r.x))
+      const minY = Math.min(...rectanglesToPaste.map(r => r.y))
 
       // Paste all rectangles with same relative positions
-      for (const original of clipboardRectangles) {
+      for (const original of rectanglesToPaste) {
         // Calculate position relative to group's top-left
         const relativeX = original.x - minX
         const relativeY = original.y - minY
@@ -545,15 +592,17 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
 
         const newRectangle = await canvasService.createRectangle(input)
         if (newRectangle) {
-          newIds.push(newRectangle.id)
+          newSelection.set(newRectangle.id, 'rectangle')
           // Select the newly pasted rectangle in Firebase
           await canvasService.selectRectangle(newRectangle.id, user.uid, username)
         }
       }
 
-      // Select all newly pasted rectangles
-      setSelectedRectangleIds(new Set(newIds))
+      // Select all newly pasted shapes
+      setSelectedShapes(newSelection)
+      const newIds = Array.from(newSelection.keys())
       setPrimarySelectionId(newIds[newIds.length - 1] || null)
+      setPrimarySelectionType(newIds.length > 0 ? 'rectangle' : null)
 
       const count = newIds.length
       showToast(`Pasted ${count} rectangle${count > 1 ? 's' : ''}`)
@@ -561,7 +610,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       console.error('Error pasting rectangles:', err)
       setError(err instanceof Error ? err.message : 'Failed to paste rectangles')
     }
-  }, [user, username, clipboardRectangles, showToast])
+  }, [user, username, clipboardShapes, showToast])
 
   // UPDATED: Duplicate rectangle (single selection only, kept for compatibility)
   const duplicateRectangle = useCallback(async (rectangleId: string): Promise<Rectangle | null> => {
@@ -601,8 +650,11 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       if (duplicated) {
         // Select the duplicated rectangle
         await canvasService.selectRectangle(duplicated.id, user.uid, username)
-        setSelectedRectangleIds(new Set([duplicated.id]))
+        const newSelection = new Map<string, ShapeType>()
+        newSelection.set(duplicated.id, 'rectangle')
+        setSelectedShapes(newSelection)
         setPrimarySelectionId(duplicated.id)
+        setPrimarySelectionType('rectangle')
         showToast('Rectangle duplicated')
       }
 
@@ -616,8 +668,8 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
 
   // Check if clipboard has data
   const hasClipboardData = useCallback(() => {
-    return clipboardRectangles.length > 0
-  }, [clipboardRectangles])
+    return clipboardShapes.length > 0
+  }, [clipboardShapes])
 
   // Bring rectangle to front
   const bringToFront = useCallback(async (rectangleId: string): Promise<void> => {
@@ -643,8 +695,9 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
 
   const value: CanvasContextType = {
     rectangles,
-    selectedRectangleIds,
+    selectedShapes,
     primarySelectionId,
+    primarySelectionType,
     loading,
     error,
     toastMessage,
