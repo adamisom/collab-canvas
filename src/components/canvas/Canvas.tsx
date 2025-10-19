@@ -1,5 +1,5 @@
 import React, { useRef, useState, useCallback, useEffect, useMemo } from 'react'
-import { Stage, Layer } from 'react-konva'
+import { Stage, Layer, Text } from 'react-konva'
 import type Konva from 'konva'
 import type { KonvaEventObject } from 'konva/lib/Node'
 import { useCanvas } from '../../contexts/CanvasContext'
@@ -10,7 +10,7 @@ import Cursor from './Cursor'
 import Rectangle from './Rectangle'
 import Circle from './Circle'  // PR #6
 import Line from './Line'  // PR #7
-import Text from './Text'  // PR #8
+import TextShape from './Text'  // PR #8
 import SelectionBox from './SelectionBox'
 import ShapeModeSelector from './ShapeModeSelector'  // PR #6
 import ColorPicker from './ColorPicker'
@@ -121,6 +121,7 @@ const Canvas: React.FC<CanvasProps> = ({
     selectionLocked,
     toastMessage,
     clearToast,
+    showToast,             // NEW: For first-visit toast
     updateViewportInfo
   } = useCanvas()
   
@@ -284,7 +285,7 @@ const Canvas: React.FC<CanvasProps> = ({
     sendViewportInfo()
   }, [sendViewportInfo])
 
-  // NEW: Handle stage mouse down (for selection box start or shape creation)
+  // NEW: Handle stage mouse down (for selection box start or line creation)
   const handleStageMouseDown = useCallback(async (e: KonvaEventObject<MouseEvent>) => {
     // Only handle clicks on the stage background (not on shapes)
     if (e.target !== e.target.getStage()) return
@@ -307,7 +308,7 @@ const Canvas: React.FC<CanvasProps> = ({
       setSelectionBoxStart(canvasCoords)
       setSelectionBoxEnd(canvasCoords)
     } else if (shapeMode === 'line') {
-      // PR #7: Two-click line creation
+      // PR #7: Two-click line creation (lines need single-click workflow)
       if (!lineCreationStart) {
         // First click: start line
         setLineCreationStart(canvasCoords)
@@ -319,16 +320,41 @@ const Canvas: React.FC<CanvasProps> = ({
         setLineCreationStart(null)
         setLinePreviewEnd(null)
       }
-    } else {
-      // Otherwise, clear selection and create new shape based on mode
-      await clearSelection()
-      if (shapeMode === 'rectangle') {
-        await createRectangle(canvasCoords.x, canvasCoords.y)
-      } else if (shapeMode === 'circle') {
-        await createCircle(canvasCoords.x, canvasCoords.y)
-      }
     }
-  }, [isShiftPressed, shapeMode, lineCreationStart, transformToCanvasCoords, clearSelection, createRectangle, createCircle, createLine, isLassoMode])
+    // Note: Rectangle, circle, and text creation moved to double-click (handleStageDoubleClick)
+  }, [isShiftPressed, shapeMode, lineCreationStart, transformToCanvasCoords, clearSelection, createLine, isLassoMode])
+
+  // NEW: Handle stage double click (for shape creation)
+  const handleStageDoubleClick = useCallback(async (e: KonvaEventObject<MouseEvent>) => {
+    // Only handle clicks on the stage background (not on shapes)
+    if (e.target !== e.target.getStage()) return
+
+    const stage = e.target.getStage()
+    const pointer = stage.getPointerPosition()
+    if (!pointer) return
+
+    const canvasCoords = transformToCanvasCoords(pointer.x, pointer.y)
+    if (!canvasCoords) return
+
+    // Don't create shapes if in selection box mode
+    if (isShiftPressed) return
+
+    // Clear selection and create new shape based on mode
+    await clearSelection()
+    
+    switch (shapeMode) {
+      case 'rectangle':
+        await createRectangle(canvasCoords.x, canvasCoords.y)
+        break
+      case 'circle':
+        await createCircle(canvasCoords.x, canvasCoords.y)
+        break
+      case 'text':
+        await createText(canvasCoords.x, canvasCoords.y, 'New Text')
+        break
+      // Line mode uses single-click in handleStageMouseDown
+    }
+  }, [isShiftPressed, shapeMode, transformToCanvasCoords, clearSelection, createRectangle, createCircle, createText])
 
   // NEW: Handle stage mouse up (for selection box completion)
   const handleStageMouseUp = useCallback(async () => {
@@ -987,6 +1013,20 @@ const Canvas: React.FC<CanvasProps> = ({
     }
   }, [primarySelectionId])
 
+  // NEW: Show first-visit welcome toast
+  useEffect(() => {
+    const hasSeenWelcome = localStorage.getItem('collabcanvas_hasSeenWelcome')
+    if (!hasSeenWelcome) {
+      // Delay toast slightly so it doesn't appear before canvas loads
+      const timeout = setTimeout(() => {
+        showToast('💡 Tip: Double-click anywhere to create a shape!')
+        localStorage.setItem('collabcanvas_hasSeenWelcome', 'true')
+      }, 1000)
+      
+      return () => clearTimeout(timeout)
+    }
+  }, [showToast])
+
   // Update viewport info on mount and window resize
   useEffect(() => {
     // Initial viewport info
@@ -1068,28 +1108,15 @@ const Canvas: React.FC<CanvasProps> = ({
           ref={stageRef}
           width={width}
           height={height}
-          draggable={isPanning && !isRectangleDragging && !isRectangleResizing && !isTextEditing}  // PR #8: Disable during text editing
+          draggable={!isShiftPressed && !isRectangleDragging && !isRectangleResizing && !isTextEditing}  // Always draggable except when Shift pressed, manipulating shapes, or editing text
           onWheel={handleWheel}
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
-          onMouseDown={handleStageMouseDown}  // CHANGED: Use mousedown for selection box
-          onDblClick={(e) => {
-            // PR #8: Create text on double-click in text mode
-            if (shapeMode === 'text') {
-              e.cancelBubble = true
-              const stage = stageRef.current
-              if (!stage) return
-              const pointer = stage.getPointerPosition()
-              if (!pointer) return
-              const coords = transformToCanvasCoords(pointer.x, pointer.y)
-              if (coords) {
-                createText(coords.x, coords.y, 'New Text')
-              }
-            }
-          }}
+          onMouseDown={handleStageMouseDown}  // CHANGED: Use mousedown for selection box and line creation
+          onDblClick={handleStageDoubleClick}  // NEW: Double-click to create shapes (rectangle, circle, text)
           onMouseMove={handleMouseMove}  // CHANGED: Merged cursor broadcasting + selection box
           onMouseUp={handleStageMouseUp}      // NEW: Complete selection box
-          className={isPanning ? 'panning' : (isLassoMode ? 'lasso-cursor' : (isShiftPressed ? 'selection-mode' : (isDragging ? 'dragging' : '')))}  // NEW: CSS classes for cursor
+          className={isLassoMode ? 'lasso-cursor' : (isShiftPressed ? 'selection-mode' : (isDragging ? 'dragging' : ''))}  // CSS classes for cursor
         >
           <Layer>
             {/* Render rectangles (sorted by zIndex) */}
@@ -1177,7 +1204,7 @@ const Canvas: React.FC<CanvasProps> = ({
             
             {/* PR #8: Render texts (sorted by zIndex) */}
             {sortedTexts.map((text) => (
-              <Text
+              <TextShape
                 key={text.id}
                 textShape={text}
                 isSelected={selectedShapes.has(text.id)}
@@ -1190,6 +1217,21 @@ const Canvas: React.FC<CanvasProps> = ({
                 onEditingChange={setIsTextEditing}
               />
             ))}
+            
+            {/* NEW: Empty canvas message */}
+            {rectangles.length === 0 && (
+              <Text
+                x={0}
+                y={VIEWPORT_HEIGHT / 2 - 20}
+                width={VIEWPORT_WIDTH}
+                text="Double-click anywhere to create your first shape!"
+                fontSize={18}
+                fontFamily="Inter, system-ui, sans-serif"
+                fill="#94a3b8"
+                align="center"
+                listening={false}
+              />
+            )}
             
             {/* NEW: Render selection box */}
             {selectionBoxStart && selectionBoxEnd && (
