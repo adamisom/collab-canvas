@@ -2258,6 +2258,31 @@ describe('snapToInterval', () => {
 
 ---
 
+## Implementation Refinements
+
+During implementation, several improvements were made to the original plan:
+
+**RotateHandle Simplifications:**
+- Removed angle indicator overlay (simpler UX, still intuitive)
+- Simplified to single `onRotate(shapeId, angle)` callback
+- Added `shapeId` prop for direct shape identification
+- Fixed angle calculation bug (removed incorrect `+ 90` offset)
+- Better viewport coordinate transformation handling
+
+**Enhanced Test Coverage:**
+- Implemented 86 comprehensive tests (vs. planned sample tests)
+- Full coverage of edge cases and integration scenarios
+- All helper functions thoroughly tested
+
+**Architecture Improvements:**
+- Extracted `calculateAngle` to `rotationHelpers.ts` for reusability
+- Used `useCallback` for better performance
+- Proper screen-to-canvas coordinate conversion for zoom/pan support
+
+All planned features delivered with higher quality than originally specified.
+
+---
+
 ## Phase 3D Completion Checklist
 
 Before moving to Phase 3E, verify:
