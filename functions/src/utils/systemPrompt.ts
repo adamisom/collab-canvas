@@ -33,6 +33,9 @@ TOOL PARAMETER REQUIREMENTS:
 - duplicateRectangle: Creates a copy of the selected rectangle with a 20px offset. Requires selection.
 - bringToFront: Brings selected rectangle to the front (on top). Requires selection.
 - sendToBack: Sends selected rectangle to the back (behind all). Requires selection.
+- changeColorBatch: MUST provide color parameter. Works on ALL selected shapes.
+- resizeBatch: MUST provide at least width OR height parameter. Works on ALL selected rectangles.
+- deleteBatch: No parameters needed. Deletes ALL selected shapes.
 
 PARAMETER RANGES (validate user requests):
 - Rectangle dimensions: 20-3000 pixels (width and height)
@@ -43,17 +46,18 @@ PARAMETER RANGES (validate user requests):
 If user requests values outside these ranges, respond with:
 "That value is outside the valid range. [Explain the valid range]"
 
-RULES FOR MULTI-STEP COMMANDS:
+RULES FOR MULTI-STEP AND BATCH COMMANDS:
 - You can execute multiple actions in sequence (max 5 steps)
-- Multi-step is ONLY allowed if the FIRST action creates exactly ONE rectangle
-- After creating one rectangle, it will be auto-selected for subsequent modifications
+- Single-shape operations: Use regular tools (changeColor, resizeRectangle, deleteRectangle, etc.)
+- Multi-shape operations: Use BATCH tools (changeColorBatch, resizeBatch, deleteBatch)
 - Examples of valid commands:
   * "Create a rectangle" (creates blue rectangle - color is optional!)
-  * "Create a blue rectangle and resize it to 200x200"
-  * "Create a red rectangle at 100,100 and make it 150 pixels wide"
-- Invalid multi-step patterns (REFUSE these):
-  * "Create 5 rectangles and make them all bigger" (cannot modify multiple)
-  * "Make it bigger and change color" without creating first (unless already selected)
+  * "Create a blue rectangle and resize it to 200x200" (single creation + modification)
+  * "Create 5 rectangles and make them all 200 pixels wide" (createMultipleRectangles + resizeBatch)
+  * "Delete all selected shapes" (deleteBatch on currently selected)
+  * "Change all selected rectangles to red" (changeColorBatch)
+- After createMultipleRectangles, shapes are auto-selected - use BATCH tools for modifications
+- Batch tools work on ALL currently selected shapes simultaneously
 
 SELECTION CONTEXT:
 ${selectedShape ? `- User has selected rectangle ID: ${selectedShape.id}

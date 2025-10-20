@@ -150,6 +150,35 @@ export const rotateShapeTool = tool({
 });
 
 /**
+ * Tool 13: Change color of all selected shapes (Batch)
+ */
+export const changeColorBatchTool = tool({
+  description: "Change the color of ALL currently selected shapes at once. Works with multiple shapes. Requires at least one shape to be selected.",
+  inputSchema: z.object({
+    color: z.enum(VALID_RECTANGLE_COLORS).describe(PARAM_DESCRIPTIONS.COLOR),
+  }),
+});
+
+/**
+ * Tool 14: Resize all selected shapes (Batch)
+ */
+export const resizeBatchTool = tool({
+  description: "Resize ALL currently selected rectangles at once. Works with multiple rectangles. Provide width and/or height to resize all to the same size.",
+  inputSchema: z.object({
+    width: z.number().min(RECTANGLE_CONSTRAINTS.MIN_WIDTH).max(RECTANGLE_CONSTRAINTS.MAX_WIDTH).optional().describe(PARAM_DESCRIPTIONS.WIDTH),
+    height: z.number().min(RECTANGLE_CONSTRAINTS.MIN_HEIGHT).max(RECTANGLE_CONSTRAINTS.MAX_HEIGHT).optional().describe(PARAM_DESCRIPTIONS.HEIGHT),
+  }),
+});
+
+/**
+ * Tool 15: Delete all selected shapes (Batch)
+ */
+export const deleteBatchTool = tool({
+  description: "Delete ALL currently selected shapes at once. Works with multiple shapes of any type. Requires at least one shape to be selected.",
+  inputSchema: z.object({}), // No parameters needed
+});
+
+/**
  * Export all tools as an object
  */
 export const tools = {
@@ -165,4 +194,7 @@ export const tools = {
   alignShapes: alignShapesTool,
   selectAllOfType: selectAllOfTypeTool,
   rotateShape: rotateShapeTool,
+  changeColorBatch: changeColorBatchTool,
+  resizeBatch: resizeBatchTool,
+  deleteBatch: deleteBatchTool,
 };

@@ -54,6 +54,9 @@ export interface CanvasContextMethods {
   alignShapes: (alignType: 'left' | 'center-horizontal' | 'right' | 'top' | 'center-vertical' | 'bottom' | 'distribute-horizontal' | 'distribute-vertical') => Promise<void>
   selectAllOfType: (shapeType: 'rectangle' | 'circle' | 'line' | 'text') => Promise<void>
   rotateShape: (shapeId: string, shapeType: 'rectangle' | 'circle' | 'line' | 'text', rotation: number) => Promise<void>
+  // Batch operations
+  deleteSelectedShapes: () => Promise<void>
+  changeSelectedShapesColor: (color: string) => Promise<void>
 }
 
 export class CanvasCommandExecutor {
@@ -160,6 +163,18 @@ export class CanvasCommandExecutor {
 
       case 'rotateShape':
         await this.executeRotateShape(parameters as { angle: number })
+        break
+
+      case 'changeColorBatch':
+        await this.executeChangeColorBatch(parameters as { color: string })
+        break
+
+      case 'resizeBatch':
+        await this.executeResizeBatch(parameters as { width?: number; height?: number })
+        break
+
+      case 'deleteBatch':
+        await this.executeDeleteBatch()
         break
 
       default:
@@ -523,6 +538,81 @@ export class CanvasCommandExecutor {
       this.context.primarySelectionType,
       normalizedAngle
     )
+  }
+
+  /**
+   * Batch: Change color of all selected shapes
+   */
+  private async executeChangeColorBatch(params: { color: string }): Promise<void> {
+    const { color } = params
+
+    // Require at least one shape to be selected
+    if (this.context.selectedShapes.size === 0) {
+      throw new Error('No shapes selected. Please select one or more shapes first.')
+    }
+
+    // Validate color
+    if (!VALID_AI_COLORS.includes(color)) {
+      throw new Error(`Invalid color: ${color}. Must be one of: ${VALID_AI_COLORS.join(', ')}`)
+    }
+
+    await this.context.changeSelectedShapesColor(color as typeof VALID_AI_COLORS[number])
+  }
+
+  /**
+   * Batch: Resize all selected rectangles
+   */
+  private async executeResizeBatch(params: { width?: number; height?: number }): Promise<void> {
+    const { width, height } = params
+
+    // Require at least one shape to be selected
+    if (this.context.selectedShapes.size === 0) {
+      throw new Error('No shapes selected. Please select one or more rectangles first.')
+    }
+
+    // Require at least width or height
+    if (width === undefined && height === undefined) {
+      throw new Error('Must specify at least width or height for batch resize')
+    }
+
+    // Validate dimensions if provided
+    if (width !== undefined) {
+      if (width < RECTANGLE_CONSTRAINTS.MIN_WIDTH || width > RECTANGLE_CONSTRAINTS.MAX_WIDTH) {
+        throw new Error(`Width must be between ${RECTANGLE_CONSTRAINTS.MIN_WIDTH} and ${RECTANGLE_CONSTRAINTS.MAX_WIDTH}`)
+      }
+    }
+    if (height !== undefined) {
+      if (height < RECTANGLE_CONSTRAINTS.MIN_HEIGHT || height > RECTANGLE_CONSTRAINTS.MAX_HEIGHT) {
+        throw new Error(`Height must be between ${RECTANGLE_CONSTRAINTS.MIN_HEIGHT} and ${RECTANGLE_CONSTRAINTS.MAX_HEIGHT}`)
+      }
+    }
+
+    // Resize each selected rectangle
+    const promises: Promise<void>[] = []
+    for (const [id, type] of this.context.selectedShapes.entries()) {
+      if (type === 'rectangle') {
+        const rect = this.context.rectangles.find(r => r.id === id)
+        if (rect) {
+          const newWidth = width !== undefined ? width : rect.width
+          const newHeight = height !== undefined ? height : rect.height
+          promises.push(this.context.resizeRectangle(id, newWidth, newHeight))
+        }
+      }
+    }
+
+    await Promise.all(promises)
+  }
+
+  /**
+   * Batch: Delete all selected shapes
+   */
+  private async executeDeleteBatch(): Promise<void> {
+    // Require at least one shape to be selected
+    if (this.context.selectedShapes.size === 0) {
+      throw new Error('No shapes selected. Please select one or more shapes first.')
+    }
+
+    await this.context.deleteSelectedShapes()
   }
 }
 

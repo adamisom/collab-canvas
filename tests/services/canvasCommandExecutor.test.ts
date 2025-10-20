@@ -25,6 +25,8 @@ describe('CanvasCommandExecutor', () => {
   let mockDeleteRectangle: Mock
   let mockChangeRectangleColor: Mock
   let mockSelectRectangle: Mock
+  let mockDeleteSelectedShapes: Mock
+  let mockChangeSelectedShapesColor: Mock
 
   beforeEach(() => {
     // Create mock functions
@@ -34,11 +36,15 @@ describe('CanvasCommandExecutor', () => {
     mockDeleteRectangle = vi.fn()
     mockChangeRectangleColor = vi.fn()
     mockSelectRectangle = vi.fn()
+    mockDeleteSelectedShapes = vi.fn()
+    mockChangeSelectedShapesColor = vi.fn()
 
     // Create mock context
     mockContext = {
       rectangles: [...mockRectangles],
       primarySelectionId: 'rect1',
+      primarySelectionType: 'rectangle',
+      selectedShapes: new Map([['rect1', 'rectangle'], ['rect2', 'rectangle']]),
       getViewportInfo: vi.fn(() => mockViewportInfo),
       createRectangle: mockCreateRectangle,
       updateRectangle: mockUpdateRectangle,
@@ -46,8 +52,10 @@ describe('CanvasCommandExecutor', () => {
       deleteRectangle: mockDeleteRectangle,
       changeRectangleColor: mockChangeRectangleColor,
       selectRectangle: mockSelectRectangle,
-      setSelectionLocked: vi.fn()
-    }
+      setSelectionLocked: vi.fn(),
+      deleteSelectedShapes: mockDeleteSelectedShapes,
+      changeSelectedShapesColor: mockChangeSelectedShapesColor
+    } as any
 
     executor = new CanvasCommandExecutor(mockContext)
   })
@@ -649,6 +657,185 @@ describe('CanvasCommandExecutor', () => {
         })
 
         expect(mockRotateShape).toHaveBeenCalledWith('circle1', 'circle', 180)
+      })
+    })
+
+    describe('Batch Operations', () => {
+      describe('changeColorBatch', () => {
+        it('should change color of all selected shapes', async () => {
+          await executor.executeCommand({
+            tool: 'changeColorBatch',
+            parameters: { color: '#ef4444' }
+          })
+
+          expect(mockChangeSelectedShapesColor).toHaveBeenCalledWith('#ef4444')
+        })
+
+        it('should throw error if no shapes selected', async () => {
+          mockContext.selectedShapes = new Map()
+
+          await expect(
+            executor.executeCommand({
+              tool: 'changeColorBatch',
+              parameters: { color: '#ef4444' }
+            })
+          ).rejects.toThrow('No shapes selected')
+        })
+
+        it('should throw error for invalid color', async () => {
+          await expect(
+            executor.executeCommand({
+              tool: 'changeColorBatch',
+              parameters: { color: '#invalid' }
+            })
+          ).rejects.toThrow('Invalid color')
+        })
+      })
+
+      describe('resizeBatch', () => {
+        it('should resize all selected rectangles to same width', async () => {
+          mockContext.rectangles = [
+            { id: 'rect1', x: 100, y: 100, width: 100, height: 80, color: '#3b82f6' } as Rectangle,
+            { id: 'rect2', x: 200, y: 200, width: 150, height: 80, color: '#ef4444' } as Rectangle
+          ]
+          mockContext.selectedShapes = new Map([['rect1', 'rectangle'], ['rect2', 'rectangle']])
+
+          await executor.executeCommand({
+            tool: 'resizeBatch',
+            parameters: { width: 200 }
+          })
+
+          expect(mockResizeRectangle).toHaveBeenCalledWith('rect1', 200, 80)
+          expect(mockResizeRectangle).toHaveBeenCalledWith('rect2', 200, 80)
+          expect(mockResizeRectangle).toHaveBeenCalledTimes(2)
+        })
+
+        it('should resize all selected rectangles to same height', async () => {
+          mockContext.rectangles = [
+            { id: 'rect1', x: 100, y: 100, width: 100, height: 80, color: '#3b82f6' } as Rectangle,
+            { id: 'rect2', x: 200, y: 200, width: 100, height: 120, color: '#ef4444' } as Rectangle
+          ]
+          mockContext.selectedShapes = new Map([['rect1', 'rectangle'], ['rect2', 'rectangle']])
+
+          await executor.executeCommand({
+            tool: 'resizeBatch',
+            parameters: { height: 150 }
+          })
+
+          expect(mockResizeRectangle).toHaveBeenCalledWith('rect1', 100, 150)
+          expect(mockResizeRectangle).toHaveBeenCalledWith('rect2', 100, 150)
+          expect(mockResizeRectangle).toHaveBeenCalledTimes(2)
+        })
+
+        it('should resize both width and height', async () => {
+          mockContext.rectangles = [
+            { id: 'rect1', x: 100, y: 100, width: 100, height: 80, color: '#3b82f6' } as Rectangle
+          ]
+          mockContext.selectedShapes = new Map([['rect1', 'rectangle']])
+
+          await executor.executeCommand({
+            tool: 'resizeBatch',
+            parameters: { width: 250, height: 200 }
+          })
+
+          expect(mockResizeRectangle).toHaveBeenCalledWith('rect1', 250, 200)
+        })
+
+        it('should throw error if no shapes selected', async () => {
+          mockContext.selectedShapes = new Map()
+
+          await expect(
+            executor.executeCommand({
+              tool: 'resizeBatch',
+              parameters: { width: 200 }
+            })
+          ).rejects.toThrow('No shapes selected')
+        })
+
+        it('should throw error if neither width nor height provided', async () => {
+          await expect(
+            executor.executeCommand({
+              tool: 'resizeBatch',
+              parameters: {}
+            })
+          ).rejects.toThrow('Must specify at least width or height')
+        })
+
+        it('should validate width is within valid range', async () => {
+          await expect(
+            executor.executeCommand({
+              tool: 'resizeBatch',
+              parameters: { width: 10 }
+            })
+          ).rejects.toThrow('Width must be between 20 and 3000')
+        })
+
+        it('should validate height is within valid range', async () => {
+          await expect(
+            executor.executeCommand({
+              tool: 'resizeBatch',
+              parameters: { height: 5000 }
+            })
+          ).rejects.toThrow('Height must be between 20 and 3000')
+        })
+
+        it('should only resize rectangles, not other shape types', async () => {
+          mockContext.rectangles = [
+            { id: 'rect1', x: 100, y: 100, width: 100, height: 80, color: '#3b82f6' } as Rectangle
+          ]
+          mockContext.selectedShapes = new Map([
+            ['rect1', 'rectangle'],
+            ['circle1', 'circle'],
+            ['line1', 'line']
+          ])
+
+          await executor.executeCommand({
+            tool: 'resizeBatch',
+            parameters: { width: 200 }
+          })
+
+          // Should only resize the rectangle
+          expect(mockResizeRectangle).toHaveBeenCalledTimes(1)
+          expect(mockResizeRectangle).toHaveBeenCalledWith('rect1', 200, 80)
+        })
+      })
+
+      describe('deleteBatch', () => {
+        it('should delete all selected shapes', async () => {
+          await executor.executeCommand({
+            tool: 'deleteBatch',
+            parameters: {}
+          })
+
+          expect(mockDeleteSelectedShapes).toHaveBeenCalledTimes(1)
+        })
+
+        it('should throw error if no shapes selected', async () => {
+          mockContext.selectedShapes = new Map()
+
+          await expect(
+            executor.executeCommand({
+              tool: 'deleteBatch',
+              parameters: {}
+            })
+          ).rejects.toThrow('No shapes selected')
+        })
+
+        it('should work with mixed shape types', async () => {
+          mockContext.selectedShapes = new Map([
+            ['rect1', 'rectangle'],
+            ['circle1', 'circle'],
+            ['line1', 'line'],
+            ['text1', 'text']
+          ])
+
+          await executor.executeCommand({
+            tool: 'deleteBatch',
+            parameters: {}
+          })
+
+          expect(mockDeleteSelectedShapes).toHaveBeenCalledTimes(1)
+        })
       })
     })
   })
