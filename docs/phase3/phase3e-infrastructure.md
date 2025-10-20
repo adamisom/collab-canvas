@@ -949,6 +949,95 @@ export default React.memo(Cursor, (prev, next) => {
 - [ ] User can see their own profile in header with initials
 - [ ] UserProfilesContext efficiently caches only online user profiles
 
+### Manual Testing Guide - Step by Step
+
+**Step 1: Open the App**
+Navigate to your deployed app URL (e.g., `https://your-app.web.app`)
+
+**Step 2: Verify Sign-In Modal Appears**
+You should immediately see a modal with:
+- "CollabCanvas" heading
+- "Real-time collaborative canvas with AI" tagline
+- "Sign in with Google" button with Google logo
+- "No account needed • Sign in with your Gmail account" footer
+
+**Step 3: Click "Sign in with Google"**
+- A Google popup will appear
+- Select your Google account (or sign in if needed)
+- Grant permissions when prompted
+
+**Step 4: Verify Sign-In Success** ✅
+After signing in, you should see:
+1. **Header**: Your profile dropdown appears in the top-right with:
+   - Your initials in a colored circle
+   - Your display name next to it
+2. **Canvas**: You can now interact with the canvas
+3. Click your profile dropdown to see:
+   - Large avatar with initials
+   - Your full name
+   - Your email
+   - "Sign Out" button
+
+**Step 5: Test Multi-User Collaboration** 👥
+Open a **second browser** (or incognito window):
+1. Go to the same URL
+2. Sign in with a **different Google account**
+3. You should see:
+   - Both users' cursors on the canvas
+   - Each cursor shows an **arrow pointer** with a badge containing:
+     - User initials in a colored circle
+     - User's display name
+
+**Step 6: Verify User Profile Auto-Creation** 🔍
+To confirm the auth trigger worked:
+1. Go to Firebase Console → Realtime Database
+2. Check `/users/{your-uid}` - you should see:
+   ```json
+   {
+     "uid": "your-google-uid",
+     "displayName": "Your Name",
+     "email": "your-email@gmail.com",
+     "createdAt": 1234567890,
+     "lastSeenAt": 1234567890
+   }
+   ```
+
+**Step 7: Test Sign-Out**
+1. Click your profile dropdown in the header
+2. Click "Sign Out"
+3. You should be returned to the sign-in modal
+
+**What to Look For:**
+
+✅ **GOOD SIGNS:**
+- Sign-in modal appears immediately
+- Google sign-in popup works smoothly
+- Your profile appears in header with correct name and initials
+- Cursor shows other users' initials and names
+- User profile created in Firebase Database automatically
+- Sign-out returns you to sign-in modal
+
+❌ **POTENTIAL ISSUES:**
+- **"Profile not found" or missing cursor**: Wait 1-2 seconds - auth trigger might still be creating the profile
+- **Google popup blocked**: Browser might block popups - check browser settings
+- **No user profile in database**: Auth trigger didn't fire - check Firebase Functions logs
+- **Cursor shows "?"**: Profile hasn't loaded yet - wait a moment or refresh
+
+**Quick Verification Checklist:**
+- [ ] Sign-in modal displays correctly
+- [ ] Can sign in with Google account
+- [ ] Profile dropdown shows in header with initials
+- [ ] Profile dropdown shows correct name and email
+- [ ] Can create shapes on canvas
+- [ ] Second user can sign in (different browser)
+- [ ] Both users see each other's cursors
+- [ ] Cursors show user initials and names
+- [ ] User profile exists in Firebase Database at `/users/{uid}`
+- [ ] Sign-out works and returns to sign-in modal
+- [ ] All Phase 3A-3D features still work (shapes, multi-select, alignment, rotation)
+- [ ] No console errors during sign-in flow
+- [ ] AI chat still works with authenticated user
+
 ### Success Criteria
 - ✅ Google authentication works flawlessly
 - ✅ User profiles automatically created by Cloud Function
