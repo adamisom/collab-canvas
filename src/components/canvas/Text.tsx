@@ -5,7 +5,6 @@ import type { KonvaEventObject } from 'konva/lib/Node'
 import type { TextShape } from '../../shared/shapes'
 import { getShapeSelectionStyle, isShapeDraggable } from '../../utils/shapeStyleHelpers'
 import * as canvasService from '../../services/canvasService'
-import RotateHandle from './RotateHandle'
 
 interface TextProps {
   textShape: TextShape
@@ -18,21 +17,19 @@ interface TextProps {
   onDragEnd: (id: string, x: number, y: number) => void
   onTextChange: (id: string, newText: string) => void
   onEditingChange: (editing: boolean) => void
-  onRotate?: (shapeId: string, rotation: number) => void
 }
 
 const Text: React.FC<TextProps> = ({
   textShape,
   isSelected,
-  isPrimary,
+  // isPrimary not used in this component (kept in interface for consistency)
   isShiftPressed,
   isInMultiSelectGroup = false,
   onClick,
   onDragStart,
   onDragEnd,
   onTextChange,
-  onEditingChange,
-  onRotate
+  onEditingChange
 }) => {
   const [isEditing, setIsEditing] = useState(false)
   const textRef = useRef<Konva.Text | null>(null)
@@ -163,11 +160,18 @@ const Text: React.FC<TextProps> = ({
   // Disable dragging when editing, Shift is pressed, or in multi-select group
   const draggable = isShapeDraggable(isSelected, isShiftPressed, isEditing) && !isInMultiSelectGroup
 
+  // Calculate offset for rotation around center
+  const textWidth = textShape.measuredWidth || 100
+  const textHeight = textShape.measuredHeight || 20
+
   return (
     <Group
       ref={groupRef}
-      x={textShape.x}
-      y={textShape.y}
+      x={textShape.x + textWidth / 2}  // Position at center
+      y={textShape.y + textHeight / 2}
+      offsetX={textWidth / 2}  // Rotate around center
+      offsetY={textHeight / 2}
+      rotation={textShape.rotation || 0}
       draggable={draggable}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
@@ -189,18 +193,6 @@ const Text: React.FC<TextProps> = ({
         strokeWidth={isSelected ? 1 : 0}  // Subtle stroke for text selection
         listening={!isEditing}
       />
-      
-      {/* Rotate handle (center of text, only when primary and not editing/multi-select) */}
-      {isPrimary && !isShiftPressed && !isInMultiSelectGroup && !isEditing && onRotate && (
-        <RotateHandle
-          shapeId={textShape.id}
-          centerX={(textShape.measuredWidth || 100) / 2}
-          centerY={(textShape.measuredHeight || 20) / 2}
-          currentRotation={textShape.rotation || 0}
-          isShiftPressed={isShiftPressed}
-          onRotate={onRotate}
-        />
-      )}
     </Group>
   )
 }

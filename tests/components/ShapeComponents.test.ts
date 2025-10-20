@@ -47,14 +47,15 @@ describe('Shape Components - Selection Visual Feedback', () => {
   })
 
   describe('getLineSelectionStyle', () => {
-    it('should add 2px to stroke width for selected lines and preserve color', () => {
+    it('should preserve stroke width and color for selected lines (red outline shows selection)', () => {
       const lineColor = '#000000'
       const baseStrokeWidth = 3
       const style = getLineSelectionStyle(lineColor, baseStrokeWidth, true, false)
       
       // Lines keep their actual color when selected (unlike rectangles/circles)
+      // Red outline (rendered separately in Line component) shows selection
       expect(style.stroke).toBe(lineColor)
-      expect(style.strokeWidth).toBe(baseStrokeWidth + 2) // 5
+      expect(style.strokeWidth).toBe(baseStrokeWidth)
     })
 
     it('should preserve line color when unselected', () => {
@@ -69,13 +70,13 @@ describe('Shape Components - Selection Visual Feedback', () => {
     it('should handle thin lines correctly', () => {
       const style = getLineSelectionStyle('#000000', 1, true, false)
       
-      expect(style.strokeWidth).toBe(3) // 1 + 2
+      expect(style.strokeWidth).toBe(1) // No change, red outline shows selection
     })
 
     it('should handle thick lines correctly', () => {
       const style = getLineSelectionStyle('#000000', 10, true, false)
       
-      expect(style.strokeWidth).toBe(12) // 10 + 2
+      expect(style.strokeWidth).toBe(10) // No change, red outline shows selection
     })
   })
 

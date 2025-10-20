@@ -15,10 +15,10 @@ import SelectionBox from './SelectionBox'
 import ShapeModeSelector from './ShapeModeSelector'  // PR #6
 import ColorPicker from './ColorPicker'
 import TextFormatToolbar from './TextFormatToolbar'  // PR #9
+import RotationSelector from './RotationSelector'
 import AlignmentToolbar from '../ui/AlignmentToolbar'  // Phase 3D PR #10
 import LassoPath from './LassoPath'  // Phase 3D PR #11
 import SelectTypeModal from '../ui/SelectTypeModal'  // Phase 3D PR #11
-import RotateHandle from './RotateHandle'  // Phase 3D PR #12
 import Toast from '../ui/Toast'
 import type { Rectangle as RectangleType } from '../../services/canvasService'
 import type { ShapeType } from '../../shared/shapes'  // Phase 3D PR #12
@@ -600,7 +600,7 @@ const Canvas: React.FC<CanvasProps> = ({
       // Note: Circles are excluded - rotation is meaningless for circles
     }
     
-    if (rotatableShapes.length < 2) return
+    if (rotatableShapes.length === 0) return
     
     // Calculate group center (center of bounding box) - need to include all points
     const allPoints: Array<{ x: number; y: number }> = []
@@ -1412,6 +1412,120 @@ const Canvas: React.FC<CanvasProps> = ({
               />
             )
           })()}
+          
+          {/* Rotation Selector for Lines - positioned at line center */}
+          {selectedLine && !isTextEditing && selectedShapes.size === 1 && (() => {
+            const centerX = (selectedLine.x + selectedLine.endX) / 2
+            const centerY = (selectedLine.y + selectedLine.endY) / 2
+            const screenPos = transformToScreenCoords(centerX, centerY)
+            if (!screenPos) return null
+            return (
+              <RotationSelector
+                currentRotation={selectedLine.rotation || 0}
+                x={screenPos.x}
+                y={screenPos.y - 35}
+                onRotate={(rotation) => rotateShape(selectedLine.id, 'line', rotation)}
+              />
+            )
+          })()}
+          
+          {/* Rotation Selector for Text - positioned above text format toolbar */}
+          {selectedText && !isTextEditing && selectedShapes.size === 1 && (() => {
+            const textWidth = selectedText.measuredWidth || 100
+            const textHeight = selectedText.measuredHeight || 20
+            const centerX = selectedText.x + textWidth / 2
+            const centerY = selectedText.y + textHeight / 2
+            const screenPos = transformToScreenCoords(centerX, centerY)
+            if (!screenPos) return null
+            return (
+              <RotationSelector
+                currentRotation={selectedText.rotation || 0}
+                x={screenPos.x + 90}
+                y={screenPos.y - 65}
+                onRotate={(rotation) => rotateShape(selectedText.id, 'text', rotation)}
+              />
+            )
+          })()}
+          
+          {/* Rotation Selector for Multi-Select Group */}
+          {selectedShapes.size > 1 && (() => {
+            const bounds: Array<{ minX: number; minY: number; maxX: number; maxY: number }> = []
+
+            // Calculate bounding box for all selected shapes
+            multiSelectShapes.rectangles.forEach(r => {
+              bounds.push({
+                minX: r.x - r.width / 2,
+                minY: r.y - r.height / 2,
+                maxX: r.x + r.width / 2,
+                maxY: r.y + r.height / 2
+              })
+            })
+
+            multiSelectShapes.circles.forEach(c => {
+              bounds.push({
+                minX: c.x - c.radius,
+                minY: c.y - c.radius,
+                maxX: c.x + c.radius,
+                maxY: c.y + c.radius
+              })
+            })
+
+            multiSelectShapes.lines.forEach(l => {
+              bounds.push({
+                minX: Math.min(l.x, l.endX),
+                minY: Math.min(l.y, l.endY),
+                maxX: Math.max(l.x, l.endX),
+                maxY: Math.max(l.y, l.endY)
+              })
+            })
+
+            multiSelectShapes.texts.forEach(t => {
+              const textWidth = t.measuredWidth || 100
+              const textHeight = t.measuredHeight || 20
+              bounds.push({
+                minX: t.x,
+                minY: t.y,
+                maxX: t.x + textWidth,
+                maxY: t.y + textHeight
+              })
+            })
+
+            if (bounds.length === 0) return null
+
+            const minX = Math.min(...bounds.map(b => b.minX))
+            const minY = Math.min(...bounds.map(b => b.minY))
+            const maxX = Math.max(...bounds.map(b => b.maxX))
+            const maxY = Math.max(...bounds.map(b => b.maxY))
+
+            const centerX = (minX + maxX) / 2
+            const centerY = (minY + maxY) / 2
+            const screenPos = transformToScreenCoords(centerX, centerY)
+            if (!screenPos) return null
+
+            // Get current rotation from primary selection (or default to 0)
+            let currentRotation = 0
+            if (primarySelectionId && primarySelectionType) {
+              if (primarySelectionType === 'rectangle') {
+                const rect = rectangles.find(r => r.id === primarySelectionId)
+                currentRotation = rect?.rotation || 0
+              } else if (primarySelectionType === 'line') {
+                const line = lines.find(l => l.id === primarySelectionId)
+                currentRotation = line?.rotation || 0
+              } else if (primarySelectionType === 'text') {
+                const text = texts.find(t => t.id === primarySelectionId)
+                currentRotation = text?.rotation || 0
+              }
+            }
+
+            return (
+              <RotationSelector
+                currentRotation={currentRotation}
+                x={screenPos.x}
+                y={screenPos.y - 40}
+                onRotate={(rotation) => handleMultiSelectGroupRotate('multi-select-group', rotation)}
+              />
+            )
+          })()}
         </div>
         
         {cursorsError && (
@@ -1486,7 +1600,6 @@ const Canvas: React.FC<CanvasProps> = ({
                 onEndpointsChange={handleLineEndpointsChange}
                 onResizeStart={handleResizeStart}
                 onResizeEnd={handleResizeEnd}
-                onRotate={handleRotate}
               />
             ))}
             
@@ -1515,7 +1628,6 @@ const Canvas: React.FC<CanvasProps> = ({
                 onDragEnd={handleTextDragEnd}
                 onTextChange={handleTextChange}
                 onEditingChange={setIsTextEditing}
-                onRotate={handleRotate}
               />
             ))}
             
@@ -1591,15 +1703,6 @@ const Canvas: React.FC<CanvasProps> = ({
                     dash={[8, 4]}
                     fill="transparent"
                     listening={false}
-                  />
-                  
-                  {/* Multi-select group rotation handle */}
-                  <RotateHandle
-                    shapeId="multi-select-group"
-                    centerX={(minX + maxX) / 2}
-                    centerY={(minY + maxY) / 2}
-                    isShiftPressed={isShiftPressed}
-                    onRotate={handleMultiSelectGroupRotate}
                   />
                   
                   {/* Render selected rectangles inside group */}

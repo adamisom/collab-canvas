@@ -1652,6 +1652,12 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       const shapesToAlign = getSelectedShapesFromMap(selectedShapes, rectangles, circles, lines, texts)
       if (shapesToAlign.length < 2) return
 
+      // Check if any shapes are rotated
+      const hasRotation = shapesToAlign.some(shape => shape.rotation && shape.rotation !== 0)
+      if (hasRotation) {
+        showToast('⚠️ Warning: Alignment does not currently play nice with rotated groups')
+      }
+
       // Calculate target value based on alignment type
       const bounds = shapesToAlign.map(getShapeBounds)
       let targetValue: number
@@ -1718,7 +1724,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       console.error('Error aligning shapes:', error)
       setToastMessage('Failed to align shapes')
     }
-  }, [selectedShapes, rectangles, circles, lines, texts])
+  }, [selectedShapes, rectangles, circles, lines, texts, showToast])
 
   // Select shapes inside lasso (Phase 3D PR #11)
   const selectShapesInLasso = useCallback(async (lassoPoints: number[]): Promise<void> => {
@@ -1878,9 +1884,46 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
         case 'circle':
           await canvasService.updateCircle(shapeId, { rotation })
           break
-        case 'line':
-          await canvasService.updateLine(shapeId, { rotation })
+        case 'line': {
+          // Lines need special handling: rotate both endpoints around center
+          const line = lines.find(l => l.id === shapeId)
+          if (!line) return
+          
+          // Calculate center of line
+          const centerX = (line.x + line.endX) / 2
+          const centerY = (line.y + line.endY) / 2
+          
+          // Calculate rotation delta
+          const currentRotation = line.rotation || 0
+          const rotationDelta = rotation - currentRotation
+          const angleRad = rotationDelta * (Math.PI / 180)
+          
+          // Rotate start point around center
+          const dx1 = line.x - centerX
+          const dy1 = line.y - centerY
+          const newDx1 = dx1 * Math.cos(angleRad) - dy1 * Math.sin(angleRad)
+          const newDy1 = dx1 * Math.sin(angleRad) + dy1 * Math.cos(angleRad)
+          const newX = centerX + newDx1
+          const newY = centerY + newDy1
+          
+          // Rotate end point around center
+          const dx2 = line.endX - centerX
+          const dy2 = line.endY - centerY
+          const newDx2 = dx2 * Math.cos(angleRad) - dy2 * Math.sin(angleRad)
+          const newDy2 = dx2 * Math.sin(angleRad) + dy2 * Math.cos(angleRad)
+          const newEndX = centerX + newDx2
+          const newEndY = centerY + newDy2
+          
+          // Update line with rotated endpoints
+          await canvasService.updateLine(shapeId, {
+            x: newX,
+            y: newY,
+            endX: newEndX,
+            endY: newEndY,
+            rotation
+          })
           break
+        }
         case 'text':
           await canvasService.updateText(shapeId, { rotation })
           break
@@ -1889,7 +1932,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       console.error('Error rotating shape:', error)
       setToastMessage('Failed to rotate shape')
     }
-  }, [])
+  }, [lines])
 
   const value: CanvasContextType = {
     rectangles,

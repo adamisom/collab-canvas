@@ -5,7 +5,6 @@ import type { KonvaEventObject } from 'konva/lib/Node'
 import type { LineShape } from '../../shared/shapes'
 import { SHAPE_CONSTANTS } from '../../utils/constants'
 import { getLineSelectionStyle, isShapeDraggable } from '../../utils/shapeStyleHelpers'
-import RotateHandle from './RotateHandle'
 
 interface LineProps {
   line: LineShape
@@ -19,7 +18,6 @@ interface LineProps {
   onEndpointsChange: (id: string, endX: number, endY: number) => void
   onResizeStart: () => void
   onResizeEnd: () => void
-  onRotate?: (shapeId: string, rotation: number) => void
 }
 
 const Line: React.FC<LineProps> = ({
@@ -33,8 +31,7 @@ const Line: React.FC<LineProps> = ({
   onDragEnd,
   onEndpointsChange,
   onResizeStart,
-  onResizeEnd,
-  onRotate
+  onResizeEnd
 }) => {
   const groupRef = useRef<Konva.Group>(null)
   const [isDraggingHandle, setIsDraggingHandle] = useState(false)
@@ -112,6 +109,32 @@ const Line: React.FC<LineProps> = ({
         lineJoin="round"
       />
       
+      {/* Red outline when selected (drawn behind main line) */}
+      {isSelected && (
+        line.hasArrow ? (
+          <Arrow
+            points={points}
+            stroke="#ef4444"
+            strokeWidth={selectionStyle.strokeWidth + 4}
+            fill="#ef4444"
+            pointerLength={SHAPE_CONSTANTS.ARROW_POINTER_LENGTH}
+            pointerWidth={SHAPE_CONSTANTS.ARROW_POINTER_WIDTH}
+            lineCap="round"
+            lineJoin="round"
+            listening={false}
+          />
+        ) : (
+          <KonvaLine
+            points={points}
+            stroke="#ef4444"
+            strokeWidth={selectionStyle.strokeWidth + 4}
+            lineCap="round"
+            lineJoin="round"
+            listening={false}
+          />
+        )
+      )}
+      
       {/* Main line or arrow */}
       {line.hasArrow ? (
         <Arrow
@@ -136,39 +159,25 @@ const Line: React.FC<LineProps> = ({
       
       {/* Endpoint handle (on primary selection only, not in multi-select group) */}
       {isPrimary && !isShiftPressed && !isInMultiSelectGroup && (
-        <>
-          <KonvaCircle
-            x={line.endX - line.x}
-            y={line.endY - line.y}
-            radius={SHAPE_CONSTANTS.LINE_HANDLE_SIZE}
-            fill="white"
-            stroke="#3b82f6"
-            strokeWidth={2}
-            draggable={true}
-            onDragStart={handleEndHandleDragStart}
-            onDragEnd={handleEndHandleDragEnd}
-            onMouseEnter={(e) => {
-              const container = e.target.getStage()?.container()
-              if (container) container.style.cursor = 'move'
-            }}
-            onMouseLeave={(e) => {
-              const container = e.target.getStage()?.container()
-              if (container) container.style.cursor = 'default'
-            }}
-          />
-          
-          {/* Rotate handle (center of line) */}
-          {onRotate && (
-            <RotateHandle
-              shapeId={line.id}
-              centerX={(line.endX - line.x) / 2}
-              centerY={(line.endY - line.y) / 2}
-              currentRotation={line.rotation || 0}
-              isShiftPressed={isShiftPressed}
-              onRotate={onRotate}
-            />
-          )}
-        </>
+        <KonvaCircle
+          x={line.endX - line.x}
+          y={line.endY - line.y}
+          radius={SHAPE_CONSTANTS.LINE_HANDLE_SIZE}
+          fill="white"
+          stroke="#3b82f6"
+          strokeWidth={2}
+          draggable={true}
+          onDragStart={handleEndHandleDragStart}
+          onDragEnd={handleEndHandleDragEnd}
+          onMouseEnter={(e) => {
+            const container = e.target.getStage()?.container()
+            if (container) container.style.cursor = 'move'
+          }}
+          onMouseLeave={(e) => {
+            const container = e.target.getStage()?.container()
+            if (container) container.style.cursor = 'default'
+          }}
+        />
       )}
     </Group>
   )

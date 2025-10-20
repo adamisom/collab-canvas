@@ -67,7 +67,7 @@ export function getLineSelectionStyle(
   if (isSelected) {
     return {
       stroke: lineColor,  // Keep actual color visible
-      strokeWidth: baseStrokeWidth + 2,  // Thicker to show selection
+      strokeWidth: baseStrokeWidth,  // Red outline now shows selection
       dash: undefined
     }
   }
