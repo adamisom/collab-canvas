@@ -78,7 +78,8 @@ interface CanvasContextType {
   // Clipboard operations (REFACTORED: PR #5)
   copySelectedRectangles: () => void  // Works with all selected shapes
   pasteRectangles: () => Promise<void>  // Handles Shape[] discriminated union
-  duplicateRectangle: (rectangleId: string) => Promise<Rectangle | null>  // Unchanged (single only)
+  duplicateShape: (shapeId: string, shapeType: ShapeType) => Promise<boolean>  // Works with all shape types
+  duplicateRectangle: (rectangleId: string) => Promise<Rectangle | null>  // Deprecated (single only)
   hasClipboardData: () => boolean
   
   // Layering operations
@@ -1344,59 +1345,172 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     }
   }, [user, username, clipboardShapes, showToast])
 
-  // UPDATED: Duplicate rectangle (single selection only, kept for compatibility)
-  const duplicateRectangle = useCallback(async (rectangleId: string): Promise<Rectangle | null> => {
+  // Generic duplicate function for any shape type
+  const duplicateShape = useCallback(async (shapeId: string, shapeType: ShapeType): Promise<boolean> => {
     if (!user || !username) {
       setError('You must be signed in to duplicate')
-      return null
+      return false
     }
 
-    const rectangle = rectangles.find(r => r.id === rectangleId)
-    if (!rectangle) {
-      showToast('Rectangle not found')
-      return null
-    }
+    const DUPLICATE_OFFSET = 20
 
     try {
-      const DUPLICATE_OFFSET = 20
-      const newX = Math.min(
-        rectangle.x + DUPLICATE_OFFSET,
-        CANVAS_WIDTH - rectangle.width
-      )
-      const newY = Math.min(
-        rectangle.y + DUPLICATE_OFFSET,
-        CANVAS_HEIGHT - rectangle.height
-      )
+      switch (shapeType) {
+        case 'rectangle': {
+          const rectangle = rectangles.find(r => r.id === shapeId)
+          if (!rectangle) {
+            showToast('Rectangle not found')
+            return false
+          }
 
-      const input: RectangleInput = {
-        x: newX,
-        y: newY,
-        width: rectangle.width,
-        height: rectangle.height,
-        color: rectangle.color,
-        createdBy: user.uid
+          const newX = Math.min(rectangle.x + DUPLICATE_OFFSET, CANVAS_WIDTH - rectangle.width)
+          const newY = Math.min(rectangle.y + DUPLICATE_OFFSET, CANVAS_HEIGHT - rectangle.height)
+
+          const duplicated = await canvasService.createRectangle({
+            x: newX,
+            y: newY,
+            width: rectangle.width,
+            height: rectangle.height,
+            color: rectangle.color,
+            createdBy: user.uid
+          })
+
+          if (duplicated) {
+            await canvasService.selectRectangle(duplicated.id, user.uid, username)
+            const newSelection = new Map<string, ShapeType>()
+            newSelection.set(duplicated.id, 'rectangle')
+            setSelectedShapes(newSelection)
+            setPrimarySelectionId(duplicated.id)
+            setPrimarySelectionType('rectangle')
+            showToast('Rectangle duplicated')
+            return true
+          }
+          break
+        }
+
+        case 'circle': {
+          const circle = circles.find(c => c.id === shapeId)
+          if (!circle) {
+            showToast('Circle not found')
+            return false
+          }
+
+          const newX = Math.min(circle.x + DUPLICATE_OFFSET, CANVAS_WIDTH - circle.radius * 2)
+          const newY = Math.min(circle.y + DUPLICATE_OFFSET, CANVAS_HEIGHT - circle.radius * 2)
+
+          const duplicated = await canvasService.createCircle({
+            x: newX,
+            y: newY,
+            radius: circle.radius,
+            color: circle.color,
+            createdBy: user.uid
+          })
+
+          if (duplicated) {
+            await canvasService.selectCircle(duplicated.id, user.uid, username)
+            const newSelection = new Map<string, ShapeType>()
+            newSelection.set(duplicated.id, 'circle')
+            setSelectedShapes(newSelection)
+            setPrimarySelectionId(duplicated.id)
+            setPrimarySelectionType('circle')
+            showToast('Circle duplicated')
+            return true
+          }
+          break
+        }
+
+        case 'line': {
+          const line = lines.find(l => l.id === shapeId)
+          if (!line) {
+            showToast('Line not found')
+            return false
+          }
+
+          const newX = line.x + DUPLICATE_OFFSET
+          const newY = line.y + DUPLICATE_OFFSET
+          const newEndX = line.endX + DUPLICATE_OFFSET
+          const newEndY = line.endY + DUPLICATE_OFFSET
+
+          const duplicated = await canvasService.createLine({
+            x: newX,
+            y: newY,
+            endX: newEndX,
+            endY: newEndY,
+            strokeWidth: line.strokeWidth,
+            color: line.color,
+            hasArrow: line.hasArrow,
+            createdBy: user.uid
+          })
+
+          if (duplicated) {
+            await canvasService.selectLine(duplicated.id, user.uid, username)
+            const newSelection = new Map<string, ShapeType>()
+            newSelection.set(duplicated.id, 'line')
+            setSelectedShapes(newSelection)
+            setPrimarySelectionId(duplicated.id)
+            setPrimarySelectionType('line')
+            showToast('Line duplicated')
+            return true
+          }
+          break
+        }
+
+        case 'text': {
+          const text = texts.find(t => t.id === shapeId)
+          if (!text) {
+            showToast('Text not found')
+            return false
+          }
+
+          const newX = text.x + DUPLICATE_OFFSET
+          const newY = text.y + DUPLICATE_OFFSET
+
+          const duplicated = await canvasService.createText({
+            x: newX,
+            y: newY,
+            text: text.text,
+            color: text.color,
+            createdBy: user.uid
+          })
+
+          if (duplicated) {
+            // Update font properties after creation
+            await canvasService.updateText(duplicated.id, {
+              fontSize: text.fontSize,
+              fontWeight: text.fontWeight,
+              fontStyle: text.fontStyle
+            })
+            
+            await canvasService.selectText(duplicated.id, user.uid, username)
+            const newSelection = new Map<string, ShapeType>()
+            newSelection.set(duplicated.id, 'text')
+            setSelectedShapes(newSelection)
+            setPrimarySelectionId(duplicated.id)
+            setPrimarySelectionType('text')
+            showToast('Text duplicated')
+            return true
+          }
+          break
+        }
       }
 
-      const duplicated = await canvasService.createRectangle(input)
-
-      if (duplicated) {
-        // Select the duplicated rectangle
-        await canvasService.selectRectangle(duplicated.id, user.uid, username)
-        const newSelection = new Map<string, ShapeType>()
-        newSelection.set(duplicated.id, 'rectangle')
-        setSelectedShapes(newSelection)
-        setPrimarySelectionId(duplicated.id)
-        setPrimarySelectionType('rectangle')
-        showToast('Rectangle duplicated')
-      }
-
-      return duplicated
+      return false
     } catch (err) {
-      console.error('Error duplicating rectangle:', err)
-      setError(err instanceof Error ? err.message : 'Failed to duplicate rectangle')
-      return null
+      console.error(`Error duplicating ${shapeType}:`, err)
+      setError(err instanceof Error ? err.message : `Failed to duplicate ${shapeType}`)
+      return false
     }
-  }, [user, username, rectangles, showToast])
+  }, [user, username, rectangles, circles, lines, texts, showToast])
+
+  // DEPRECATED: Keep for backward compatibility
+  const duplicateRectangle = useCallback(async (rectangleId: string): Promise<Rectangle | null> => {
+    const success = await duplicateShape(rectangleId, 'rectangle')
+    if (success) {
+      const rect = rectangles.find(r => r.id === primarySelectionId)
+      return rect || null
+    }
+    return null
+  }, [duplicateShape, rectangles, primarySelectionId])
 
   // Check if clipboard has data
   const hasClipboardData = useCallback(() => {
@@ -1720,6 +1834,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     changeSelectedRectanglesColor,
     copySelectedRectangles,
     pasteRectangles,
+    duplicateShape,
     duplicateRectangle,
     hasClipboardData,
     bringToFront,

@@ -48,7 +48,7 @@ const Canvas: React.FC<CanvasProps> = ({
   const [selectionBoxStart, setSelectionBoxStart] = useState<{ x: number; y: number } | null>(null)
   const [selectionBoxEnd, setSelectionBoxEnd] = useState<{ x: number; y: number } | null>(null)
   
-  // NEW PR #7: Line creation state (two-click creation)
+  // NEW PR #7: Line creation state (double-click to start, single-click to finish)
   const [lineCreationStart, setLineCreationStart] = useState<{ x: number; y: number } | null>(null)
   const [linePreviewEnd, setLinePreviewEnd] = useState<{ x: number; y: number } | null>(null)
   
@@ -71,7 +71,6 @@ const Canvas: React.FC<CanvasProps> = ({
   // Refs for clipboard operations (to avoid dependency array issues)
   const copySelectedRectanglesRef = useRef<() => void>()  // CHANGED
   const pasteRectanglesRef = useRef<() => Promise<void>>()  // CHANGED
-  const duplicateRectangleRef = useRef<(rectangleId: string) => Promise<RectangleType | null>>()
   
   // Refs for layering operations
   const bringToFrontRef = useRef<(rectangleId: string) => Promise<void>>()
@@ -113,7 +112,7 @@ const Canvas: React.FC<CanvasProps> = ({
     changeSelectedRectanglesColor, // NEW: Change color of all selected
     copySelectedRectangles,  // Copy selected
     pasteRectangles,         // Paste clipboard
-    duplicateRectangle,
+    duplicateShape,
     bringToFront,
     sendToBack,
     alignShapes,  // Phase 3D PR #10
@@ -282,7 +281,7 @@ const Canvas: React.FC<CanvasProps> = ({
     sendViewportInfo()
   }, [sendViewportInfo])
 
-  // NEW: Handle stage mouse down (for selection box start or line creation)
+  // NEW: Handle stage mouse down (for selection box start and lasso)
   const handleStageMouseDown = useCallback(async (e: KonvaEventObject<MouseEvent>) => {
     // Only handle clicks on the stage background (not on shapes)
     if (e.target !== e.target.getStage()) return
@@ -304,22 +303,9 @@ const Canvas: React.FC<CanvasProps> = ({
     if (isShiftPressed) {
       setSelectionBoxStart(canvasCoords)
       setSelectionBoxEnd(canvasCoords)
-    } else if (shapeMode === 'line') {
-      // PR #7: Two-click line creation (lines need single-click workflow)
-      if (!lineCreationStart) {
-        // First click: start line
-        setLineCreationStart(canvasCoords)
-        setLinePreviewEnd(canvasCoords)
-        await clearSelection()
-      } else {
-        // Second click: complete line
-        await createLine(lineCreationStart.x, lineCreationStart.y, canvasCoords.x, canvasCoords.y)
-        setLineCreationStart(null)
-        setLinePreviewEnd(null)
-      }
     }
-    // Note: Rectangle, circle, and text creation moved to double-click (handleStageDoubleClick)
-  }, [isShiftPressed, shapeMode, lineCreationStart, transformToCanvasCoords, clearSelection, createLine, isLassoMode])
+    // Note: All shape creation (rectangle, circle, line, text) uses double-click (handleStageDoubleClick)
+  }, [isShiftPressed, transformToCanvasCoords, isLassoMode])
 
   // NEW: Handle stage double click (for shape creation)
   const handleStageDoubleClick = useCallback(async (e: KonvaEventObject<MouseEvent>) => {
@@ -336,6 +322,23 @@ const Canvas: React.FC<CanvasProps> = ({
     // Don't create shapes if in selection box mode
     if (isShiftPressed) return
 
+    // PR #7: Handle line creation (double-click to start, double-click to finish)
+    if (shapeMode === 'line') {
+      if (!lineCreationStart) {
+        // First double-click: start line
+        setLineCreationStart(canvasCoords)
+        setLinePreviewEnd(canvasCoords)
+        await clearSelection()
+        return
+      } else {
+        // Second double-click: complete line
+        await createLine(lineCreationStart.x, lineCreationStart.y, canvasCoords.x, canvasCoords.y)
+        setLineCreationStart(null)
+        setLinePreviewEnd(null)
+        return
+      }
+    }
+
     // Clear selection and create new shape based on mode
     await clearSelection()
     
@@ -349,9 +352,8 @@ const Canvas: React.FC<CanvasProps> = ({
       case 'text':
         await createText(canvasCoords.x, canvasCoords.y, 'New Text')
         break
-      // Line mode uses single-click in handleStageMouseDown
     }
-  }, [isShiftPressed, shapeMode, transformToCanvasCoords, clearSelection, createRectangle, createCircle, createText])
+  }, [isShiftPressed, shapeMode, lineCreationStart, transformToCanvasCoords, clearSelection, createRectangle, createCircle, createLine, createText])
 
   // NEW: Handle stage mouse up (for selection box completion)
   const handleStageMouseUp = useCallback(async () => {
@@ -754,8 +756,7 @@ const Canvas: React.FC<CanvasProps> = ({
   useEffect(() => {
     copySelectedRectanglesRef.current = copySelectedRectangles  // CHANGED
     pasteRectanglesRef.current = pasteRectangles        // CHANGED
-    duplicateRectangleRef.current = duplicateRectangle
-  }, [copySelectedRectangles, pasteRectangles, duplicateRectangle])
+  }, [copySelectedRectangles, pasteRectangles])
 
   // Keep layering operation refs updated
   useEffect(() => {
@@ -857,8 +858,8 @@ const Canvas: React.FC<CanvasProps> = ({
       // Duplicate: Cmd+D (Mac) or Ctrl+D (Windows/Linux) - only works with single selection
       if ((e.metaKey || e.ctrlKey) && e.key === 'd' && !isTyping) {
         e.preventDefault() // Prevent browser bookmark shortcut
-        if (selectedShapes.size === 1 && primarySelectionId) {
-          duplicateRectangleRef.current?.(primarySelectionId)
+        if (selectedShapes.size === 1 && primarySelectionId && primarySelectionType) {
+          duplicateShape(primarySelectionId, primarySelectionType)
         } else if (selectedShapes.size > 1) {
           showToast('Duplicate only works with single selection')
         }
@@ -1192,8 +1193,8 @@ const Canvas: React.FC<CanvasProps> = ({
           onWheel={handleWheel}
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
-          onMouseDown={handleStageMouseDown}  // CHANGED: Use mousedown for selection box and line creation
-          onDblClick={handleStageDoubleClick}  // NEW: Double-click to create shapes (rectangle, circle, text)
+          onMouseDown={handleStageMouseDown}  // CHANGED: Use mousedown for selection box and lasso
+          onDblClick={handleStageDoubleClick}  // NEW: Double-click to create shapes (rectangle, circle, line, text)
           onMouseMove={handleMouseMove}  // CHANGED: Merged cursor broadcasting + selection box
           onMouseUp={handleStageMouseUp}      // NEW: Complete selection box
           className={isLassoMode ? 'lasso-cursor' : (isShiftPressed ? 'selection-mode' : (isDragging ? 'dragging' : ''))}  // CSS classes for cursor
