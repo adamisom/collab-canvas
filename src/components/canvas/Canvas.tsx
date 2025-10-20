@@ -999,6 +999,18 @@ const Canvas: React.FC<CanvasProps> = ({
     return sortedTexts.filter(t => !selectedShapes.has(t.id) || selectedShapes.size === 1)
   }, [sortedTexts, selectedShapes])
 
+  // Merge all shapes into a single array sorted by zIndex for correct rendering order
+  const allShapesSorted = useMemo(() => {
+    const shapes: Array<{ shape: RectangleType | typeof circles[0] | typeof lines[0] | typeof texts[0]; type: ShapeType; zIndex: number }> = []
+    
+    otherRectangles.forEach(r => shapes.push({ shape: r, type: 'rectangle', zIndex: r.zIndex ?? 0 }))
+    otherCircles.forEach(c => shapes.push({ shape: c, type: 'circle', zIndex: c.zIndex ?? 0 }))
+    otherLines.forEach(l => shapes.push({ shape: l, type: 'line', zIndex: l.zIndex ?? 0 }))
+    otherTexts.forEach(t => shapes.push({ shape: t, type: 'text', zIndex: t.zIndex ?? 0 }))
+    
+    return shapes.sort((a, b) => a.zIndex - b.zIndex)
+  }, [otherRectangles, otherCircles, otherLines, otherTexts])
+
   // Keep clipboard operation refs updated
   useEffect(() => {
     copySelectedShapesRef.current = copySelectedShapes  // CHANGED
@@ -1615,57 +1627,79 @@ const Canvas: React.FC<CanvasProps> = ({
           className={isLassoMode ? 'lasso-cursor' : (isShiftPressed ? 'selection-mode' : (isDragging ? 'dragging' : ''))}  // CSS classes for cursor
         >
           <Layer>
-            {/* Render non-selected or single-selected rectangles */}
-            {otherRectangles.map((rectangle) => (
-              <Rectangle
-                key={rectangle.id}
-                rectangle={rectangle}
-                isSelected={selectedShapes.has(rectangle.id)}
-                isPrimary={rectangle.id === primarySelectionId}
-                isShiftPressed={isShiftPressed}
-                onClick={handleRectangleClick}
-                onDragStart={handleRectangleDragStart}
-                onDragEnd={handleRectangleDragEnd}
-                onResize={handleRectangleResize}
-                onResizeStart={handleResizeStart}
-                onResizeEnd={handleResizeEnd}
-                onRotate={handleRotate}
-              />
-            ))}
-            
-            {/* PR #6: Render circles (sorted by zIndex, excluding multi-select group) */}
-            {otherCircles.map((circle) => (
-              <Circle
-                key={circle.id}
-                circle={circle}
-                isSelected={selectedShapes.has(circle.id)}
-                isPrimary={circle.id === primarySelectionId}
-                isShiftPressed={isShiftPressed}
-                onClick={handleCircleClick}
-                onDragStart={handleCircleDragStart}
-                onDragEnd={handleCircleDragEnd}
-                onResize={handleCircleResize}
-                onResizeStart={handleResizeStart}
-                onResizeEnd={handleResizeEnd}
-              />
-            ))}
-            
-            {/* PR #7: Render lines (sorted by zIndex, excluding multi-select group) */}
-            {otherLines.map((line) => (
-              <Line
-                key={line.id}
-                line={line}
-                isSelected={selectedShapes.has(line.id)}
-                isPrimary={line.id === primarySelectionId}
-                isShiftPressed={isShiftPressed}
-                onClick={handleLineClick}
-                onDragStart={handleLineDragStart}
-                onDragEnd={handleLineDragEnd}
-                onEndpointsChange={handleLineEndpointsChange}
-                onResizeStart={handleResizeStart}
-                onResizeEnd={handleResizeEnd}
-              />
-            ))}
+            {/* Render all shapes sorted by zIndex (lower zIndex = render first = behind) */}
+            {allShapesSorted.map(({ shape, type }) => {
+              if (type === 'rectangle') {
+                const rectangle = shape as RectangleType
+                return (
+                  <Rectangle
+                    key={rectangle.id}
+                    rectangle={rectangle}
+                    isSelected={selectedShapes.has(rectangle.id)}
+                    isPrimary={rectangle.id === primarySelectionId}
+                    isShiftPressed={isShiftPressed}
+                    onClick={handleRectangleClick}
+                    onDragStart={handleRectangleDragStart}
+                    onDragEnd={handleRectangleDragEnd}
+                    onResize={handleRectangleResize}
+                    onResizeStart={handleResizeStart}
+                    onResizeEnd={handleResizeEnd}
+                    onRotate={handleRotate}
+                  />
+                )
+              } else if (type === 'circle') {
+                const circle = shape as typeof circles[0]
+                return (
+                  <Circle
+                    key={circle.id}
+                    circle={circle}
+                    isSelected={selectedShapes.has(circle.id)}
+                    isPrimary={circle.id === primarySelectionId}
+                    isShiftPressed={isShiftPressed}
+                    onClick={handleCircleClick}
+                    onDragStart={handleCircleDragStart}
+                    onDragEnd={handleCircleDragEnd}
+                    onResize={handleCircleResize}
+                    onResizeStart={handleResizeStart}
+                    onResizeEnd={handleResizeEnd}
+                  />
+                )
+              } else if (type === 'line') {
+                const line = shape as typeof lines[0]
+                return (
+                  <Line
+                    key={line.id}
+                    line={line}
+                    isSelected={selectedShapes.has(line.id)}
+                    isPrimary={line.id === primarySelectionId}
+                    isShiftPressed={isShiftPressed}
+                    onClick={handleLineClick}
+                    onDragStart={handleLineDragStart}
+                    onDragEnd={handleLineDragEnd}
+                    onEndpointsChange={handleLineEndpointsChange}
+                    onResizeStart={handleResizeStart}
+                    onResizeEnd={handleResizeEnd}
+                  />
+                )
+              } else if (type === 'text') {
+                const text = shape as typeof texts[0]
+                return (
+                  <TextShape
+                    key={text.id}
+                    textShape={text}
+                    isSelected={selectedShapes.has(text.id)}
+                    isPrimary={text.id === primarySelectionId}
+                    isShiftPressed={isShiftPressed}
+                    onClick={handleTextClick}
+                    onDragStart={handleTextDragStart}
+                    onDragEnd={handleTextDragEnd}
+                    onTextChange={handleTextChange}
+                    onEditingChange={setIsTextEditing}
+                  />
+                )
+              }
+              return null
+            })}
             
             {/* PR #7: Render line preview during creation (non-interactive) */}
             {lineCreationStart && linePreviewEnd && (
@@ -1678,22 +1712,6 @@ const Canvas: React.FC<CanvasProps> = ({
                 listening={false}
               />
             )}
-            
-            {/* PR #8: Render texts (sorted by zIndex, excluding multi-select group) */}
-            {otherTexts.map((text) => (
-              <TextShape
-                key={text.id}
-                textShape={text}
-                isSelected={selectedShapes.has(text.id)}
-                isPrimary={text.id === primarySelectionId}
-                isShiftPressed={isShiftPressed}
-                onClick={handleTextClick}
-                onDragStart={handleTextDragStart}
-                onDragEnd={handleTextDragEnd}
-                onTextChange={handleTextChange}
-                onEditingChange={setIsTextEditing}
-              />
-            ))}
             
             {/* NEW: Multi-select group (2+ selected) - Konva Group with all selected shapes */}
             {selectedShapes.size > 1 && (() => {
