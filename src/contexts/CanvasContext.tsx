@@ -1655,7 +1655,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       // Check if any shapes are rotated
       const hasRotation = shapesToAlign.some(shape => shape.rotation && shape.rotation !== 0)
       if (hasRotation) {
-        showToast('⚠️ Warning: Alignment does not currently play nice with rotated groups')
+        showToast('Note: You\'re aligning a rotated group')
       }
 
       // Calculate target value based on alignment type
@@ -1704,7 +1704,14 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
             })
           )
 
-          setToastMessage(`Distributed ${shapesToAlign.length} shapes`)
+          // Delay success toast if warning was shown
+          if (hasRotation) {
+            setTimeout(() => {
+              setToastMessage(`Distributed ${shapesToAlign.length} shapes`)
+            }, 1500)
+          } else {
+            setToastMessage(`Distributed ${shapesToAlign.length} shapes`)
+          }
           return
         }
         default:
@@ -1719,7 +1726,14 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
         })
       )
 
-      setToastMessage(`Aligned ${shapesToAlign.length} shapes`)
+      // Delay success toast if warning was shown
+      if (hasRotation) {
+        setTimeout(() => {
+          setToastMessage(`Aligned ${shapesToAlign.length} shapes`)
+        }, 1500)
+      } else {
+        setToastMessage(`Aligned ${shapesToAlign.length} shapes`)
+      }
     } catch (error) {
       console.error('Error aligning shapes:', error)
       setToastMessage('Failed to align shapes')
