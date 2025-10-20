@@ -36,7 +36,8 @@ const Line: React.FC<LineProps> = ({
 
   const handleClick = (e: KonvaEventObject<MouseEvent>) => {
     e.cancelBubble = true
-    onClick(line.id)
+    const cmdOrCtrlPressed = e.evt.metaKey || e.evt.ctrlKey
+    onClick(line.id, cmdOrCtrlPressed)
   }
 
   const handleDragStart = () => {

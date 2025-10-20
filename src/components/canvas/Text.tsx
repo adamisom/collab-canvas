@@ -11,7 +11,7 @@ interface TextProps {
   isSelected: boolean
   isPrimary: boolean
   isShiftPressed: boolean
-  onClick: (id: string) => void
+  onClick: (id: string, cmdOrCtrlPressed?: boolean) => void
   onDragStart: () => void
   onDragEnd: (id: string, x: number, y: number) => void
   onTextChange: (id: string, newText: string) => void
@@ -35,7 +35,8 @@ const Text: React.FC<TextProps> = ({
 
   const handleClick = useCallback((e: KonvaEventObject<MouseEvent>) => {
     e.cancelBubble = true
-    onClick(textShape.id)
+    const cmdOrCtrlPressed = e.evt.metaKey || e.evt.ctrlKey
+    onClick(textShape.id, cmdOrCtrlPressed)
   }, [onClick, textShape.id])
 
   const handleDblClick = useCallback((e: KonvaEventObject<MouseEvent>) => {
