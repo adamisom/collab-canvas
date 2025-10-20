@@ -15,6 +15,7 @@ interface RectangleProps {
   isSelected?: boolean
   isPrimary?: boolean  // NEW: Is this the primary selection (shows resize handles)
   isShiftPressed?: boolean  // NEW: Is Shift key pressed (disables dragging for selection box)
+  isInMultiSelectGroup?: boolean  // NEW: Is this part of a multi-select group (disables individual dragging)
   onClick?: (rectangle: Rectangle, cmdOrCtrlPressed: boolean) => void
   onDragStart?: (rectangle: Rectangle) => void
   onDragEnd?: (rectangle: Rectangle, newX: number, newY: number) => void
@@ -29,6 +30,7 @@ const RectangleComponent: React.FC<RectangleProps> = ({
   isSelected = false,
   isPrimary = false,  // NEW
   isShiftPressed = false,  // NEW
+  isInMultiSelectGroup = false,  // NEW
   onClick,
   onDragStart,
   onDragEnd,
@@ -94,7 +96,7 @@ const RectangleComponent: React.FC<RectangleProps> = ({
       }
       
       // Manually start the drag since the draggable prop update won't happen in time
-      if (rectRef.current && !isShiftPressed) {
+      if (rectRef.current && !isShiftPressed && !isInMultiSelectGroup) {
         rectRef.current.startDrag()
       }
     }
@@ -226,7 +228,7 @@ const RectangleComponent: React.FC<RectangleProps> = ({
               : DEFAULT_RECT.STROKE_WIDTH
         }
         dash={isSelectedByOther ? [5, 5] : undefined}
-        draggable={isSelected && !isResizing && !isShiftPressed && dragEnabled}
+        draggable={isSelected && !isResizing && !isShiftPressed && !isInMultiSelectGroup && dragEnabled}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}

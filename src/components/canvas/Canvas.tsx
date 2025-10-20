@@ -1309,6 +1309,7 @@ const Canvas: React.FC<CanvasProps> = ({
                       isSelected={true}
                       isPrimary={rectangle.id === primarySelectionId}
                       isShiftPressed={isShiftPressed}
+                      isInMultiSelectGroup={true}
                       onClick={handleRectangleClick}
                       onDragStart={handleRectangleDragStart}
                       onDragEnd={handleRectangleDragEnd}
