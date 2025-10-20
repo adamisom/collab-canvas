@@ -410,18 +410,8 @@ const Canvas: React.FC<CanvasProps> = ({
     
     // Cmd/Ctrl+Click: Add/remove from multi-select (toggle)
     if (cmdOrCtrlPressed) {
-      const isAlreadySelected = selectedShapes.has(rectangle.id)
-      
-      if (isAlreadySelected) {
-        // Remove from selection
-        const newSelection = Array.from(selectedShapes.keys()).filter(id => id !== rectangle.id)
-        await selectMultiple(newSelection)
-      } else {
-        // Add to selection
-        const newSelection = Array.from(selectedShapes.keys())
-        newSelection.push(rectangle.id)
-        await selectMultiple(newSelection)
-      }
+      // selectRectangle with additive=true handles toggle automatically
+      await selectRectangle(rectangle.id, true)
       return
     }
     
@@ -1283,10 +1273,11 @@ const Canvas: React.FC<CanvasProps> = ({
             {/* NEW: Multi-select group (2+ selected) - Konva Group with all selected rectangles */}
             {multiSelectRectangles.length > 1 && (() => {
               const MARGIN = 8
-              const minX = Math.min(...multiSelectRectangles.map(r => r.x)) - MARGIN
-              const minY = Math.min(...multiSelectRectangles.map(r => r.y)) - MARGIN
-              const maxX = Math.max(...multiSelectRectangles.map(r => r.x + r.width)) + MARGIN
-              const maxY = Math.max(...multiSelectRectangles.map(r => r.y + r.height)) + MARGIN
+              // Rectangles use center-based coords (offsetX/offsetY = width/2, height/2)
+              const minX = Math.min(...multiSelectRectangles.map(r => r.x - r.width / 2)) - MARGIN
+              const minY = Math.min(...multiSelectRectangles.map(r => r.y - r.height / 2)) - MARGIN
+              const maxX = Math.max(...multiSelectRectangles.map(r => r.x + r.width / 2)) + MARGIN
+              const maxY = Math.max(...multiSelectRectangles.map(r => r.y + r.height / 2)) + MARGIN
               
               return (
                 <Group
