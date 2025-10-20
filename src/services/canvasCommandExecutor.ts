@@ -139,6 +139,25 @@ export class CanvasCommandExecutor {
   }
 
   /**
+   * Get shape type by ID (searches all shape collections)
+   */
+  private getShapeTypeById(shapeId: string): 'rectangle' | 'circle' | 'line' | 'text' | null {
+    if (this.context.rectangles?.find(r => r.id === shapeId)) {
+      return 'rectangle'
+    }
+    if (this.context.circles?.find(c => c.id === shapeId)) {
+      return 'circle'
+    }
+    if (this.context.lines?.find(l => l.id === shapeId)) {
+      return 'line'
+    }
+    if (this.context.texts?.find(t => t.id === shapeId)) {
+      return 'text'
+    }
+    return null
+  }
+
+  /**
    * Get selected shape info (or null if none selected)
    */
   getSelectedShape(): SelectedShape | null {
@@ -399,17 +418,22 @@ export class CanvasCommandExecutor {
       throw new Error('No shape ID provided')
     }
 
-    // Get shape type
-    const shapeType = this.context.primarySelectionType
-
-    // Only validate existence if not using createdRectangleId (to avoid race condition)
-    if (!createdRectangleId && !shapeType) {
-      throw new Error(`Shape ${shapeId} not found or was deleted`)
-    }
-
     // Validate color
     if (!this.isValidColor(params.color)) {
       throw new Error(`Invalid color: ${params.color}`)
+    }
+
+    // If using createdRectangleId, assume it's a rectangle (to avoid race condition)
+    if (createdRectangleId) {
+      await this.context.changeRectangleColor(shapeId, params.color)
+      return
+    }
+
+    // Get shape type by looking up the shapeId in the actual shape collections
+    const shapeType = this.getShapeTypeById(shapeId)
+
+    if (!shapeType) {
+      throw new Error(`Shape ${shapeId} not found or was deleted`)
     }
 
     // Call the appropriate color change method based on shape type
@@ -446,8 +470,12 @@ export class CanvasCommandExecutor {
     const x = this.clampNumber(params.x, CANVAS_BOUNDS.MIN_X, CANVAS_BOUNDS.MAX_X)
     const y = this.clampNumber(params.y, CANVAS_BOUNDS.MIN_Y, CANVAS_BOUNDS.MAX_Y)
 
-    // Determine shape type and update accordingly
-    const shapeType = this.context.primarySelectionType
+    // Determine shape type by looking up the shapeId
+    const shapeType = this.getShapeTypeById(shapeId)
+    
+    if (!shapeType) {
+      throw new Error(`Shape ${shapeId} not found or was deleted`)
+    }
     
     switch (shapeType) {
       case 'rectangle':
@@ -519,8 +547,18 @@ export class CanvasCommandExecutor {
       throw new Error('No shape ID provided')
     }
 
-    // Determine shape type and delete accordingly
-    const shapeType = this.context.primarySelectionType
+    // If using createdRectangleId, assume it's a rectangle (to avoid race condition)
+    if (createdRectangleId) {
+      await this.context.deleteRectangle(shapeId)
+      return
+    }
+
+    // Determine shape type by looking up the shapeId
+    const shapeType = this.getShapeTypeById(shapeId)
+    
+    if (!shapeType) {
+      throw new Error(`Shape ${shapeId} not found or was deleted`)
+    }
     
     switch (shapeType) {
       case 'rectangle':
@@ -552,8 +590,8 @@ export class CanvasCommandExecutor {
       throw new Error('No shape selected to duplicate')
     }
 
-    // Determine shape type and duplicate accordingly
-    const shapeType = this.context.primarySelectionType
+    // Determine shape type by looking up the shapeId
+    const shapeType = this.getShapeTypeById(shapeId)
     
     if (!shapeType) {
       throw new Error('Unknown shape type for duplication')
@@ -574,8 +612,8 @@ export class CanvasCommandExecutor {
       throw new Error('No shape selected to bring to front')
     }
 
-    // Get shape type for validation
-    const shapeType = this.context.primarySelectionType
+    // Get shape type for validation by looking up the shapeId
+    const shapeType = this.getShapeTypeById(shapeId)
 
     // Only validate existence if not using createdRectangleId (to avoid race condition)
     if (!createdRectangleId && !shapeType) {
@@ -597,8 +635,8 @@ export class CanvasCommandExecutor {
       throw new Error('No shape selected to send to back')
     }
 
-    // Get shape type for validation
-    const shapeType = this.context.primarySelectionType
+    // Get shape type for validation by looking up the shapeId
+    const shapeType = this.getShapeTypeById(shapeId)
 
     // Only validate existence if not using createdRectangleId (to avoid race condition)
     if (!createdRectangleId && !shapeType) {

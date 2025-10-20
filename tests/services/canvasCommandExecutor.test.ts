@@ -199,7 +199,7 @@ describe('CanvasCommandExecutor', () => {
           tool: 'moveShape',  // Renamed from moveRectangle
           parameters: { shapeId: 'deleted-rect', x: 200, y: 300 }
         })
-      ).rejects.toThrow('Unknown shape type')
+      ).rejects.toThrow('not found')
     })
 
     it('should allow operations on existing rectangles', async () => {

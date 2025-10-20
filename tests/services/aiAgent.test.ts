@@ -253,10 +253,11 @@ describe('AIAgent', () => {
 
       const result = await agent.processCommand('Create, change color, and delete')
 
-      // Should succeed creating but fail on color change (createdRectangleId prevents existence check, so it succeeds)
-      // The test expectation was wrong - with createdRectangleId, all commands succeed
+      // With createdRectangleId flow, all commands succeed (no existence checks)
+      // The second command uses createdRectangleId instead of 'non-existent'
+      // The third command also uses createdRectangleId instead of 'rect1'
       expect(result.success).toBe(true)
-      expect(mockContext.deleteRectangle).toHaveBeenCalled()
+      expect(mockContext.deleteRectangle).toHaveBeenCalledWith('new-rect')
     })
 
     it('should report partial success (e.g. 3/5 succeeded)', async () => {
