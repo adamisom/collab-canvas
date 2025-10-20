@@ -181,6 +181,37 @@
         "username": { ".validate": "newData.isString()" },
         "timestamp": { ".validate": "newData.isNumber()" }
       }
+    },
+    
+    // Phase 3F PR #18: Comments - attached to shapes
+    "comments": {
+      ".read": "auth != null",
+      "$commentId": {
+        ".write": "auth != null && (!data.exists() || data.child('authorId').val() === auth.uid)",
+        ".validate": "newData.hasChildren(['id', 'shapeId', 'text', 'authorId', 'authorName', 'createdAt', 'updatedAt'])",
+        
+        "id": {
+          ".validate": "newData.isString() && newData.val() === $commentId"
+        },
+        "shapeId": {
+          ".validate": "newData.isString() && newData.val().length > 0"
+        },
+        "text": {
+          ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 500"
+        },
+        "authorId": {
+          ".validate": "newData.isString() && newData.val() === auth.uid"
+        },
+        "authorName": {
+          ".validate": "newData.isString() && newData.val().length > 0"
+        },
+        "createdAt": {
+          ".validate": "newData.isNumber() && (!data.exists() || newData.val() === data.val())"
+        },
+        "updatedAt": {
+          ".validate": "newData.isNumber()"
+        }
+      }
     }
   }
 }

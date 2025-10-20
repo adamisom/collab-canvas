@@ -1,0 +1,120 @@
+.comments-panel {
+  position: absolute;
+  top: 60px;  /* Below info bar */
+  right: 20px;
+  width: 360px;
+  max-height: 500px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.panel-header {
+  padding: 16px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f9fafb;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.panel-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.panel-header .close-button {
+  background: none;
+  border: none;
+  font-size: 18px;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 4px;
+  line-height: 1;
+  transition: color 0.2s;
+}
+
+.panel-header .close-button:hover {
+  color: #1f2937;
+}
+
+.comment-input-container {
+  padding: 12px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.comment-input-container textarea {
+  width: 100%;
+  min-height: 60px;
+  padding: 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 14px;
+  font-family: inherit;
+  resize: vertical;
+  margin-bottom: 8px;
+}
+
+.comment-input-container textarea:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
+.comment-input-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.comment-char-count {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.comment-char-count.error {
+  color: #dc2626;
+}
+
+.comment-input-actions button {
+  padding: 6px 16px;
+  font-size: 13px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.comment-input-actions button.submit {
+  background: #3b82f6;
+  color: white;
+}
+
+.comment-input-actions button.submit:hover:not(:disabled) {
+  background: #2563eb;
+}
+
+.comment-input-actions button.submit:disabled {
+  background: #cbd5e1;
+  cursor: not-allowed;
+}
+
+.comments-list {
+  flex: 1;
+  overflow-y: auto;
+  max-height: 350px;
+}
+
+.empty-state {
+  padding: 40px 20px;
+  text-align: center;
+  color: #9ca3af;
+  font-size: 14px;
+}
+

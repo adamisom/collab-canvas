@@ -20,6 +20,8 @@ import AlignmentToolbar from '../ui/AlignmentToolbar'  // Phase 3D PR #10
 import LassoPath from './LassoPath'  // Phase 3D PR #11
 import SelectTypeModal from '../ui/SelectTypeModal'  // Phase 3D PR #11
 import Toast from '../ui/Toast'
+import { useComments } from '../../contexts/CommentsContext'  // Phase 3F PR #18
+import CommentsPanel from '../comments/CommentsPanel'  // Phase 3F PR #18
 import type { Rectangle as RectangleType } from '../../services/canvasService'
 import type { ShapeType } from '../../shared/shapes'  // Phase 3D PR #12
 import './Canvas.css'
@@ -65,6 +67,9 @@ const Canvas: React.FC<CanvasProps> = ({
   
   // Phase 3D PR #11: Select-all-type modal state
   const [showSelectTypeModal, setShowSelectTypeModal] = useState(false)
+  
+  // Phase 3F PR #18: Comments panel state
+  const [commentsPanelOpen, setCommentsPanelOpen] = useState(false)
   
   // Track if user just used AI command (to prevent accidental deselect on first click)
   const justUsedAICommandRef = useRef(false)
@@ -128,7 +133,9 @@ const Canvas: React.FC<CanvasProps> = ({
   
   // Get cursors context
   const { cursors, updateCursor, error: cursorsError } = useCursors()
-
+  
+  // Phase 3F PR #18: Get comments context
+  const { getCommentsForShape, hasUnreadComments, markShapeAsRead } = useComments()
 
   // Get current stage position (for keyboard navigation)
   const getCurrentStagePosition = useCallback(() => {
@@ -1394,6 +1401,43 @@ const Canvas: React.FC<CanvasProps> = ({
               />
             </div>
           )}
+          
+          {/* Phase 3F PR #18: Comment Icon (only for single shape selection) */}
+          {selectedShape && selectedShapes.size === 1 && (() => {
+            const selectedShapeId = selectedShape.id
+            const commentCount = getCommentsForShape(selectedShapeId).length
+            const hasComments = commentCount > 0
+            const hasUnread = hasUnreadComments(selectedShapeId)
+            
+            const handleCommentIconClick = () => {
+              setCommentsPanelOpen(!commentsPanelOpen)
+              // Mark as read when opening panel
+              if (!commentsPanelOpen) {
+                markShapeAsRead(selectedShapeId)
+              }
+            }
+            
+            return (
+              <>
+                <button
+                  className={`comment-icon-button ${hasComments ? 'has-comments' : ''}`}
+                  onClick={handleCommentIconClick}
+                  title={`Comments (${commentCount})`}
+                >
+                  💬
+                  {hasUnread && <div className="comment-unread-indicator" />}
+                </button>
+                
+                {/* Comments panel dropdown */}
+                {commentsPanelOpen && (
+                  <CommentsPanel
+                    shapeId={selectedShapeId}
+                    onClose={() => setCommentsPanelOpen(false)}
+                  />
+                )}
+              </>
+            )
+          })()}
           
           {/* PR #9: Text Format Toolbar - positioned above selected text */}
           {selectedText && (() => {

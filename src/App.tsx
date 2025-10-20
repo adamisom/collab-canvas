@@ -3,6 +3,7 @@ import './App.css'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { CanvasProvider, useCanvas } from './contexts/CanvasContext'
 import { UserProfilesProvider } from './contexts/UserProfilesContext'
+import { CommentsProvider } from './contexts/CommentsContext'  // Phase 3F PR #18
 import { useCursors } from './hooks/useCursors'
 import SignInModal from './components/auth/SignInModal'
 import Header from './components/layout/Header'
@@ -81,7 +82,9 @@ const AppContent: React.FC = () => {
       <div className="App">
         <Header />
         <CanvasProvider>
-          <CanvasContent />
+          <CommentsProvider>
+            <CanvasContent />
+          </CommentsProvider>
         </CanvasProvider>
       </div>
     </UserProfilesProvider>
