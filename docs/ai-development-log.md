@@ -93,7 +93,13 @@ Sunday should be a protected personal day. Feels wrong that it wasn't. Could've 
 
 ---
 
-### 3. **Coding with Cursor is so freakin awesome**
+### 3. *Even a 5-10min iteration cycle sucks now**
+
+Curse Firebase Cloud functions and the eternity between testing different versions.
+
+---
+
+### 4. **Coding with Cursor is so freakin awesome**
 
 I'm surprised to find I understand why people put in such long hours, seems drug-like.
 
