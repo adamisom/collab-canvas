@@ -265,17 +265,17 @@ export class AIAgent {
         return rect.id
       }
       case 'createCircle': {
-        const circle = await this.executor['executeCreateCircle'](command.parameters)
+        const circle = await this.executor['executeCreateCircle'](command.parameters as { x?: number; y?: number; radius?: number; color?: string })
         if (!circle) throw new Error('Failed to create circle')
         return circle.id
       }
       case 'createLine': {
-        const line = await this.executor['executeCreateLine'](command.parameters)
+        const line = await this.executor['executeCreateLine'](command.parameters as { x: number; y: number; endX: number; endY: number; color?: string })
         if (!line) throw new Error('Failed to create line')
         return line.id
       }
       case 'createText': {
-        const text = await this.executor['executeCreateText'](command.parameters)
+        const text = await this.executor['executeCreateText'](command.parameters as { x?: number; y?: number; text: string; fontSize?: number; color?: string })
         if (!text) throw new Error('Failed to create text')
         return text.id
       }

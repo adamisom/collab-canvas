@@ -154,6 +154,7 @@ export class CanvasCommandExecutor {
         if (!rectangle) return null
         return {
           id: rectangle.id,
+          type: 'rectangle',
           color: rectangle.color,
           x: rectangle.x,
           y: rectangle.y,
@@ -167,6 +168,7 @@ export class CanvasCommandExecutor {
         if (!circle) return null
         return {
           id: circle.id,
+          type: 'circle',
           color: circle.color,
           x: circle.x,
           y: circle.y,
@@ -180,6 +182,7 @@ export class CanvasCommandExecutor {
         if (!line) return null
         return {
           id: line.id,
+          type: 'line',
           color: line.color,
           x: line.x,
           y: line.y,
@@ -193,6 +196,7 @@ export class CanvasCommandExecutor {
         if (!text) return null
         return {
           id: text.id,
+          type: 'text',
           color: text.color,
           x: text.x,
           y: text.y,
