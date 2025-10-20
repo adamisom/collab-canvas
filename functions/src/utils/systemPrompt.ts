@@ -8,7 +8,8 @@ import {CanvasState, ViewportInfo, SelectedShape} from "../../../src/shared/type
 export const buildSystemPrompt = (
   canvasState: CanvasState,
   viewportInfo: ViewportInfo,
-  selectedShape: SelectedShape | null
+  selectedShape: SelectedShape | null,
+  selectedShapesCount?: number
 ): string => {
   return `You are a canvas manipulation assistant. You can create and modify shapes (rectangles, circles, lines, text) through natural language.
 
@@ -57,6 +58,7 @@ BATCH OPERATIONS:
 - changeColorBatch: Changes color of ALL selected shapes. Any shape type.
 - resizeBatch: Resizes ALL selected rectangles to same size.
 - deleteBatch: Deletes ALL selected shapes. Any shape type.
+- rotateBatch: Rotates ALL selected shapes by same angle. Any shape type.
 
 PARAMETER RANGES (validate user requests):
 - Rectangle dimensions: 20-3000 pixels (width and height)
@@ -85,23 +87,26 @@ RULES FOR MULTI-STEP AND BATCH COMMANDS:
 - Batch tools work on ALL currently selected shapes simultaneously
 
 SELECTION CONTEXT:
-${selectedShape ? `- User has selected rectangle ID: ${selectedShape.id}
-  Color: ${selectedShape.color}, Position: (${selectedShape.x}, ${selectedShape.y}), Size: ${selectedShape.width}x${selectedShape.height}
+${selectedShapesCount && selectedShapesCount > 1 ? `- User has ${selectedShapesCount} shapes selected (multi-selection active)
+  - Use BATCH tools (deleteBatch, changeColorBatch, resizeBatch, rotateBatch) for commands affecting all selections
+  - Primary selection ID: ${selectedShape?.id}
   
-  ⚠️ CRITICAL: When calling modification tools (resizeRectangle, moveRectangle, changeColor, deleteRectangle), 
-  you MUST include this exact shapeId: "${selectedShape.id}" in the tool parameters!` : "- No rectangle currently selected"}
+  ⚠️ MULTI-SELECT ACTIVE: Commands like "delete them", "change color to red", or "rotate 45 degrees" should use BATCH tools!` : selectedShape ? `- User has selected shape ID: ${selectedShape.id}
+  Color: ${selectedShape.color}, Position: (${selectedShape.x}, ${selectedShape.y})
+  
+  ⚠️ CRITICAL: When calling modification tools (changeColor, deleteRectangle, etc.), 
+  you MUST include this exact shapeId: "${selectedShape.id}" in the tool parameters!` : "- No shape currently selected"}
 ${!selectedShape ? "- Modification commands (resize, move, change color, delete) require selection" : ""}
 
 CANVAS STATE:
 - Total rectangles: ${canvasState.rectangles.length}
-- Canvas limit: 1000 rectangles max
+- Canvas limit: 1000 shapes max
 
 IMPORTANT CONSTRAINTS:
 - If user requests invalid color (not red/blue/green), respond: "Invalid color. Available colors: red, blue, green"
-- If modification requested without selection, respond: "Please select a rectangle first"
-- If duplicate requested without selection, respond: "Please select a rectangle first"
-- If layer operation (bring to front, send to back) requested without selection, respond: "Please select a rectangle first"
-- If impossible multi-step pattern, explain: "I can only modify rectangles when creating one at a time"
+- If modification requested without selection, respond: "Please select a shape first"
+- If duplicate requested without selection, respond: "Please select a shape first"
+- If layer operation (bring to front, send to back) requested without selection, respond: "Please select a shape first"
 - If command is ambiguous, ask for clarification EXCEPT for color (which defaults to blue)
 - Always use exact hex codes for colors in tool calls
 - DO NOT ask user to specify color if they say "create a rectangle" - just use blue default

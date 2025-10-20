@@ -41,7 +41,7 @@ export const processAICommand = functions.https.onCall(
 
     const userId = request.auth.uid;
     const data = request.data as ProcessAICommandRequest;
-    const {userMessage, canvasState, viewportInfo, selectedShape} = data;
+    const {userMessage, canvasState, viewportInfo, selectedShape, selectedShapesCount} = data;
 
     // Validate request
     if (!userMessage || typeof userMessage !== "string") {
@@ -77,7 +77,8 @@ export const processAICommand = functions.https.onCall(
       const systemPrompt = buildSystemPrompt(
         canvasState,
         viewportInfo,
-        selectedShape
+        selectedShape,
+        selectedShapesCount
       );
 
       // Create OpenAI provider with API key

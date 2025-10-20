@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { CanvasProvider, useCanvas } from './contexts/CanvasContext'
 import { CommentsProvider } from './contexts/CommentsContext'  // Phase 3F PR #18
 import { useCursors } from './hooks/useCursors'
+import ErrorBoundary from './components/ui/ErrorBoundary'
 import SignInModal from './components/auth/SignInModal'
 import Header from './components/layout/Header'
 import Canvas from './components/canvas/Canvas'
@@ -79,11 +80,13 @@ const AppContent: React.FC = () => {
   return (
     <div className="App">
       <Header />
-      <CanvasProvider>
-        <CommentsProvider>
-          <CanvasContent />
-        </CommentsProvider>
-      </CanvasProvider>
+      <ErrorBoundary>
+        <CanvasProvider>
+          <CommentsProvider>
+            <CanvasContent />
+          </CommentsProvider>
+        </CanvasProvider>
+      </ErrorBoundary>
     </div>
   )
 }

@@ -55,6 +55,7 @@ export interface ProcessAICommandRequest {
   canvasState: CanvasState;
   viewportInfo: ViewportInfo;
   selectedShape: SelectedShape | null;
+  selectedShapesCount?: number;  // Total number of selected shapes (for multi-select)
 }
 
 export interface ProcessAICommandResponse {
@@ -132,5 +133,6 @@ export interface CommandSnapshot {
   canvasState: CanvasState;
   viewportInfo?: ViewportInfo;
   selectedShapeId: string | null;
+  selectedShapesCount?: number;  // Total number of selected shapes
 }
 

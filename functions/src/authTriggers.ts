@@ -1,9 +1,10 @@
-import { onAuthUserCreated, onAuthUserDeleted } from 'firebase-functions/v2/auth'
+import * as functions from 'firebase-functions/v1'
 import * as admin from 'firebase-admin'
+import type { UserRecord } from 'firebase-functions/v1/auth'
 
 // Automatically create user profile when user signs in for first time
-export const onUserCreated = onAuthUserCreated(async (event) => {
-  const { uid, email, displayName } = event.data
+export const onUserCreated = functions.auth.user().onCreate(async (user: UserRecord) => {
+  const { uid, email, displayName } = user
   
   try {
     await admin.database().ref(`users/${uid}`).set({
@@ -22,8 +23,8 @@ export const onUserCreated = onAuthUserCreated(async (event) => {
 })
 
 // Clean up user data when account is deleted
-export const onUserDeleted = onAuthUserDeleted(async (event) => {
-  const { uid } = event.data
+export const onUserDeleted = functions.auth.user().onDelete(async (user: UserRecord) => {
+  const { uid } = user
   
   try {
     // Remove user profile

@@ -110,17 +110,56 @@ export class CanvasCommandExecutor {
     const selectedId = this.context.primarySelectionId
     if (!selectedId) return null
 
+    // Check all shape types
     const rectangle = this.context.rectangles.find(r => r.id === selectedId)
-    if (!rectangle) return null
-
-    return {
-      id: rectangle.id,
-      color: rectangle.color,
-      x: rectangle.x,
-      y: rectangle.y,
-      width: rectangle.width,
-      height: rectangle.height
+    if (rectangle) {
+      return {
+        id: rectangle.id,
+        color: rectangle.color,
+        x: rectangle.x,
+        y: rectangle.y,
+        width: rectangle.width,
+        height: rectangle.height
+      }
     }
+
+    const circle = this.context.circles.find(c => c.id === selectedId)
+    if (circle) {
+      return {
+        id: circle.id,
+        color: circle.color,
+        x: circle.x,
+        y: circle.y,
+        width: circle.radius * 2,  // Approximate as width
+        height: circle.radius * 2  // Approximate as height
+      }
+    }
+
+    const line = this.context.lines.find(l => l.id === selectedId)
+    if (line) {
+      return {
+        id: line.id,
+        color: line.color,
+        x: line.x,
+        y: line.y,
+        width: Math.abs(line.endX - line.x),
+        height: Math.abs(line.endY - line.y)
+      }
+    }
+
+    const text = this.context.texts.find(t => t.id === selectedId)
+    if (text) {
+      return {
+        id: text.id,
+        color: text.color,
+        x: text.x,
+        y: text.y,
+        width: text.measuredWidth || 100,
+        height: text.measuredHeight || 20
+      }
+    }
+
+    return null
   }
 
   /**
@@ -197,6 +236,10 @@ export class CanvasCommandExecutor {
 
       case 'deleteBatch':
         await this.executeDeleteBatch()
+        break
+
+      case 'rotateBatch':
+        await this.executeRotateBatch(parameters as { angle: number })
         break
 
       case 'createCircle':
@@ -664,6 +707,23 @@ export class CanvasCommandExecutor {
     }
 
     await this.context.deleteSelectedShapes()
+  }
+
+  /**
+   * Phase 3F: Rotate all selected shapes (Batch)
+   */
+  private async executeRotateBatch(params: { angle: number }): Promise<void> {
+    const { angle } = params
+
+    // Require at least one shape to be selected
+    if (this.context.selectedShapes.size === 0) {
+      throw new Error('No shapes selected. Please select one or more shapes first.')
+    }
+
+    // Rotate all selected shapes
+    for (const [shapeId, shapeType] of this.context.selectedShapes.entries()) {
+      await this.context.rotateShape(shapeId, shapeType, angle)
+    }
   }
 
   /**

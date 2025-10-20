@@ -28,10 +28,10 @@ export const createRectangleTool = tool({
 });
 
 /**
- * Tool 2: Change color of existing rectangle
+ * Tool 2: Change color of any selected shape
  */
 export const changeColorTool = tool({
-  description: "Change the color of an existing rectangle. Requires a rectangle to be selected.",
+  description: "Change the color of any selected shape (rectangle, circle, line, or text). Works on single or multiple selections.",
   inputSchema: z.object({
     shapeId: z.string().optional().describe(PARAM_DESCRIPTIONS.SHAPE_ID),
     color: z.enum(VALID_RECTANGLE_COLORS).describe(PARAM_DESCRIPTIONS.COLOR),
@@ -197,7 +197,17 @@ export const deleteBatchTool = tool({
 });
 
 /**
- * Tool 16: Create a circle (Phase 3C)
+ * Tool 16: Rotate all selected shapes (Batch)
+ */
+export const rotateBatchTool = tool({
+  description: "Rotate ALL currently selected shapes at once. Works with multiple shapes of any type. Positive angles rotate clockwise.",
+  inputSchema: z.object({
+    angle: z.number().min(-360).max(360).describe("Rotation angle in degrees (positive = clockwise, negative = counter-clockwise)"),
+  }),
+});
+
+/**
+ * Tool 17: Create a circle (Phase 3C)
  */
 export const createCircleTool = tool({
   description: "Create a circle on the canvas. Position defaults to viewport center if not specified. Color defaults to blue if not specified.",
@@ -294,6 +304,7 @@ export const tools = {
   changeColorBatch: changeColorBatchTool,
   resizeBatch: resizeBatchTool,
   deleteBatch: deleteBatchTool,
+  rotateBatch: rotateBatchTool,
   createCircle: createCircleTool,
   createLine: createLineTool,
   createText: createTextTool,
