@@ -270,7 +270,7 @@ export class AIAgent {
         return circle.id
       }
       case 'createLine': {
-        const line = await this.executor['executeCreateLine'](command.parameters as { x: number; y: number; endX: number; endY: number; color?: string })
+        const line = await this.executor['executeCreateLine'](command.parameters as { x?: number; y?: number; endX?: number; endY?: number; color?: string })
         if (!line) throw new Error('Failed to create line')
         return line.id
       }

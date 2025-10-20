@@ -938,8 +938,20 @@ export class CanvasCommandExecutor {
   /**
    * Phase 3F: Create a line
    */
-  private async executeCreateLine(params: { x: number; y: number; endX: number; endY: number; color?: string }): Promise<LineShape | null> {
-    const { x, y, endX, endY } = params
+  private async executeCreateLine(params: { x?: number; y?: number; endX?: number; endY?: number; color?: string }): Promise<LineShape | null> {
+    const viewportInfo = this.getViewportInfo()
+    if (!viewportInfo) {
+      throw new Error('Viewport info not available')
+    }
+
+    // Default to viewport center for start point
+    const x = params.x ?? viewportInfo.centerX
+    const y = params.y ?? viewportInfo.centerY
+    
+    // Default to horizontal line 100 pixels long
+    const endX = params.endX ?? (x + 100)
+    const endY = params.endY ?? y
+    
     const color = params.color ?? '#3b82f6'
 
     return await this.context.createLine(x, y, endX, endY, false, color) // hasArrow = false

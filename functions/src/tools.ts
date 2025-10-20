@@ -234,12 +234,12 @@ export const createCircleTool = tool({
  * Tool 17: Create a line (Phase 3C)
  */
 export const createLineTool = tool({
-  description: "Create a line on the canvas. Requires start and end coordinates. Color defaults to blue if not specified.",
+  description: "Create a line on the canvas. If coordinates not specified, creates a horizontal line at viewport center. Color defaults to blue.",
   inputSchema: z.object({
-    x: z.number().min(CANVAS_BOUNDS.MIN_X).max(CANVAS_BOUNDS.MAX_X).describe("X coordinate of the line's start point"),
-    y: z.number().min(CANVAS_BOUNDS.MIN_Y).max(CANVAS_BOUNDS.MAX_Y).describe("Y coordinate of the line's start point"),
-    endX: z.number().min(CANVAS_BOUNDS.MIN_X).max(CANVAS_BOUNDS.MAX_X).describe("X coordinate of the line's end point"),
-    endY: z.number().min(CANVAS_BOUNDS.MIN_Y).max(CANVAS_BOUNDS.MAX_Y).describe("Y coordinate of the line's end point"),
+    x: z.number().min(CANVAS_BOUNDS.MIN_X).max(CANVAS_BOUNDS.MAX_X).optional().describe("X coordinate of the line's start point (defaults to viewport center)"),
+    y: z.number().min(CANVAS_BOUNDS.MIN_Y).max(CANVAS_BOUNDS.MAX_Y).optional().describe("Y coordinate of the line's start point (defaults to viewport center)"),
+    endX: z.number().min(CANVAS_BOUNDS.MIN_X).max(CANVAS_BOUNDS.MAX_X).optional().describe("X coordinate of the line's end point (defaults to start + 100)"),
+    endY: z.number().min(CANVAS_BOUNDS.MIN_Y).max(CANVAS_BOUNDS.MAX_Y).optional().describe("Y coordinate of the line's end point (defaults to start Y)"),
     color: z.enum(VALID_RECTANGLE_COLORS).optional().describe(PARAM_DESCRIPTIONS.COLOR + " (defaults to blue)"),
   }),
 });
