@@ -108,58 +108,67 @@ export class CanvasCommandExecutor {
    */
   getSelectedShape(): SelectedShape | null {
     const selectedId = this.context.primarySelectionId
-    if (!selectedId) return null
+    const selectedType = this.context.primarySelectionType
+    
+    if (!selectedId || !selectedType) return null
 
-    // Check all shape types
-    const rectangle = this.context.rectangles.find(r => r.id === selectedId)
-    if (rectangle) {
-      return {
-        id: rectangle.id,
-        color: rectangle.color,
-        x: rectangle.x,
-        y: rectangle.y,
-        width: rectangle.width,
-        height: rectangle.height
+    // Use primarySelectionType to check the correct array
+    switch (selectedType) {
+      case 'rectangle': {
+        const rectangle = this.context.rectangles.find(r => r.id === selectedId)
+        if (!rectangle) return null
+        return {
+          id: rectangle.id,
+          color: rectangle.color,
+          x: rectangle.x,
+          y: rectangle.y,
+          width: rectangle.width,
+          height: rectangle.height
+        }
       }
-    }
 
-    const circle = this.context.circles.find(c => c.id === selectedId)
-    if (circle) {
-      return {
-        id: circle.id,
-        color: circle.color,
-        x: circle.x,
-        y: circle.y,
-        width: circle.radius * 2,  // Approximate as width
-        height: circle.radius * 2  // Approximate as height
+      case 'circle': {
+        const circle = this.context.circles.find(c => c.id === selectedId)
+        if (!circle) return null
+        return {
+          id: circle.id,
+          color: circle.color,
+          x: circle.x,
+          y: circle.y,
+          width: circle.radius * 2,
+          height: circle.radius * 2
+        }
       }
-    }
 
-    const line = this.context.lines.find(l => l.id === selectedId)
-    if (line) {
-      return {
-        id: line.id,
-        color: line.color,
-        x: line.x,
-        y: line.y,
-        width: Math.abs(line.endX - line.x),
-        height: Math.abs(line.endY - line.y)
+      case 'line': {
+        const line = this.context.lines.find(l => l.id === selectedId)
+        if (!line) return null
+        return {
+          id: line.id,
+          color: line.color,
+          x: line.x,
+          y: line.y,
+          width: Math.abs(line.endX - line.x),
+          height: Math.abs(line.endY - line.y)
+        }
       }
-    }
 
-    const text = this.context.texts.find(t => t.id === selectedId)
-    if (text) {
-      return {
-        id: text.id,
-        color: text.color,
-        x: text.x,
-        y: text.y,
-        width: text.measuredWidth || 100,
-        height: text.measuredHeight || 20
+      case 'text': {
+        const text = this.context.texts.find(t => t.id === selectedId)
+        if (!text) return null
+        return {
+          id: text.id,
+          color: text.color,
+          x: text.x,
+          y: text.y,
+          width: text.measuredWidth || 100,
+          height: text.measuredHeight || 20
+        }
       }
-    }
 
-    return null
+      default:
+        return null
+    }
   }
 
   /**
