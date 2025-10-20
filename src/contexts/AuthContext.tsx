@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react'
-import { signInWithRedirect, getRedirectResult, GoogleAuthProvider } from 'firebase/auth'
+import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth'
 import {
   firebaseAuth,
   onAuthStateChange
@@ -37,24 +37,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
 
-  // Handle redirect result and auth state changes
+  // Simplified auth state listener - user profile created by Cloud Function
   useEffect(() => {
-    // Check if user is returning from Google redirect
-    getRedirectResult(firebaseAuth)
-      .then((result) => {
-        if (result) {
-          // User successfully signed in via redirect
-          setUser(result.user)
-        }
-      })
-      .catch((error) => {
-        console.error('Error getting redirect result:', error)
-      })
-      .finally(() => {
-        setLoading(false)
-      })
-
-    // Listen for auth state changes
     const unsubscribe = onAuthStateChange(firebaseAuth, (firebaseUser) => {
       setUser(firebaseUser)
       setLoading(false)
@@ -63,19 +47,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     return unsubscribe
   }, [])
 
-  // Google Sign-In with redirect (no COOP warnings, better mobile UX)
+  // Google Sign-In (popup-based - simpler and more reliable)
   const signInWithGoogle = useCallback(async () => {
     try {
       setLoading(true)
-      await signInWithRedirect(firebaseAuth, googleProvider)
-      // User will be redirected to Google, then back to app
+      await signInWithPopup(firebaseAuth, googleProvider)
       // User profile automatically created by Firebase Auth Trigger
     } catch (error: unknown) {
       console.error('Error signing in with Google:', error)
-      setLoading(false)
       throw error
+    } finally {
+      setLoading(false)
     }
-    // Note: setLoading(false) in finally removed - redirect leaves the page
   }, [])
 
   // Simplified sign-out (Cloud Function handles cursor cleanup)
