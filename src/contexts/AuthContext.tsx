@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react'
-import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth'
+import { signInWithRedirect, GoogleAuthProvider } from 'firebase/auth'
 import {
   firebaseAuth,
   onAuthStateChange
@@ -47,18 +47,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     return unsubscribe
   }, [])
 
-  // Google Sign-In (user profile automatically created by Cloud Function)
+  // Google Sign-In with redirect (no COOP warnings, better mobile UX)
   const signInWithGoogle = useCallback(async () => {
     try {
       setLoading(true)
-      await signInWithPopup(firebaseAuth, googleProvider)
+      await signInWithRedirect(firebaseAuth, googleProvider)
+      // User will be redirected to Google, then back to app
       // User profile automatically created by Firebase Auth Trigger
     } catch (error: unknown) {
       console.error('Error signing in with Google:', error)
-      throw error
-    } finally {
       setLoading(false)
+      throw error
     }
+    // Note: setLoading(false) in finally removed - redirect leaves the page
   }, [])
 
   // Simplified sign-out (Cloud Function handles cursor cleanup)
