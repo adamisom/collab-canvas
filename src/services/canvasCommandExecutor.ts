@@ -914,7 +914,7 @@ export class CanvasCommandExecutor {
   /**
    * Phase 3F: Create a circle
    */
-  private async executeCreateCircle(params: { x?: number; y?: number; radius?: number; color?: string }): Promise<void> {
+  private async executeCreateCircle(params: { x?: number; y?: number; radius?: number; color?: string }): Promise<CircleShape | null> {
     const viewportInfo = this.getViewportInfo()
     if (!viewportInfo) {
       throw new Error('Viewport info not available')
@@ -928,23 +928,23 @@ export class CanvasCommandExecutor {
     const radius = params.radius ?? 50
     const color = params.color ?? '#3b82f6'
 
-    await this.context.createCircle(x, y, radius, color)
+    return await this.context.createCircle(x, y, radius, color)
   }
 
   /**
    * Phase 3F: Create a line
    */
-  private async executeCreateLine(params: { x: number; y: number; endX: number; endY: number; color?: string }): Promise<void> {
+  private async executeCreateLine(params: { x: number; y: number; endX: number; endY: number; color?: string }): Promise<LineShape | null> {
     const { x, y, endX, endY } = params
     const color = params.color ?? '#3b82f6'
 
-    await this.context.createLine(x, y, endX, endY, false, color) // hasArrow = false
+    return await this.context.createLine(x, y, endX, endY, false, color) // hasArrow = false
   }
 
   /**
    * Phase 3F: Create text
    */
-  private async executeCreateText(params: { x?: number; y?: number; text: string; fontSize?: number; color?: string }): Promise<void> {
+  private async executeCreateText(params: { x?: number; y?: number; text: string; fontSize?: number; color?: string }): Promise<TextShape | null> {
     const viewportInfo = this.getViewportInfo()
     if (!viewportInfo) {
       throw new Error('Viewport info not available')
@@ -958,7 +958,7 @@ export class CanvasCommandExecutor {
     const fontSize = params.fontSize ?? 16
     const color = params.color ?? '#3b82f6'
 
-    await this.context.createText(x, y, params.text, fontSize, color)
+    return await this.context.createText(x, y, params.text, fontSize, color)
   }
 
   /**

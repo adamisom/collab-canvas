@@ -212,7 +212,7 @@ export class AIAgent {
 
     console.log('🤖 AI Commands received:', JSON.stringify(commands, null, 2))
 
-    let createdRectangleId: string | undefined
+    let createdShapeId: string | undefined
 
     // Execute each command
     for (let i = 0; i < commands.length; i++) {
@@ -221,12 +221,12 @@ export class AIAgent {
       console.log(`🔧 Executing command ${i + 1}/${commands.length}:`, command.tool, command.parameters)
 
       try {
-        // Special handling for first createRectangle command
-        if (i === 0 && command.tool === 'createRectangle') {
-          createdRectangleId = await this.executeCreateRectangleCommand(command)
+        // Special handling for first shape creation command (any shape type)
+        if (i === 0 && this.isShapeCreationCommand(command.tool)) {
+          createdShapeId = await this.executeShapeCreationCommand(command)
         } else {
-          // For subsequent commands, use createdRectangleId if available
-          await this.executor.executeCommand(command, createdRectangleId)
+          // For subsequent commands, use createdShapeId if available
+          await this.executor.executeCommand(command, createdShapeId)
         }
       } catch (error) {
         // Partial failure - some commands succeeded
@@ -247,22 +247,41 @@ export class AIAgent {
   }
 
   /**
-   * Execute createRectangle command and handle auto-selection
+   * Check if a command is a shape creation command (single shape only, not batch)
    */
-  private async executeCreateRectangleCommand(command: AICommand): Promise<string | undefined> {
-    // Execute the creation
-    // Type assertion is safe here because this method is only called when command.tool === 'createRectangle'
-    const rect = await this.executor['executeCreateRectangle'](command.parameters as CreateRectangleParams)
+  private isShapeCreationCommand(tool: string): boolean {
+    return tool === 'createRectangle' || tool === 'createCircle' || tool === 'createLine' || tool === 'createText'
+  }
 
-    if (!rect) {
-      throw new Error('Failed to create rectangle')
+  /**
+   * Execute shape creation command and return the created shape ID
+   * Supports all shape types: rectangle, circle, line, text
+   */
+  private async executeShapeCreationCommand(command: AICommand): Promise<string | undefined> {
+    switch (command.tool) {
+      case 'createRectangle': {
+        const rect = await this.executor['executeCreateRectangle'](command.parameters as CreateRectangleParams)
+        if (!rect) throw new Error('Failed to create rectangle')
+        return rect.id
+      }
+      case 'createCircle': {
+        const circle = await this.executor['executeCreateCircle'](command.parameters)
+        if (!circle) throw new Error('Failed to create circle')
+        return circle.id
+      }
+      case 'createLine': {
+        const line = await this.executor['executeCreateLine'](command.parameters)
+        if (!line) throw new Error('Failed to create line')
+        return line.id
+      }
+      case 'createText': {
+        const text = await this.executor['executeCreateText'](command.parameters)
+        if (!text) throw new Error('Failed to create text')
+        return text.id
+      }
+      default:
+        throw new Error(`Unknown shape creation command: ${command.tool}`)
     }
-
-    // Auto-select if this is a single-create command (will be followed by modifications)
-    // Don't auto-select if this is part of createMultipleRectangles or standalone
-    // The executor already auto-selects via CanvasContext.createRectangle
-    
-    return rect.id
   }
 }
 
