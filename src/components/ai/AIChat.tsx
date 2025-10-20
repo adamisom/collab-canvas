@@ -13,9 +13,18 @@ export const AIChat: React.FC = () => {
   const [input, setInput] = useState('')
   const [lastCommand, setLastCommand] = useState('')
   const [history, setHistory] = useState<AICommandEntry[]>([])
+  const [isListening, setIsListening] = useState(false)
+  const [voiceSupported, setVoiceSupported] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const recognitionRef = useRef<any>(null)
   
   const { isProcessing, lastResult, processCommand, clearResult } = useAIAgent()
+
+  // Check voice support on mount
+  useEffect(() => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+    setVoiceSupported(!!SpeechRecognition)
+  }, [])
 
   // Load command history on mount
   useEffect(() => {
@@ -74,6 +83,54 @@ export const AIChat: React.FC = () => {
     inputRef.current?.focus()
   }
 
+  const startVoiceInput = () => {
+    if (!voiceSupported || isProcessing) return
+
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+    const recognition = new SpeechRecognition()
+
+    recognition.continuous = false
+    recognition.interimResults = false
+    recognition.lang = 'en-US'
+
+    recognition.onstart = () => {
+      setIsListening(true)
+    }
+
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript
+      setInput(transcript)
+      setIsListening(false)
+    }
+
+    recognition.onerror = (event: any) => {
+      console.error('Speech recognition error:', event.error)
+      setIsListening(false)
+      
+      if (event.error === 'not-allowed') {
+        alert('Microphone access denied. Please allow microphone access in your browser settings.')
+      } else if (event.error === 'no-speech') {
+        // Silent failure - user didn't speak
+      } else {
+        alert('Voice recognition failed. Please try again.')
+      }
+    }
+
+    recognition.onend = () => {
+      setIsListening(false)
+    }
+
+    recognitionRef.current = recognition
+    recognition.start()
+  }
+
+  const stopVoiceInput = () => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop()
+      setIsListening(false)
+    }
+  }
+
   return (
     <div className="ai-chat">
       <div className="ai-chat-header">
@@ -95,10 +152,23 @@ export const AIChat: React.FC = () => {
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Tell me what to do..."
+          placeholder={isListening ? "Listening..." : "Tell me what to do..."}
           className="ai-chat-input"
-          disabled={isProcessing}
+          disabled={isProcessing || isListening}
         />
+        
+        {voiceSupported && (
+          <button
+            type="button"
+            className={`ai-chat-voice ${isListening ? 'listening' : ''}`}
+            onClick={isListening ? stopVoiceInput : startVoiceInput}
+            disabled={isProcessing}
+            title={isListening ? "Stop listening" : "Voice input"}
+          >
+            🎤
+          </button>
+        )}
+        
         <button
           type="submit"
           className="ai-chat-submit"
