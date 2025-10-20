@@ -486,7 +486,7 @@ const Canvas: React.FC<CanvasProps> = ({
     }
   }, [updateRectangle])
 
-  // NEW: Handle multi-select group drag end (Konva Group approach)
+  // NEW: Handle multi-select group drag end (Konva Group approach - all shape types)
   const handleMultiSelectGroupDragEnd = useCallback(async () => {
     if (!multiSelectGroupRef.current) return
     
@@ -494,52 +494,124 @@ const Canvas: React.FC<CanvasProps> = ({
     const offsetX = group.x()
     const offsetY = group.y()
     
-    // Reset group position immediately (rectangles will update via Firebase)
+    // Reset group position immediately (shapes will update via Firebase)
     group.position({ x: 0, y: 0 })
     
-    const selectedIds = Array.from(selectedShapes.keys())
-    const selectedRects = rectangles.filter(r => selectedIds.includes(r.id))
-    
     try {
-      // Update all selected rectangles with the offset
-      await Promise.all(
-        selectedRects.map(rect => 
-          updateRectangle(rect.id, { 
-            x: rect.x + offsetX, 
-            y: rect.y + offsetY 
-          })
-        )
-      )
+      const updates = []
+      
+      // Update all selected rectangles
+      for (const [shapeId, shapeType] of selectedShapes.entries()) {
+        if (shapeType === 'rectangle') {
+          const rect = rectangles.find(r => r.id === shapeId)
+          if (rect) {
+            updates.push(updateRectangle(rect.id, { 
+              x: rect.x + offsetX, 
+              y: rect.y + offsetY 
+            }))
+          }
+        } else if (shapeType === 'circle') {
+          const circle = circles.find(c => c.id === shapeId)
+          if (circle) {
+            updates.push(updateCircle(circle.id, { 
+              x: circle.x + offsetX, 
+              y: circle.y + offsetY 
+            }))
+          }
+        } else if (shapeType === 'line') {
+          const line = lines.find(l => l.id === shapeId)
+          if (line) {
+            updates.push(updateLine(line.id, { 
+              x: line.x + offsetX, 
+              y: line.y + offsetY,
+              endX: line.endX + offsetX,
+              endY: line.endY + offsetY
+            }))
+          }
+        } else if (shapeType === 'text') {
+          const text = texts.find(t => t.id === shapeId)
+          if (text) {
+            updates.push(updateText(text.id, { 
+              x: text.x + offsetX, 
+              y: text.y + offsetY 
+            }))
+          }
+        }
+      }
+      
+      await Promise.all(updates)
     } catch (error) {
       console.error('Error updating multi-select group position:', error)
     }
-  }, [selectedShapes, rectangles, updateRectangle])
+  }, [selectedShapes, rectangles, circles, lines, texts, updateRectangle, updateCircle, updateLine, updateText])
 
-  // NEW: Handle multi-select group rotation
+  // NEW: Handle multi-select group rotation (rectangles, lines, and text - not circles)
   const handleMultiSelectGroupRotate = useCallback(async (_groupId: string, newRotation: number) => {
-    const selectedIds = Array.from(selectedShapes.keys())
-    const selectedRects = rectangles.filter(r => selectedIds.includes(r.id))
+    // Collect all rotatable shapes (exclude circles since rotation is meaningless for them)
+    const rotatableShapes: Array<{ 
+      id: string
+      type: 'rectangle' | 'line' | 'text'
+      x: number
+      y: number
+      rotation: number
+      endX?: number  // For lines
+      endY?: number  // For lines
+    }> = []
     
-    if (selectedRects.length < 2) return
+    for (const [shapeId, shapeType] of selectedShapes.entries()) {
+      if (shapeType === 'rectangle') {
+        const rect = rectangles.find(r => r.id === shapeId)
+        if (rect) {
+          rotatableShapes.push({ id: rect.id, type: 'rectangle', x: rect.x, y: rect.y, rotation: rect.rotation || 0 })
+        }
+      } else if (shapeType === 'line') {
+        const line = lines.find(l => l.id === shapeId)
+        if (line) {
+          rotatableShapes.push({ 
+            id: line.id, 
+            type: 'line', 
+            x: line.x, 
+            y: line.y, 
+            endX: line.endX,
+            endY: line.endY,
+            rotation: line.rotation || 0 
+          })
+        }
+      } else if (shapeType === 'text') {
+        const text = texts.find(t => t.id === shapeId)
+        if (text) {
+          rotatableShapes.push({ id: text.id, type: 'text', x: text.x, y: text.y, rotation: text.rotation || 0 })
+        }
+      }
+      // Note: Circles are excluded - rotation is meaningless for circles
+    }
     
-    // Calculate group center (center of bounding box)
-    const allX = selectedRects.map(r => r.x)
-    const allY = selectedRects.map(r => r.y)
-    const centerX = (Math.min(...allX) + Math.max(...allX)) / 2
-    const centerY = (Math.min(...allY) + Math.max(...allY)) / 2
+    if (rotatableShapes.length < 2) return
+    
+    // Calculate group center (center of bounding box) - need to include all points
+    const allPoints: Array<{ x: number; y: number }> = []
+    rotatableShapes.forEach(shape => {
+      allPoints.push({ x: shape.x, y: shape.y })
+      if (shape.type === 'line' && shape.endX !== undefined && shape.endY !== undefined) {
+        allPoints.push({ x: shape.endX, y: shape.endY })
+      }
+    })
+    
+    const centerX = (Math.min(...allPoints.map(p => p.x)) + Math.max(...allPoints.map(p => p.x))) / 2
+    const centerY = (Math.min(...allPoints.map(p => p.y)) + Math.max(...allPoints.map(p => p.y))) / 2
     
     // Calculate rotation delta from first shape's rotation
-    const firstRect = selectedRects[0]
-    const rotationDelta = newRotation - (firstRect.rotation || 0)
+    const firstShape = rotatableShapes[0]
+    const rotationDelta = newRotation - firstShape.rotation
     const angleRad = rotationDelta * (Math.PI / 180)
     
     try {
       // Rotate each shape around group center
-      await Promise.all(
-        selectedRects.map(rect => {
+      const updates = rotatableShapes.map(shape => {
+        if (shape.type === 'rectangle' || shape.type === 'text') {
           // Relative position from group center
-          const dx = rect.x - centerX
-          const dy = rect.y - centerY
+          const dx = shape.x - centerX
+          const dy = shape.y - centerY
           
           // Apply rotation transformation
           const newDx = dx * Math.cos(angleRad) - dy * Math.sin(angleRad)
@@ -548,19 +620,43 @@ const Canvas: React.FC<CanvasProps> = ({
           // New position and rotation
           const newX = centerX + newDx
           const newY = centerY + newDy
-          const newRot = (rect.rotation || 0) + rotationDelta
+          const newRot = shape.rotation + rotationDelta
           
-          return updateRectangle(rect.id, { 
-            x: newX, 
-            y: newY, 
-            rotation: newRot 
-          })
-        })
-      )
+          if (shape.type === 'rectangle') {
+            return updateRectangle(shape.id, { x: newX, y: newY, rotation: newRot })
+          } else {
+            return updateText(shape.id, { x: newX, y: newY, rotation: newRot })
+          }
+        } else if (shape.type === 'line' && shape.endX !== undefined && shape.endY !== undefined) {
+          // For lines, rotate both start and end points
+          const dx1 = shape.x - centerX
+          const dy1 = shape.y - centerY
+          const dx2 = shape.endX - centerX
+          const dy2 = shape.endY - centerY
+          
+          // Apply rotation transformation to both points
+          const newDx1 = dx1 * Math.cos(angleRad) - dy1 * Math.sin(angleRad)
+          const newDy1 = dx1 * Math.sin(angleRad) + dy1 * Math.cos(angleRad)
+          const newDx2 = dx2 * Math.cos(angleRad) - dy2 * Math.sin(angleRad)
+          const newDy2 = dx2 * Math.sin(angleRad) + dy2 * Math.cos(angleRad)
+          
+          // New positions
+          const newX = centerX + newDx1
+          const newY = centerY + newDy1
+          const newEndX = centerX + newDx2
+          const newEndY = centerY + newDy2
+          const newRot = shape.rotation + rotationDelta
+          
+          return updateLine(shape.id, { x: newX, y: newY, endX: newEndX, endY: newEndY, rotation: newRot })
+        }
+        return Promise.resolve()
+      })
+      
+      await Promise.all(updates)
     } catch (error) {
       console.error('Error rotating multi-select group:', error)
     }
-  }, [selectedShapes, rectangles, updateRectangle])
+  }, [selectedShapes, rectangles, lines, texts, updateRectangle, updateLine, updateText])
 
   // Handle rectangle resize
   const handleRectangleResize = useCallback(async (
@@ -832,22 +928,43 @@ const Canvas: React.FC<CanvasProps> = ({
     })
   }, [texts])
 
-  // Split rectangles into multi-select group vs individual
-  const { multiSelectRectangles, otherRectangles } = useMemo(() => {
+  // Split shapes into multi-select group vs individual (all shape types)
+  const multiSelectShapes = useMemo(() => {
     const isMultiSelect = selectedShapes.size > 1
     
     if (!isMultiSelect) {
       return {
-        multiSelectRectangles: [],
-        otherRectangles: sortedRectangles
+        rectangles: [],
+        circles: [],
+        lines: [],
+        texts: []
       }
     }
     
     return {
-      multiSelectRectangles: sortedRectangles.filter(r => selectedShapes.has(r.id)),
-      otherRectangles: sortedRectangles.filter(r => !selectedShapes.has(r.id))
+      rectangles: sortedRectangles.filter(r => selectedShapes.has(r.id)),
+      circles: sortedCircles.filter(c => selectedShapes.has(c.id)),
+      lines: sortedLines.filter(l => selectedShapes.has(l.id)),
+      texts: sortedTexts.filter(t => selectedShapes.has(t.id))
     }
+  }, [sortedRectangles, sortedCircles, sortedLines, sortedTexts, selectedShapes])
+  
+  // Filter out shapes that are in multi-select group
+  const otherRectangles = useMemo(() => {
+    return sortedRectangles.filter(r => !selectedShapes.has(r.id) || selectedShapes.size === 1)
   }, [sortedRectangles, selectedShapes])
+  
+  const otherCircles = useMemo(() => {
+    return sortedCircles.filter(c => !selectedShapes.has(c.id) || selectedShapes.size === 1)
+  }, [sortedCircles, selectedShapes])
+  
+  const otherLines = useMemo(() => {
+    return sortedLines.filter(l => !selectedShapes.has(l.id) || selectedShapes.size === 1)
+  }, [sortedLines, selectedShapes])
+  
+  const otherTexts = useMemo(() => {
+    return sortedTexts.filter(t => !selectedShapes.has(t.id) || selectedShapes.size === 1)
+  }, [sortedTexts, selectedShapes])
 
   // Keep clipboard operation refs updated
   useEffect(() => {
@@ -1318,8 +1435,8 @@ const Canvas: React.FC<CanvasProps> = ({
               />
             ))}
             
-            {/* PR #6: Render circles (sorted by zIndex) */}
-            {sortedCircles.map((circle) => (
+            {/* PR #6: Render circles (sorted by zIndex, excluding multi-select group) */}
+            {otherCircles.map((circle) => (
               <Circle
                 key={circle.id}
                 circle={circle}
@@ -1335,8 +1452,8 @@ const Canvas: React.FC<CanvasProps> = ({
               />
             ))}
             
-            {/* PR #7: Render lines (sorted by zIndex) */}
-            {sortedLines.map((line) => (
+            {/* PR #7: Render lines (sorted by zIndex, excluding multi-select group) */}
+            {otherLines.map((line) => (
               <Line
                 key={line.id}
                 line={line}
@@ -1364,8 +1481,8 @@ const Canvas: React.FC<CanvasProps> = ({
               />
             )}
             
-            {/* PR #8: Render texts (sorted by zIndex) */}
-            {sortedTexts.map((text) => (
+            {/* PR #8: Render texts (sorted by zIndex, excluding multi-select group) */}
+            {otherTexts.map((text) => (
               <TextShape
                 key={text.id}
                 textShape={text}
@@ -1380,14 +1497,60 @@ const Canvas: React.FC<CanvasProps> = ({
               />
             ))}
             
-            {/* NEW: Multi-select group (2+ selected) - Konva Group with all selected rectangles */}
-            {multiSelectRectangles.length > 1 && (() => {
+            {/* NEW: Multi-select group (2+ selected) - Konva Group with all selected shapes */}
+            {selectedShapes.size > 1 && (() => {
               const MARGIN = 8
-              // Rectangles use center-based coords (offsetX/offsetY = width/2, height/2)
-              const minX = Math.min(...multiSelectRectangles.map(r => r.x - r.width / 2)) - MARGIN
-              const minY = Math.min(...multiSelectRectangles.map(r => r.y - r.height / 2)) - MARGIN
-              const maxX = Math.max(...multiSelectRectangles.map(r => r.x + r.width / 2)) + MARGIN
-              const maxY = Math.max(...multiSelectRectangles.map(r => r.y + r.height / 2)) + MARGIN
+              const bounds: Array<{ minX: number; minY: number; maxX: number; maxY: number }> = []
+              
+              // Calculate bounding box for all selected shapes
+              // Rectangles: center-based coords (offsetX/offsetY = width/2, height/2)
+              multiSelectShapes.rectangles.forEach(r => {
+                bounds.push({
+                  minX: r.x - r.width / 2,
+                  minY: r.y - r.height / 2,
+                  maxX: r.x + r.width / 2,
+                  maxY: r.y + r.height / 2
+                })
+              })
+              
+              // Circles: center-based with radius
+              multiSelectShapes.circles.forEach(c => {
+                bounds.push({
+                  minX: c.x - c.radius,
+                  minY: c.y - c.radius,
+                  maxX: c.x + c.radius,
+                  maxY: c.y + c.radius
+                })
+              })
+              
+              // Lines: min/max of both endpoints
+              multiSelectShapes.lines.forEach(l => {
+                bounds.push({
+                  minX: Math.min(l.x, l.endX),
+                  minY: Math.min(l.y, l.endY),
+                  maxX: Math.max(l.x, l.endX),
+                  maxY: Math.max(l.y, l.endY)
+                })
+              })
+              
+              // Texts: top-left based with measured dimensions
+              multiSelectShapes.texts.forEach(t => {
+                const textWidth = t.measuredWidth || 100
+                const textHeight = t.measuredHeight || 20
+                bounds.push({
+                  minX: t.x,
+                  minY: t.y,
+                  maxX: t.x + textWidth,
+                  maxY: t.y + textHeight
+                })
+              })
+              
+              if (bounds.length === 0) return null
+              
+              const minX = Math.min(...bounds.map(b => b.minX)) - MARGIN
+              const minY = Math.min(...bounds.map(b => b.minY)) - MARGIN
+              const maxX = Math.max(...bounds.map(b => b.maxX)) + MARGIN
+              const maxY = Math.max(...bounds.map(b => b.maxY)) + MARGIN
               
               return (
                 <Group
@@ -1418,7 +1581,7 @@ const Canvas: React.FC<CanvasProps> = ({
                   />
                   
                   {/* Render selected rectangles inside group */}
-                  {multiSelectRectangles.map((rectangle) => (
+                  {multiSelectShapes.rectangles.map((rectangle) => (
                     <Rectangle
                       key={rectangle.id}
                       rectangle={rectangle}
@@ -1433,6 +1596,59 @@ const Canvas: React.FC<CanvasProps> = ({
                       onResizeStart={handleResizeStart}
                       onResizeEnd={handleResizeEnd}
                       onRotate={handleRotate}
+                    />
+                  ))}
+                  
+                  {/* Render selected circles inside group */}
+                  {multiSelectShapes.circles.map((circle) => (
+                    <Circle
+                      key={circle.id}
+                      circle={circle}
+                      isSelected={true}
+                      isPrimary={circle.id === primarySelectionId}
+                      isShiftPressed={isShiftPressed}
+                      isInMultiSelectGroup={true}
+                      onClick={handleCircleClick}
+                      onDragStart={handleCircleDragStart}
+                      onDragEnd={handleCircleDragEnd}
+                      onResize={handleCircleResize}
+                      onResizeStart={handleResizeStart}
+                      onResizeEnd={handleResizeEnd}
+                    />
+                  ))}
+                  
+                  {/* Render selected lines inside group */}
+                  {multiSelectShapes.lines.map((line) => (
+                    <Line
+                      key={line.id}
+                      line={line}
+                      isSelected={true}
+                      isPrimary={line.id === primarySelectionId}
+                      isShiftPressed={isShiftPressed}
+                      isInMultiSelectGroup={true}
+                      onClick={handleLineClick}
+                      onDragStart={handleLineDragStart}
+                      onDragEnd={handleLineDragEnd}
+                      onEndpointsChange={handleLineEndpointsChange}
+                      onResizeStart={handleResizeStart}
+                      onResizeEnd={handleResizeEnd}
+                    />
+                  ))}
+                  
+                  {/* Render selected texts inside group */}
+                  {multiSelectShapes.texts.map((text) => (
+                    <TextShape
+                      key={text.id}
+                      textShape={text}
+                      isSelected={true}
+                      isPrimary={text.id === primarySelectionId}
+                      isShiftPressed={isShiftPressed}
+                      isInMultiSelectGroup={true}
+                      onClick={handleTextClick}
+                      onDragStart={handleTextDragStart}
+                      onDragEnd={handleTextDragEnd}
+                      onTextChange={handleTextChange}
+                      onEditingChange={setIsTextEditing}
                     />
                   ))}
                 </Group>

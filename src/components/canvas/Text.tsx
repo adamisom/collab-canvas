@@ -11,6 +11,7 @@ interface TextProps {
   isSelected: boolean
   isPrimary: boolean
   isShiftPressed: boolean
+  isInMultiSelectGroup?: boolean
   onClick: (id: string, cmdOrCtrlPressed?: boolean) => void
   onDragStart: () => void
   onDragEnd: (id: string, x: number, y: number) => void
@@ -23,6 +24,7 @@ const Text: React.FC<TextProps> = ({
   isSelected,
   // isPrimary - not used yet, but kept in interface for consistency
   isShiftPressed,
+  isInMultiSelectGroup = false,
   onClick,
   onDragStart,
   onDragEnd,
@@ -155,8 +157,8 @@ const Text: React.FC<TextProps> = ({
   // Get selection styling
   const selectionStyle = getShapeSelectionStyle(textShape.color, isSelected, false)
 
-  // Disable dragging when editing or Shift is pressed
-  const draggable = isShapeDraggable(isSelected, isShiftPressed, isEditing)
+  // Disable dragging when editing, Shift is pressed, or in multi-select group
+  const draggable = isShapeDraggable(isSelected, isShiftPressed, isEditing) && !isInMultiSelectGroup
 
   return (
     <Group

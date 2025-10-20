@@ -11,6 +11,7 @@ interface LineProps {
   isSelected: boolean
   isPrimary: boolean
   isShiftPressed: boolean
+  isInMultiSelectGroup?: boolean
   onClick: (id: string, cmdOrCtrlPressed?: boolean) => void
   onDragStart: () => void
   onDragEnd: (id: string, x: number, y: number) => void
@@ -24,6 +25,7 @@ const Line: React.FC<LineProps> = ({
   isSelected,
   isPrimary,
   isShiftPressed,
+  isInMultiSelectGroup = false,
   onClick,
   onDragStart,
   onDragEnd,
@@ -84,8 +86,8 @@ const Line: React.FC<LineProps> = ({
   // Get selection styling
   const selectionStyle = getLineSelectionStyle(line.color, line.strokeWidth, isSelected, false)
 
-  // Disable dragging when Shift is held (for selection box) or dragging handle
-  const draggable = isShapeDraggable(isSelected, isShiftPressed, isDraggingHandle)
+  // Disable dragging when Shift is held (for selection box), dragging handle, or in multi-select group
+  const draggable = isShapeDraggable(isSelected, isShiftPressed, isDraggingHandle) && !isInMultiSelectGroup
 
   return (
     <Group
@@ -129,8 +131,8 @@ const Line: React.FC<LineProps> = ({
         />
       )}
       
-      {/* Endpoint handle (on primary selection only) */}
-      {isPrimary && !isShiftPressed && (
+      {/* Endpoint handle (on primary selection only, not in multi-select group) */}
+      {isPrimary && !isShiftPressed && !isInMultiSelectGroup && (
         <KonvaCircle
           x={line.endX - line.x}
           y={line.endY - line.y}

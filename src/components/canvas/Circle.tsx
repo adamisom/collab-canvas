@@ -11,6 +11,7 @@ interface CircleProps {
   isSelected: boolean
   isPrimary: boolean
   isShiftPressed: boolean
+  isInMultiSelectGroup?: boolean
   onClick: (id: string, cmdOrCtrlPressed?: boolean) => void
   onDragStart: () => void
   onDragEnd: (id: string, x: number, y: number) => void
@@ -24,6 +25,7 @@ const Circle: React.FC<CircleProps> = ({
   isSelected,
   isPrimary,
   isShiftPressed,
+  isInMultiSelectGroup = false,
   onClick,
   onDragStart,
   onDragEnd,
@@ -80,8 +82,8 @@ const Circle: React.FC<CircleProps> = ({
     onResizeEnd()
   }
 
-  // Disable dragging when Shift is pressed (for selection box) or when resizing
-  const dragEnabled = isShapeDraggable(isSelected, isShiftPressed, isResizing)
+  // Disable dragging when Shift is pressed (for selection box), when resizing, or when in multi-select group
+  const dragEnabled = isShapeDraggable(isSelected, isShiftPressed, isResizing) && !isInMultiSelectGroup
 
   // Get selection styling
   const selectionStyle = getShapeSelectionStyle(circle.color, isSelected, false)
@@ -103,7 +105,7 @@ const Circle: React.FC<CircleProps> = ({
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       />
-      {isPrimary && !isShiftPressed && (
+      {isPrimary && !isShiftPressed && !isInMultiSelectGroup && (
         <Transformer
           ref={transformerRef}
           flipEnabled={false}
