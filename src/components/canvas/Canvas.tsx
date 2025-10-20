@@ -18,6 +18,7 @@ import TextFormatToolbar from './TextFormatToolbar'  // PR #9
 import AlignmentToolbar from '../ui/AlignmentToolbar'  // Phase 3D PR #10
 import LassoPath from './LassoPath'  // Phase 3D PR #11
 import SelectTypeModal from '../ui/SelectTypeModal'  // Phase 3D PR #11
+import RotateHandle from './RotateHandle'  // Phase 3D PR #12
 import Toast from '../ui/Toast'
 import type { Rectangle as RectangleType } from '../../services/canvasService'
 import type { ShapeType } from '../../shared/shapes'  // Phase 3D PR #12
@@ -473,6 +474,53 @@ const Canvas: React.FC<CanvasProps> = ({
       )
     } catch (error) {
       console.error('Error updating multi-select group position:', error)
+    }
+  }, [selectedShapes, rectangles, updateRectangle])
+
+  // NEW: Handle multi-select group rotation
+  const handleMultiSelectGroupRotate = useCallback(async (_groupId: string, newRotation: number) => {
+    const selectedIds = Array.from(selectedShapes.keys())
+    const selectedRects = rectangles.filter(r => selectedIds.includes(r.id))
+    
+    if (selectedRects.length < 2) return
+    
+    // Calculate group center (center of bounding box)
+    const allX = selectedRects.map(r => r.x)
+    const allY = selectedRects.map(r => r.y)
+    const centerX = (Math.min(...allX) + Math.max(...allX)) / 2
+    const centerY = (Math.min(...allY) + Math.max(...allY)) / 2
+    
+    // Calculate rotation delta from first shape's rotation
+    const firstRect = selectedRects[0]
+    const rotationDelta = newRotation - (firstRect.rotation || 0)
+    const angleRad = rotationDelta * (Math.PI / 180)
+    
+    try {
+      // Rotate each shape around group center
+      await Promise.all(
+        selectedRects.map(rect => {
+          // Relative position from group center
+          const dx = rect.x - centerX
+          const dy = rect.y - centerY
+          
+          // Apply rotation transformation
+          const newDx = dx * Math.cos(angleRad) - dy * Math.sin(angleRad)
+          const newDy = dx * Math.sin(angleRad) + dy * Math.cos(angleRad)
+          
+          // New position and rotation
+          const newX = centerX + newDx
+          const newY = centerY + newDy
+          const newRot = (rect.rotation || 0) + rotationDelta
+          
+          return updateRectangle(rect.id, { 
+            x: newX, 
+            y: newY, 
+            rotation: newRot 
+          })
+        })
+      )
+    } catch (error) {
+      console.error('Error rotating multi-select group:', error)
     }
   }, [selectedShapes, rectangles, updateRectangle])
 
@@ -1299,6 +1347,15 @@ const Canvas: React.FC<CanvasProps> = ({
                     dash={[8, 4]}
                     fill="transparent"
                     listening={false}
+                  />
+                  
+                  {/* Multi-select group rotation handle */}
+                  <RotateHandle
+                    shapeId="multi-select-group"
+                    centerX={(minX + maxX) / 2}
+                    centerY={(minY + maxY) / 2}
+                    isShiftPressed={isShiftPressed}
+                    onRotate={handleMultiSelectGroupRotate}
                   />
                   
                   {/* Render selected rectangles inside group */}

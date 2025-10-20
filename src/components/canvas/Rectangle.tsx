@@ -253,7 +253,7 @@ const RectangleComponent: React.FC<RectangleProps> = ({
       />
       
       {/* Render resize handles when selected and not dragging */}
-      {isPrimary && !isDragging && !isShiftPressed && (  // CHANGED: Only show for primary selection, hide during Shift
+      {isPrimary && !isDragging && !isShiftPressed && !isInMultiSelectGroup && (  // CHANGED: Only show for primary selection, hide during Shift and multi-select
         <>
           {Object.entries(RESIZE_DIRECTIONS).map(([, direction]) => {
             const position = handlePositions[direction]
