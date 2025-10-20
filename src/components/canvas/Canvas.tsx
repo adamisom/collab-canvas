@@ -845,13 +845,16 @@ const Canvas: React.FC<CanvasProps> = ({
         return
       }
       
-      // Duplicate: Cmd+D (Mac) or Ctrl+D (Windows/Linux) - only works with single selection
+      // Duplicate: Cmd+D (Mac) or Ctrl+D (Windows/Linux) - works with single or multi-selection
       if ((e.metaKey || e.ctrlKey) && e.key === 'd' && !isTyping) {
         e.preventDefault() // Prevent browser bookmark shortcut
         if (selectedShapes.size === 1 && primarySelectionId && primarySelectionType) {
+          // Single selection: use dedicated duplicateShape (preserves original selection briefly)
           duplicateShape(primarySelectionId, primarySelectionType)
         } else if (selectedShapes.size > 1) {
-          showToast('Duplicate only works with single selection')
+          // Multi-selection: use copy+paste approach (preserves relative positions)
+          copySelectedShapesRef.current?.()
+          pasteShapesRef.current?.()
         }
         return
       }
