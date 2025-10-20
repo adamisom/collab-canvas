@@ -174,6 +174,7 @@ describe('CanvasCommandExecutor', () => {
 
   describe('Rectangle Existence Checks', () => {
     it('should throw error when modifying non-existent rectangle', async () => {
+      mockContext.primarySelectionType = null  // Simulate non-existent shape
       await expect(
         executor.executeCommand({
           tool: 'changeColor',
@@ -443,7 +444,7 @@ describe('CanvasCommandExecutor', () => {
           tool: 'changeColor',
           parameters: { color: '#ef4444' }
         })
-      ).rejects.toThrow('No rectangle ID provided')
+      ).rejects.toThrow('No shape ID provided')
     })
   })
 

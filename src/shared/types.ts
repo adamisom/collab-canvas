@@ -68,6 +68,7 @@ export interface ViewportInfo {
 
 export interface SelectedShape {
   id: string;
+  type: 'rectangle' | 'circle' | 'line' | 'text';  // Shape type
   color: string;
   x: number;
   y: number;

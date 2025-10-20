@@ -387,17 +387,20 @@ export class CanvasCommandExecutor {
    * Change color of existing rectangle
    */
   private async executeChangeColor(params: ChangeColorParams, createdRectangleId?: string): Promise<void> {
-    // Use provided shapeId, or createdRectangleId from multi-step, or fall back to selected rectangle
+    // Use provided shapeId, or createdRectangleId from multi-step, or fall back to selected shape
     const shapeId = createdRectangleId || params.shapeId || this.context.primarySelectionId
 
     // Validate shapeId exists
     if (!shapeId) {
-      throw new Error('No rectangle ID provided')
+      throw new Error('No shape ID provided')
     }
 
+    // Get shape type
+    const shapeType = this.context.primarySelectionType
+
     // Only validate existence if not using createdRectangleId (to avoid race condition)
-    if (!createdRectangleId && !this.rectangleExists(shapeId)) {
-      throw new Error(`Rectangle ${shapeId} not found or was deleted`)
+    if (!createdRectangleId && !shapeType) {
+      throw new Error(`Shape ${shapeId} not found or was deleted`)
     }
 
     // Validate color
@@ -405,7 +408,23 @@ export class CanvasCommandExecutor {
       throw new Error(`Invalid color: ${params.color}`)
     }
 
-    await this.context.changeRectangleColor(shapeId, params.color)
+    // Call the appropriate color change method based on shape type
+    switch (shapeType) {
+      case 'rectangle':
+        await this.context.changeRectangleColor(shapeId, params.color)
+        break
+      case 'circle':
+        await this.context.updateCircle(shapeId, { color: params.color })
+        break
+      case 'line':
+        await this.context.updateLine(shapeId, { color: params.color })
+        break
+      case 'text':
+        await this.context.updateText(shapeId, { color: params.color })
+        break
+      default:
+        throw new Error(`Unknown shape type: ${shapeType}`)
+    }
   }
 
   /**
@@ -543,17 +562,20 @@ export class CanvasCommandExecutor {
    * Bring rectangle to front
    */
   private async executeBringToFront(params: BringToFrontParams, createdRectangleId?: string): Promise<void> {
-    // Use provided shapeId, or createdRectangleId from multi-step, or fall back to selected rectangle
+    // Use provided shapeId, or createdRectangleId from multi-step, or fall back to selected shape
     const shapeId = createdRectangleId || params.shapeId || this.context.primarySelectionId
 
     // Validate shapeId exists
     if (!shapeId) {
-      throw new Error('No rectangle selected to bring to front')
+      throw new Error('No shape selected to bring to front')
     }
 
+    // Get shape type for validation
+    const shapeType = this.context.primarySelectionType
+
     // Only validate existence if not using createdRectangleId (to avoid race condition)
-    if (!createdRectangleId && !this.rectangleExists(shapeId)) {
-      throw new Error(`Rectangle ${shapeId} not found or was deleted`)
+    if (!createdRectangleId && !shapeType) {
+      throw new Error(`Shape ${shapeId} not found or was deleted`)
     }
 
     await this.context.bringToFront(shapeId)
@@ -563,17 +585,20 @@ export class CanvasCommandExecutor {
    * Send rectangle to back
    */
   private async executeSendToBack(params: SendToBackParams, createdRectangleId?: string): Promise<void> {
-    // Use provided shapeId, or createdRectangleId from multi-step, or fall back to selected rectangle
+    // Use provided shapeId, or createdRectangleId from multi-step, or fall back to selected shape
     const shapeId = createdRectangleId || params.shapeId || this.context.primarySelectionId
 
     // Validate shapeId exists
     if (!shapeId) {
-      throw new Error('No rectangle selected to send to back')
+      throw new Error('No shape selected to send to back')
     }
 
+    // Get shape type for validation
+    const shapeType = this.context.primarySelectionType
+
     // Only validate existence if not using createdRectangleId (to avoid race condition)
-    if (!createdRectangleId && !this.rectangleExists(shapeId)) {
-      throw new Error(`Rectangle ${shapeId} not found or was deleted`)
+    if (!createdRectangleId && !shapeType) {
+      throw new Error(`Shape ${shapeId} not found or was deleted`)
     }
 
     await this.context.sendToBack(shapeId)

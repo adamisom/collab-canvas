@@ -124,15 +124,16 @@ RULES FOR MULTI-STEP AND BATCH COMMANDS:
 SELECTION CONTEXT:
 ${selectedShapesCount && selectedShapesCount > 1 ? `- User has ${selectedShapesCount} shapes selected (multi-selection active)
   - Use BATCH tools (deleteBatch, changeColorBatch, resizeBatch, rotateBatch, moveBatch) for commands affecting all selections
-  - Primary selection ID: ${selectedShape?.id}
+  - Primary selection: ${selectedShape?.type} (ID: ${selectedShape?.id})
   
-  ⚠️ MULTI-SELECT ACTIVE: Commands like "delete them", "change color to red", or "rotate 45 degrees" should use BATCH tools!` : selectedShape ? `- User has selected ONE shape: ID ${selectedShape.id}
+  ⚠️ MULTI-SELECT ACTIVE: Commands like "delete them", "change color to red", or "rotate 45 degrees" should use BATCH tools!` : selectedShape ? `- User has selected ONE ${selectedShape.type.toUpperCase()}: ID ${selectedShape.id}
+  - Type: ${selectedShape.type}
   - Color: ${selectedShape.color}, Position: (${selectedShape.x}, ${selectedShape.y}), Size: ${selectedShape.width}x${selectedShape.height}
   
-  ⚠️ TOOL SELECTION:
-  - For ANY shape type: changeColor, moveShape, deleteShape, duplicateShape, bringToFront, sendToBack
-  - For rectangles only: resizeRectangle
-  - For text only: updateTextContent, updateTextFontSize, toggleTextBold, toggleTextItalic
+  ⚠️ TOOL SELECTION FOR ${selectedShape.type.toUpperCase()}:
+  - For ANY shape type (including ${selectedShape.type}): changeColor, moveShape, deleteShape, duplicateShape, bringToFront, sendToBack
+  - For rectangles only: resizeRectangle ${selectedShape.type !== 'rectangle' ? '(NOT AVAILABLE for ' + selectedShape.type + ')' : ''}
+  - For text only: updateTextContent, updateTextFontSize, toggleTextBold, toggleTextItalic ${selectedShape.type !== 'text' ? '(NOT AVAILABLE for ' + selectedShape.type + ')' : ''}
   - Always include shapeId: "${selectedShape.id}" in tool parameters when required!` : "- No shape currently selected"}
 ${!selectedShape ? "- Modification commands require selection first" : ""}
 
