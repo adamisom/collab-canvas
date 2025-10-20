@@ -647,9 +647,9 @@ BEST PRACTICES:
 - Comments dropdown panel (appears below info bar when icon clicked)
 - Add comment input at top of panel
 - Comments listed newest-first (reverse chronological)
+**UI Design Diagram:**
 - Clean, minimal design using initials and user colors
 
-**UI Design Diagram:**
 ```
 ┌─────────────────────────────────────────────────────────┐
 │  CanvasInfo Bar                                         │
