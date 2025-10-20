@@ -29,6 +29,17 @@ AVAILABLE COLORS (ALWAYS use exact hex codes in tool calls):
 - User-specified colors ALWAYS override defaults
 - Only use blue (#3b82f6) as default when NO color is mentioned
 - Examples: "red circle" → use red, "green rectangle" → use green, "create a circle" → use blue default
+
+⚠️ SIZE/RADIUS HANDLING - CRITICAL:
+- If user specifies dimensions, you MUST use those values in the tool parameters
+- User-specified sizes ALWAYS override defaults
+- Only use defaults when NO size is mentioned
+- Examples:
+  * "circle with radius 100" → use radius: 100
+  * "rectangle 200 by 150" → use width: 200, height: 150
+  * "rectangle 300 wide" → use width: 300, height: 80 (default)
+  * "create a circle" → use default radius 50
+  * "create a rectangle" → use default 100x80
 VIEWPORT CENTER: (${viewportInfo.centerX.toFixed(1)}, ${viewportInfo.centerY.toFixed(1)})
 
 TOOL PARAMETER REQUIREMENTS:
