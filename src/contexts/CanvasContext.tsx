@@ -1255,21 +1255,62 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     }
   }, [changeRectangleColor, changeCircleColor, changeLineColor, changeTextColor])
 
-  // REFACTORED PR #5: Copy all selected shapes to clipboard (currently only rectangles)
+  // Copy all selected shapes to clipboard (all shape types)
   const copySelectedRectangles = useCallback(() => {
-    const selected = rectangles.filter(r => selectedShapes.has(r.id))
-    if (selected.length === 0) {
-      showToast('No rectangles selected to copy')
+    if (selectedShapes.size === 0) {
+      showToast('No shapes selected to copy')
       return
     }
 
-    // Store as Shape[] (rectangles implement Rectangle interface which extends BaseShape)
-    setClipboardShapes(selected as Shape[])
-    const count = selected.length
-    showToast(`Copied ${count} rectangle${count > 1 ? 's' : ''}`)
-  }, [rectangles, selectedShapes, showToast])
+    // Collect all selected shapes by type
+    const selected: Shape[] = []
+    const typeCounts = { rectangle: 0, circle: 0, line: 0, text: 0 }
 
-  // REFACTORED PR #5: Paste all clipboard shapes (type-discriminated handling)
+    for (const [id, shapeType] of selectedShapes.entries()) {
+      typeCounts[shapeType]++
+      switch (shapeType) {
+        case 'rectangle': {
+          const rect = rectangles.find(r => r.id === id)
+          if (rect) selected.push(rect)
+          break
+        }
+        case 'circle': {
+          const circle = circles.find(c => c.id === id)
+          if (circle) selected.push(circle)
+          break
+        }
+        case 'line': {
+          const line = lines.find(l => l.id === id)
+          if (line) selected.push(line)
+          break
+        }
+        case 'text': {
+          const text = texts.find(t => t.id === id)
+          if (text) selected.push(text)
+          break
+        }
+      }
+    }
+
+    setClipboardShapes(selected)
+    
+    // Generate toast message
+    const count = selected.length
+    if (count === 1) {
+      const shapeType = selected[0].type
+      showToast(`Copied 1 ${shapeType}`)
+    } else {
+      const types = Object.entries(typeCounts).filter(([, count]) => count > 0)
+      if (types.length === 1) {
+        const [type, typeCount] = types[0]
+        showToast(`Copied ${typeCount} ${type}s`)
+      } else {
+        showToast(`Copied ${count} shapes`)
+      }
+    }
+  }, [rectangles, circles, lines, texts, selectedShapes, showToast])
+
+  // Paste all clipboard shapes (all shape types)
   const pasteRectangles = useCallback(async (): Promise<void> => {
     if (!user || !username) {
       setError('You must be signed in to paste')
@@ -1284,64 +1325,166 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     try {
       const PASTE_OFFSET = 20
       const newSelection = new Map<string, ShapeType>()
+      const typeCounts = { rectangle: 0, circle: 0, line: 0, text: 0 }
 
-      // For now, only handle rectangles (Phase 3C PR #5)
-      // In future PRs, we'll add circle, line, text handling
-      const rectanglesToPaste = clipboardShapes.filter(s => s.type === 'rectangle') as Rectangle[]
-
-      if (rectanglesToPaste.length === 0) {
-        showToast('Clipboard contains no rectangles')
-        return
+      // Calculate bounding box of all clipboard shapes
+      const allX: number[] = []
+      const allY: number[] = []
+      
+      for (const shape of clipboardShapes) {
+        if (shape.type === 'rectangle') {
+          allX.push(shape.x)
+          allY.push(shape.y)
+        } else if (shape.type === 'circle') {
+          allX.push(shape.x)
+          allY.push(shape.y)
+        } else if (shape.type === 'line') {
+          allX.push(shape.x, shape.endX)
+          allY.push(shape.y, shape.endY)
+        } else if (shape.type === 'text') {
+          allX.push(shape.x)
+          allY.push(shape.y)
+        }
       }
 
-      // Calculate bounding box of all clipboard rectangles
-      const minX = Math.min(...rectanglesToPaste.map(r => r.x))
-      const minY = Math.min(...rectanglesToPaste.map(r => r.y))
+      const minX = Math.min(...allX)
+      const minY = Math.min(...allY)
 
-      // Paste all rectangles with same relative positions
-      for (const original of rectanglesToPaste) {
-        // Calculate position relative to group's top-left
-        const relativeX = original.x - minX
-        const relativeY = original.y - minY
+      // Paste all shapes with same relative positions
+      for (const original of clipboardShapes) {
+        typeCounts[original.type]++
+        
+        switch (original.type) {
+          case 'rectangle': {
+            const rect = original as Rectangle
+            const relativeX = rect.x - minX
+            const relativeY = rect.y - minY
+            const newX = Math.min(minX + PASTE_OFFSET + relativeX, CANVAS_WIDTH - rect.width)
+            const newY = Math.min(minY + PASTE_OFFSET + relativeY, CANVAS_HEIGHT - rect.height)
 
-        // Apply uniform offset to entire group
-        const newX = Math.min(
-          minX + PASTE_OFFSET + relativeX,
-          CANVAS_WIDTH - original.width
-        )
-        const newY = Math.min(
-          minY + PASTE_OFFSET + relativeY,
-          CANVAS_HEIGHT - original.height
-        )
+            const newRect = await canvasService.createRectangle({
+              x: newX,
+              y: newY,
+              width: rect.width,
+              height: rect.height,
+              color: rect.color,
+              createdBy: user.uid
+            })
 
-        const input: RectangleInput = {
-          x: newX,
-          y: newY,
-          width: original.width,
-          height: original.height,
-          color: original.color,
-          createdBy: user.uid
-        }
+            if (newRect) {
+              newSelection.set(newRect.id, 'rectangle')
+              await canvasService.selectRectangle(newRect.id, user.uid, username)
+            }
+            break
+          }
 
-        const newRectangle = await canvasService.createRectangle(input)
-        if (newRectangle) {
-          newSelection.set(newRectangle.id, 'rectangle')
-          // Select the newly pasted rectangle in Firebase
-          await canvasService.selectRectangle(newRectangle.id, user.uid, username)
+          case 'circle': {
+            const circle = original as CircleShape
+            const relativeX = circle.x - minX
+            const relativeY = circle.y - minY
+            const newX = Math.min(minX + PASTE_OFFSET + relativeX, CANVAS_WIDTH - circle.radius * 2)
+            const newY = Math.min(minY + PASTE_OFFSET + relativeY, CANVAS_HEIGHT - circle.radius * 2)
+
+            const newCircle = await canvasService.createCircle({
+              x: newX,
+              y: newY,
+              radius: circle.radius,
+              color: circle.color,
+              createdBy: user.uid
+            })
+
+            if (newCircle) {
+              newSelection.set(newCircle.id, 'circle')
+              await canvasService.selectCircle(newCircle.id, user.uid, username)
+            }
+            break
+          }
+
+          case 'line': {
+            const line = original as LineShape
+            const relativeStartX = line.x - minX
+            const relativeStartY = line.y - minY
+            const relativeEndX = line.endX - minX
+            const relativeEndY = line.endY - minY
+            
+            const newStartX = minX + PASTE_OFFSET + relativeStartX
+            const newStartY = minY + PASTE_OFFSET + relativeStartY
+            const newEndX = minX + PASTE_OFFSET + relativeEndX
+            const newEndY = minY + PASTE_OFFSET + relativeEndY
+
+            const newLine = await canvasService.createLine({
+              x: newStartX,
+              y: newStartY,
+              endX: newEndX,
+              endY: newEndY,
+              strokeWidth: line.strokeWidth,
+              color: line.color,
+              hasArrow: line.hasArrow,
+              createdBy: user.uid
+            })
+
+            if (newLine) {
+              newSelection.set(newLine.id, 'line')
+              await canvasService.selectLine(newLine.id, user.uid, username)
+            }
+            break
+          }
+
+          case 'text': {
+            const text = original as TextShape
+            const relativeX = text.x - minX
+            const relativeY = text.y - minY
+            const newX = minX + PASTE_OFFSET + relativeX
+            const newY = minY + PASTE_OFFSET + relativeY
+
+            const newText = await canvasService.createText({
+              x: newX,
+              y: newY,
+              text: text.text,
+              color: text.color,
+              createdBy: user.uid
+            })
+
+            if (newText) {
+              // Update font properties after creation
+              await canvasService.updateText(newText.id, {
+                fontSize: text.fontSize,
+                fontWeight: text.fontWeight,
+                fontStyle: text.fontStyle
+              })
+              
+              newSelection.set(newText.id, 'text')
+              await canvasService.selectText(newText.id, user.uid, username)
+            }
+            break
+          }
         }
       }
 
       // Select all newly pasted shapes
       setSelectedShapes(newSelection)
       const newIds = Array.from(newSelection.keys())
-      setPrimarySelectionId(newIds[newIds.length - 1] || null)
-      setPrimarySelectionType(newIds.length > 0 ? 'rectangle' : null)
+      const lastEntry = Array.from(newSelection.entries()).pop()
+      setPrimarySelectionId(lastEntry?.[0] || null)
+      setPrimarySelectionType(lastEntry?.[1] || null)
 
+      // Generate toast message
       const count = newIds.length
-      showToast(`Pasted ${count} rectangle${count > 1 ? 's' : ''}`)
+      if (count === 1) {
+        const shapeType = lastEntry?.[1]
+        showToast(`Pasted 1 ${shapeType}`)
+      } else {
+        const types = Object.entries(typeCounts).filter(([, count]) => count > 0)
+        if (types.length === 1) {
+          const [type, typeCount] = types[0]
+          showToast(`Pasted ${typeCount} ${type}s`)
+        } else {
+          showToast(`Pasted ${count} shapes`)
+        }
+      }
     } catch (err) {
-      console.error('Error pasting rectangles:', err)
-      setError(err instanceof Error ? err.message : 'Failed to paste rectangles')
+      console.error('Error pasting shapes:', err)
+      setError(err instanceof Error ? err.message : 'Failed to paste shapes')
     }
   }, [user, username, clipboardShapes, showToast])
 
