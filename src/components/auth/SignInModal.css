@@ -1,0 +1,79 @@
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.sign-in-modal {
+  background: white;
+  border-radius: 12px;
+  padding: 48px;
+  max-width: 400px;
+  width: 90%;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.modal-header h1 {
+  margin: 0 0 8px 0;
+  font-size: 32px;
+  color: #1a1a1a;
+}
+
+.modal-header p {
+  margin: 0 0 32px 0;
+  font-size: 16px;
+  color: #666;
+}
+
+.error-message {
+  background: #fee;
+  border: 1px solid #fcc;
+  color: #c00;
+  padding: 12px;
+  border-radius: 6px;
+  margin-bottom: 16px;
+  font-size: 14px;
+}
+
+.sign-in-button {
+  width: 100%;
+  padding: 16px 24px;
+  font-size: 16px;
+  font-weight: 500;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: white;
+  color: #444;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  transition: all 0.2s;
+}
+
+.sign-in-button:hover:not(:disabled) {
+  background: #f8f9fa;
+  border-color: #bbb;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.sign-in-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.sign-in-footer {
+  margin-top: 16px;
+  font-size: 13px;
+  color: #888;
+}
+

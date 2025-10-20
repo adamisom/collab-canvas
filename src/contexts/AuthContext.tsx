@@ -1,21 +1,16 @@
-import React, { createContext, useContext, useEffect, useState } from 'react'
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react'
+import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth'
 import {
   firebaseAuth,
-  firebaseDatabase,
-  signInUserAnonymously,
-  onAuthStateChange,
-  dbRef,
-  dbSet,
-  dbGet
+  onAuthStateChange
 } from '../services/firebaseService'
 import type { User } from '../services/firebaseService'
-import { cursorService } from '../services/cursorService'
 
 interface AuthContextType {
   user: User | null
   username: string | null
   loading: boolean
-  signIn: (username: string) => Promise<void>
+  signInWithGoogle: () => Promise<void>
   signOut: () => Promise<void>
 }
 
@@ -35,94 +30,56 @@ interface AuthProviderProps {
   children: React.ReactNode
 }
 
+// Google Auth provider (initialized once)
+const googleProvider = new GoogleAuthProvider()
+
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null)
-  const [username, setUsername] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
+  // Simplified auth state listener - user profile created by Cloud Function
   useEffect(() => {
-    const unsubscribe = onAuthStateChange(firebaseAuth, async (firebaseUser) => {
-      if (firebaseUser) {
-        setUser(firebaseUser)
-        
-        // Retrieve username from localStorage first (for immediate UI update)
-        const storedUsername = localStorage.getItem('username')
-        if (storedUsername) {
-          setUsername(storedUsername)
-        }
-        
-        // Then sync with Firebase database
-        try {
-          const userRef = dbRef(firebaseDatabase, `users/${firebaseUser.uid}`)
-          const snapshot = await dbGet(userRef)
-          
-          if (snapshot.exists()) {
-            const userData = snapshot.val()
-            setUsername(userData.username)
-            localStorage.setItem('username', userData.username)
-          }
-        } catch (error) {
-          console.error('Error fetching user data:', error)
-        }
-      } else {
-        setUser(null)
-        setUsername(null)
-        localStorage.removeItem('username')
-      }
+    const unsubscribe = onAuthStateChange(firebaseAuth, (firebaseUser) => {
+      setUser(firebaseUser)
       setLoading(false)
     })
-
-    return () => unsubscribe()
+    
+    return unsubscribe
   }, [])
 
-  const signIn = async (usernameInput: string) => {
+  // Google Sign-In (user profile automatically created by Cloud Function)
+  const signInWithGoogle = useCallback(async () => {
     try {
       setLoading(true)
-      
-      // Sign in anonymously with Firebase
-      const result = await signInUserAnonymously(firebaseAuth)
-      const firebaseUser = result.user
-      
-      // Store username in localStorage immediately
-      localStorage.setItem('username', usernameInput)
-      setUsername(usernameInput)
-      
-      // Store username in Firebase Realtime Database
-      const userRef = dbRef(firebaseDatabase, `users/${firebaseUser.uid}`)
-      await dbSet(userRef, {
-        username: usernameInput,
-        createdAt: Date.now(),
-        lastActive: Date.now()
-      })
-      
-    } catch (error) {
-      console.error('Error signing in:', error)
+      await signInWithPopup(firebaseAuth, googleProvider)
+      // User profile automatically created by Firebase Auth Trigger
+    } catch (error: unknown) {
+      console.error('Error signing in with Google:', error)
       throw error
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
-  const signOut = async () => {
+  // Simplified sign-out (Cloud Function handles cursor cleanup)
+  const signOut = useCallback(async () => {
     try {
-      // Clean up cursor data before signing out
-      if (user) {
-        await cursorService.removeCursor(user.uid)
-      }
-      
       await firebaseAuth.signOut()
-      localStorage.removeItem('username')
-    } catch (error) {
+      setUser(null)
+    } catch (error: unknown) {
       console.error('Error signing out:', error)
       throw error
     }
-  }
+  }, [])
+
+  // Derive username from user profile (displayName or email)
+  const username = user?.displayName || user?.email?.split('@')[0] || null
 
   const value: AuthContextType = {
     user,
     username,
     loading,
-    signIn,
+    signInWithGoogle,
     signOut
   }
 

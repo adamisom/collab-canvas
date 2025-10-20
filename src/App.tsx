@@ -2,8 +2,9 @@ import React from 'react'
 import './App.css'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { CanvasProvider, useCanvas } from './contexts/CanvasContext'
+import { UserProfilesProvider } from './contexts/UserProfilesContext'
 import { useCursors } from './hooks/useCursors'
-import LoginForm from './components/auth/LoginForm'
+import SignInModal from './components/auth/SignInModal'
 import Header from './components/layout/Header'
 import Canvas from './components/canvas/Canvas'
 import UsersList from './components/canvas/UsersList'
@@ -72,16 +73,18 @@ const AppContent: React.FC = () => {
   }
 
   if (!user) {
-    return <LoginForm />
+    return <SignInModal />
   }
 
   return (
-    <div className="App">
-      <Header />
-      <CanvasProvider>
-        <CanvasContent />
-      </CanvasProvider>
-    </div>
+    <UserProfilesProvider>
+      <div className="App">
+        <Header />
+        <CanvasProvider>
+          <CanvasContent />
+        </CanvasProvider>
+      </div>
+    </UserProfilesProvider>
   )
 }
 

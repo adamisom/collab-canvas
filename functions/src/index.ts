@@ -164,3 +164,6 @@ export const processAICommand = functions.https.onCall(
     }
   }
 );
+
+// Export auth triggers (PR #13: Auth Migration)
+export { onUserCreated, onUserDeleted } from './authTriggers'
