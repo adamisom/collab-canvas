@@ -97,29 +97,20 @@ export class CursorService {
 
   // Listen to all cursor position changes (real-time)
   onCursorsChange(callback: (cursors: CursorData) => void): () => void {
-    console.log('🔧 Setting up onCursorsChange listener')
     const handleChange = (snapshot: DataSnapshot) => {
-      console.log('📡 onCursorsChange fired! snapshot.exists():', snapshot.exists())
       if (snapshot.exists()) {
         const cursorsData = snapshot.val() as CursorData
-        console.log('📦 Raw cursorsData:', cursorsData)
         const activeCursors = this.filterStaleCursors(cursorsData)
-        console.log('✨ Active cursors after filter:', activeCursors)
         callback(activeCursors)
       } else {
-        console.log('📭 No cursors in database')
         callback({})
       }
     }
 
-    console.log('🔌 Calling dbOnValue with cursorsRef:', this.cursorsRef.toString())
-    dbOnValue(this.cursorsRef, handleChange, (error) => {
-      console.error('❌ dbOnValue error handler:', error)
-    })
+    dbOnValue(this.cursorsRef, handleChange)
 
     // Return unsubscribe function
     return () => {
-      console.log('🔌 Unsubscribing from cursors')
       dbOff(this.cursorsRef, 'value', handleChange)
     }
   }

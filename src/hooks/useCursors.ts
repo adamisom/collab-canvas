@@ -54,7 +54,6 @@ export const useCursors = (): UseCursorsReturn => {
 
     // Set up real-time listener for all cursor positions
     const unsubscribe = cursorService.onCursorsChange((newCursors) => {
-      console.log('🎯 Cursors received:', newCursors)
       // Filter out current user's cursor from the display
       const otherUsersCursors: CursorData = {}
       
@@ -64,7 +63,6 @@ export const useCursors = (): UseCursorsReturn => {
         }
       })
       
-      console.log('👥 Other users cursors:', otherUsersCursors)
       setCursors(otherUsersCursors)
       setLoading(false)
     })
