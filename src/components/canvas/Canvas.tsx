@@ -430,7 +430,7 @@ const Canvas: React.FC<CanvasProps> = ({
       // Otherwise, select it
       await selectRectangle(rectangle.id)
     }
-  }, [clearSelection, selectRectangle, selectMultiple, primarySelectionId, selectedShapes])
+  }, [clearSelection, selectRectangle, primarySelectionId])
 
   // Handle rectangle drag start
   const handleRectangleDragStart = useCallback(async (rectangle: RectangleType) => {

@@ -551,12 +551,13 @@ export class CanvasCommandExecutor {
       throw new Error('No shapes selected. Please select one or more shapes first.')
     }
 
-    // Validate color
-    if (!VALID_AI_COLORS.includes(color)) {
+    // Validate color (use type assertion for includes check with readonly const array)
+    if (!(VALID_AI_COLORS as readonly string[]).includes(color)) {
       throw new Error(`Invalid color: ${color}. Must be one of: ${VALID_AI_COLORS.join(', ')}`)
     }
 
-    await this.context.changeSelectedShapesColor(color as typeof VALID_AI_COLORS[number])
+    // Safe to pass after validation
+    await this.context.changeSelectedShapesColor(color)
   }
 
   /**

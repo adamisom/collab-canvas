@@ -39,7 +39,7 @@ describe('CanvasCommandExecutor', () => {
     mockDeleteSelectedShapes = vi.fn()
     mockChangeSelectedShapesColor = vi.fn()
 
-    // Create mock context
+    // Create mock context (Partial type for test mocking - only includes methods used in tests)
     mockContext = {
       rectangles: [...mockRectangles],
       primarySelectionId: 'rect1',
@@ -55,7 +55,7 @@ describe('CanvasCommandExecutor', () => {
       setSelectionLocked: vi.fn(),
       deleteSelectedShapes: mockDeleteSelectedShapes,
       changeSelectedShapesColor: mockChangeSelectedShapesColor
-    } as any
+    } as Partial<CanvasContextMethods> as CanvasContextMethods
 
     executor = new CanvasCommandExecutor(mockContext)
   })
