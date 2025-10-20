@@ -162,7 +162,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
    * Centralizes the mapping between shape types and their service operations
    * MOVED UP: Must be defined before selectAll and other functions that use it
    */
-  const getShapeServiceMethods = (shapeType: ShapeType) => {
+  const getShapeServiceMethods = useCallback((shapeType: ShapeType) => {
     switch (shapeType) {
       case 'rectangle':
         return {
@@ -185,7 +185,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
           deselect: canvasService.deselectText.bind(canvasService)
         }
     }
-  }
+  }, [])
 
   // Initialize canvas state and set up real-time listeners
   useEffect(() => {
@@ -1089,7 +1089,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       const methods = getShapeServiceMethods(prevType)
       await methods.deselect(prevId, user.uid)
     }
-  }, [selectedShapes, user])
+  }, [selectedShapes, user, getShapeServiceMethods])
 
   /**
    * Helper: Update primary selection after removing a shape
@@ -1188,7 +1188,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
         setPrimarySelectionType(shapeType)
       }
     }
-  }, [user, username, selectionLocked, selectRectangle, selectedShapes, showToast, findShapeByIdAndType, clearAllSelections, updatePrimaryAfterRemoval])
+  }, [user, username, selectionLocked, selectRectangle, selectedShapes, showToast, findShapeByIdAndType, clearAllSelections, updatePrimaryAfterRemoval, getShapeServiceMethods])
 
 
   // Unified deleteShape (handles rectangles, circles, lines, text)
