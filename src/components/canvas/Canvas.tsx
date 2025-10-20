@@ -379,28 +379,67 @@ const Canvas: React.FC<CanvasProps> = ({
     const minY = Math.min(selectionBoxStart.y, selectionBoxEnd.y)
     const maxY = Math.max(selectionBoxStart.y, selectionBoxEnd.y)
 
-    // Find all rectangles fully contained in selection box
-    const selectedIds = rectangles
-      .filter(rect => {
-        const rectLeft = rect.x
-        const rectRight = rect.x + rect.width
-        const rectTop = rect.y
-        const rectBottom = rect.y + rect.height
+    // Find all shapes fully contained in selection box (all types)
+    const shapesToSelect: Array<{ id: string; type: 'rectangle' | 'circle' | 'line' | 'text' }> = []
 
-        return rectLeft >= minX && rectRight <= maxX && 
-               rectTop >= minY && rectBottom <= maxY
-      })
-      .map(rect => rect.id)
+    // Check rectangles
+    rectangles.forEach(rect => {
+      const rectLeft = rect.x
+      const rectRight = rect.x + rect.width
+      const rectTop = rect.y
+      const rectBottom = rect.y + rect.height
+      if (rectLeft >= minX && rectRight <= maxX && rectTop >= minY && rectBottom <= maxY) {
+        shapesToSelect.push({ id: rect.id, type: 'rectangle' })
+      }
+    })
 
-    // Select the rectangles
-    if (selectedIds.length > 0) {
-      await selectMultiple(selectedIds)
+    // Check circles
+    circles.forEach(circle => {
+      const circleLeft = circle.x - circle.radius
+      const circleRight = circle.x + circle.radius
+      const circleTop = circle.y - circle.radius
+      const circleBottom = circle.y + circle.radius
+      if (circleLeft >= minX && circleRight <= maxX && circleTop >= minY && circleBottom <= maxY) {
+        shapesToSelect.push({ id: circle.id, type: 'circle' })
+      }
+    })
+
+    // Check lines
+    lines.forEach(line => {
+      const lineMinX = Math.min(line.x, line.endX)
+      const lineMaxX = Math.max(line.x, line.endX)
+      const lineMinY = Math.min(line.y, line.endY)
+      const lineMaxY = Math.max(line.y, line.endY)
+      if (lineMinX >= minX && lineMaxX <= maxX && lineMinY >= minY && lineMaxY <= maxY) {
+        shapesToSelect.push({ id: line.id, type: 'line' })
+      }
+    })
+
+    // Check texts (use measured dimensions if available, otherwise estimate)
+    texts.forEach(text => {
+      const textWidth = text.measuredWidth || 100  // Fallback estimate
+      const textHeight = text.measuredHeight || 20  // Fallback estimate
+      const textLeft = text.x
+      const textRight = text.x + textWidth
+      const textTop = text.y
+      const textBottom = text.y + textHeight
+      if (textLeft >= minX && textRight <= maxX && textTop >= minY && textBottom <= maxY) {
+        shapesToSelect.push({ id: text.id, type: 'text' })
+      }
+    })
+
+    // Select all shapes in the box (all types)
+    if (shapesToSelect.length > 0) {
+      // Call the generic selectShape function for each shape
+      for (const shape of shapesToSelect) {
+        await selectShape(shape.id, shape.type, true)  // additive = true
+      }
     }
 
     // Clear selection box
     setSelectionBoxStart(null)
     setSelectionBoxEnd(null)
-  }, [selectionBoxStart, selectionBoxEnd, rectangles, selectMultiple, isLassoMode, lassoPoints, selectShapesInLasso])
+  }, [selectionBoxStart, selectionBoxEnd, rectangles, circles, lines, texts, selectShape, isLassoMode, lassoPoints, selectShapesInLasso])
 
   // Handle rectangle click (selection/deselection)
   const handleRectangleClick = useCallback(async (rectangle: RectangleType, cmdOrCtrlPressed: boolean = false) => {

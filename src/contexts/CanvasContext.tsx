@@ -569,40 +569,54 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     }
   }, [selectionLocked, user, username, rectangles, selectedShapes, showToast])
 
-  // NEW: Select all available rectangles (skip those selected by others)
+  // NEW: Select all available shapes (skip those selected by others)
   const selectAll = useCallback(async () => {
     if (selectionLocked) return
     if (!user || !username) return
 
-    // Filter to only available rectangles
-    const availableIds = rectangles
-      .filter(r => !r.selectedBy || r.selectedBy === user.uid)
-      .map(r => r.id)
+    // Collect all available shapes from all types
+    const availableShapes: Array<{ id: string; type: ShapeType }> = [
+      ...rectangles
+        .filter(r => !r.selectedBy || r.selectedBy === user.uid)
+        .map(r => ({ id: r.id, type: 'rectangle' as ShapeType })),
+      ...circles
+        .filter(c => !c.selectedBy || c.selectedBy === user.uid)
+        .map(c => ({ id: c.id, type: 'circle' as ShapeType })),
+      ...lines
+        .filter(l => !l.selectedBy || l.selectedBy === user.uid)
+        .map(l => ({ id: l.id, type: 'line' as ShapeType })),
+      ...texts
+        .filter(t => !t.selectedBy || t.selectedBy === user.uid)
+        .map(t => ({ id: t.id, type: 'text' as ShapeType }))
+    ]
 
     // Enforce selection limit
-    if (availableIds.length > 25) {
-      showToast(`Too many rectangles (${availableIds.length}). Max selection is 25.`)
+    if (availableShapes.length > 25) {
+      showToast(`Too many shapes (${availableShapes.length}). Max selection is 25.`)
       return
     }
 
     // Clear previous selections
-    for (const prevId of selectedShapes.keys()) {
-      await canvasService.deselectRectangle(prevId, user.uid)
+    for (const [prevId, prevType] of selectedShapes.entries()) {
+      const methods = getShapeServiceMethods(prevType)
+      await methods.deselect(prevId, user.uid)
     }
 
-    // Select all available ones
-    for (const id of availableIds) {
-      await canvasService.selectRectangle(id, user.uid, username)
-    }
-
+    // Select all available shapes
     const newSelection = new Map<string, ShapeType>()
-    availableIds.forEach(id => newSelection.set(id, 'rectangle'))
-    setSelectedShapes(newSelection)
-    setPrimarySelectionId(availableIds[availableIds.length - 1] || null)
-    setPrimarySelectionType(availableIds.length > 0 ? 'rectangle' : null)
+    for (const shape of availableShapes) {
+      const methods = getShapeServiceMethods(shape.type)
+      await methods.select(shape.id, user.uid, username)
+      newSelection.set(shape.id, shape.type)
+    }
 
-    showToast(`Selected all ${availableIds.length} rectangles`)
-  }, [selectionLocked, user, username, rectangles, selectedShapes, showToast])
+    setSelectedShapes(newSelection)
+    const lastShape = availableShapes[availableShapes.length - 1]
+    setPrimarySelectionId(lastShape?.id || null)
+    setPrimarySelectionType(lastShape?.type || null)
+
+    showToast(`Selected all ${availableShapes.length} shape${availableShapes.length !== 1 ? 's' : ''}`)
+  }, [selectionLocked, user, username, rectangles, circles, lines, texts, selectedShapes, showToast, getShapeServiceMethods])
 
   // NEW: Clear selection
   const clearSelection = useCallback(async () => {
