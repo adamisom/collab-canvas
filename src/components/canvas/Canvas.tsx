@@ -542,16 +542,6 @@ const Canvas: React.FC<CanvasProps> = ({
   }, [])
 
   /**
-   * Factory: Create a click handler that selects a shape by type
-   * (Circle has special toggle behavior, so it uses a custom handler)
-   */
-  const createShapeClickHandler = useCallback((shapeType: 'line' | 'text') => {
-    return (shapeId: string) => {
-      selectShape(shapeId, shapeType)
-    }
-  }, [selectShape])
-
-  /**
    * Factory: Create a drag end handler with shape-specific update function
    */
   const createShapeDragEndHandler = useCallback((
@@ -610,8 +600,23 @@ const Canvas: React.FC<CanvasProps> = ({
     }
   }, [resizeCircle])
 
-  // PR #7: LINE HANDLERS (use shared factories)
-  const handleLineClick = useMemo(() => createShapeClickHandler('line'), [createShapeClickHandler])
+  // PR #7: LINE HANDLERS (line click has toggle behavior like circle)
+  const handleLineClick = useCallback(async (lineId: string) => {
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur()
+    }
+    
+    if (primarySelectionId === lineId) {
+      if (justUsedAICommandRef.current) {
+        justUsedAICommandRef.current = false
+        return
+      }
+      await clearSelection()
+    } else {
+      await selectShape(lineId, 'line')
+    }
+  }, [clearSelection, selectShape, primarySelectionId])
+
   const handleLineDragStart = handleShapeDragStart  // Use shared handler
   const handleLineDragEnd = useMemo(
     () => createShapeDragEndHandler(updateLine, 'line'),
@@ -626,8 +631,23 @@ const Canvas: React.FC<CanvasProps> = ({
     }
   }, [updateLineEndpoints])
 
-  // PR #8: TEXT HANDLERS (use shared factories)
-  const handleTextClick = useMemo(() => createShapeClickHandler('text'), [createShapeClickHandler])
+  // PR #8: TEXT HANDLERS (text click has toggle behavior like circle/line)
+  const handleTextClick = useCallback(async (textId: string) => {
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur()
+    }
+    
+    if (primarySelectionId === textId) {
+      if (justUsedAICommandRef.current) {
+        justUsedAICommandRef.current = false
+        return
+      }
+      await clearSelection()
+    } else {
+      await selectShape(textId, 'text')
+    }
+  }, [clearSelection, selectShape, primarySelectionId])
+
   const handleTextDragStart = handleShapeDragStart  // Use shared handler
   const handleTextDragEnd = useMemo(
     () => createShapeDragEndHandler(updateText, 'text'),
