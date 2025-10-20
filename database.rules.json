@@ -2,7 +2,7 @@
   "rules": {
     "users": {
       "$userId": {
-        ".read": "auth.uid === $userId",
+        ".read": "auth != null",
         ".write": "auth.uid === $userId",
         "aiCommandCount": {
           ".read": "auth.uid === $userId",
