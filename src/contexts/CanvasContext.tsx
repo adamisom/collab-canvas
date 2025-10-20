@@ -72,12 +72,12 @@ interface CanvasContextType {
   setSelectionLocked: (locked: boolean) => void
   
   // Bulk operations (NEW)
-  deleteSelectedRectangles: () => Promise<void>
-  changeSelectedRectanglesColor: (color: string) => Promise<void>
+  deleteSelectedShapes: () => Promise<void>
+  changeSelectedShapesColor: (color: string) => Promise<void>
   
   // Clipboard operations (REFACTORED: PR #5)
-  copySelectedRectangles: () => void  // Works with all selected shapes
-  pasteRectangles: () => Promise<void>  // Handles Shape[] discriminated union
+  copySelectedShapes: () => void  // Works with all selected shapes
+  pasteShapes: () => Promise<void>  // Handles Shape[] discriminated union
   duplicateShape: (shapeId: string, shapeType: ShapeType) => Promise<boolean>  // Works with all shape types
   duplicateRectangle: (rectangleId: string) => Promise<Rectangle | null>  // Deprecated (single only)
   hasClipboardData: () => boolean
@@ -619,7 +619,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
   }, [user, selectedShapes])
 
   // NEW: Delete all selected shapes (rectangles, circles, lines, texts)
-  const deleteSelectedRectangles = useCallback(async () => {
+  const deleteSelectedShapes = useCallback(async () => {
     if (selectedShapes.size === 0) return
 
     // Count shapes by type
@@ -670,7 +670,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
   }, [selectedShapes, showToast])
 
   // NEW: Change color of all selected shapes
-  const changeSelectedRectanglesColor = useCallback(async (color: string) => {
+  const changeSelectedShapesColor = useCallback(async (color: string) => {
     if (selectedShapes.size === 0) return
 
     // Update all sequentially based on shape type
@@ -1256,7 +1256,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
   }, [changeRectangleColor, changeCircleColor, changeLineColor, changeTextColor])
 
   // Copy all selected shapes to clipboard (all shape types)
-  const copySelectedRectangles = useCallback(() => {
+  const copySelectedShapes = useCallback(() => {
     if (selectedShapes.size === 0) {
       showToast('No shapes selected to copy')
       return
@@ -1311,7 +1311,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
   }, [rectangles, circles, lines, texts, selectedShapes, showToast])
 
   // Paste all clipboard shapes (all shape types)
-  const pasteRectangles = useCallback(async (): Promise<void> => {
+  const pasteShapes = useCallback(async (): Promise<void> => {
     if (!user || !username) {
       setError('You must be signed in to paste')
       return
@@ -1973,10 +1973,10 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     selectAll,
     clearSelection,
     setSelectionLocked,
-    deleteSelectedRectangles,
-    changeSelectedRectanglesColor,
-    copySelectedRectangles,
-    pasteRectangles,
+    deleteSelectedShapes,
+    changeSelectedShapesColor,
+    copySelectedShapes,
+    pasteShapes,
     duplicateShape,
     duplicateRectangle,
     hasClipboardData,

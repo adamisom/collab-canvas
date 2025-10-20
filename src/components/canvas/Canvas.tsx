@@ -69,8 +69,8 @@ const Canvas: React.FC<CanvasProps> = ({
   const justUsedAICommandRef = useRef(false)
   
   // Refs for clipboard operations (to avoid dependency array issues)
-  const copySelectedRectanglesRef = useRef<() => void>()  // CHANGED
-  const pasteRectanglesRef = useRef<() => Promise<void>>()  // CHANGED
+  const copySelectedShapesRef = useRef<() => void>()  // CHANGED
+  const pasteShapesRef = useRef<() => Promise<void>>()  // CHANGED
   
   // Refs for layering operations
   const bringToFrontRef = useRef<(rectangleId: string) => Promise<void>>()
@@ -102,16 +102,16 @@ const Canvas: React.FC<CanvasProps> = ({
     resizeRectangle, 
     resizeCircle,          // PR #6
     deleteRectangle, 
-    deleteSelectedRectangles, // NEW: Delete all selected
+    deleteSelectedShapes, // NEW: Delete all selected
     selectRectangle,
     selectShape,           // PR #6, updated PR #7, updated PR #8: Unified selection
     selectMultiple,        // Multi-select operation
     selectAll,             // Select all
     clearSelection,        // Clear selection
     changeShapeColor,      // PR #6, updated PR #7, updated PR #8: Unified color change
-    changeSelectedRectanglesColor, // NEW: Change color of all selected
-    copySelectedRectangles,  // Copy selected
-    pasteRectangles,         // Paste clipboard
+    changeSelectedShapesColor, // NEW: Change color of all selected
+    copySelectedShapes,  // Copy selected
+    pasteShapes,         // Paste clipboard
     duplicateShape,
     bringToFront,
     sendToBack,
@@ -668,12 +668,12 @@ const Canvas: React.FC<CanvasProps> = ({
   const handleColorChange = useCallback(async (color: string) => {
     if (selectedShapes.size > 1) {
       // Batch change color for all selected rectangles
-      await changeSelectedRectanglesColor(color)
+      await changeSelectedShapesColor(color)
     } else if (primarySelectionId && primarySelectionType) {
       // Single selection - change only primary
       await changeShapeColor(primarySelectionId, primarySelectionType, color)
     }
-  }, [primarySelectionId, primarySelectionType, selectedShapes, changeShapeColor, changeSelectedRectanglesColor])
+  }, [primarySelectionId, primarySelectionType, selectedShapes, changeShapeColor, changeSelectedShapesColor])
 
   // Get selected shape (primary selection) - check rectangles, circles, lines, and texts
   const selectedRectangle = rectangles.find(r => r.id === primarySelectionId)
@@ -754,9 +754,9 @@ const Canvas: React.FC<CanvasProps> = ({
 
   // Keep clipboard operation refs updated
   useEffect(() => {
-    copySelectedRectanglesRef.current = copySelectedRectangles  // CHANGED
-    pasteRectanglesRef.current = pasteRectangles        // CHANGED
-  }, [copySelectedRectangles, pasteRectangles])
+    copySelectedShapesRef.current = copySelectedShapes  // CHANGED
+    pasteShapesRef.current = pasteShapes        // CHANGED
+  }, [copySelectedShapes, pasteShapes])
 
   // Keep layering operation refs updated
   useEffect(() => {
@@ -843,7 +843,7 @@ const Canvas: React.FC<CanvasProps> = ({
         
         if (selectedShapes.size > 0 && !hasTextSelection) {
           e.preventDefault()
-          copySelectedRectanglesRef.current?.()
+          copySelectedShapesRef.current?.()
         }
         return
       }
@@ -851,7 +851,7 @@ const Canvas: React.FC<CanvasProps> = ({
       // Paste: Cmd+V (Mac) or Ctrl+V (Windows/Linux)
       if ((e.metaKey || e.ctrlKey) && e.key === 'v' && !isTyping) {
         e.preventDefault()
-        pasteRectanglesRef.current?.()
+        pasteShapesRef.current?.()
         return
       }
       
@@ -975,7 +975,7 @@ const Canvas: React.FC<CanvasProps> = ({
         // Prevent deletion during active operations
         if (!isShapeDragging && !isShapeResizing) {
           e.preventDefault()
-          deleteSelectedRectangles()
+          deleteSelectedShapes()
           return
         }
       }
@@ -1072,7 +1072,7 @@ const Canvas: React.FC<CanvasProps> = ({
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)
     }
-  }, [primarySelectionId, rectangles, circles, lines, texts, primarySelectionType, handleRectangleResize, deleteRectangle, deleteSelectedRectangles, isShapeDragging, isShapeResizing, getCurrentStagePosition, selectionLocked, selectedShapes, isShiftPressed, selectAll, clearSelection, selectionBoxStart, lineCreationStart, setShapeMode, alignShapes, isLassoMode, rotateShape, sendViewportInfo, showToast, duplicateShape])
+  }, [primarySelectionId, rectangles, circles, lines, texts, primarySelectionType, handleRectangleResize, deleteRectangle, deleteSelectedShapes, isShapeDragging, isShapeResizing, getCurrentStagePosition, selectionLocked, selectedShapes, isShiftPressed, selectAll, clearSelection, selectionBoxStart, lineCreationStart, setShapeMode, alignShapes, isLassoMode, rotateShape, sendViewportInfo, showToast, duplicateShape])
 
   // Detect when rectangle is selected after AI command (input was focused)
   useEffect(() => {
