@@ -128,6 +128,53 @@ export class CanvasService {
   }
 
   /**
+   * Get minimum zIndex across all shape types
+   * Used for sendToBack operation
+   */
+  private async getMinZIndexAcrossAllShapes(): Promise<number> {
+    try {
+      let minZ = Infinity
+
+      // Check rectangles
+      const rectSnapshot = await dbGet(this.rectanglesRef)
+      if (rectSnapshot.exists()) {
+        const rectangles = Object.values(rectSnapshot.val() as Record<string, Rectangle>)
+        const rectMin = Math.min(...rectangles.map(r => r.zIndex))
+        minZ = Math.min(minZ, rectMin)
+      }
+
+      // Check circles
+      const circleSnapshot = await dbGet(this.circlesRef)
+      if (circleSnapshot.exists()) {
+        const circles = Object.values(circleSnapshot.val() as Record<string, CircleShape>)
+        const circleMin = Math.min(...circles.map(c => c.zIndex))
+        minZ = Math.min(minZ, circleMin)
+      }
+
+      // Check lines
+      const lineSnapshot = await dbGet(this.linesRef)
+      if (lineSnapshot.exists()) {
+        const lines = Object.values(lineSnapshot.val() as Record<string, LineShape>)
+        const lineMin = Math.min(...lines.map(l => l.zIndex))
+        minZ = Math.min(minZ, lineMin)
+      }
+
+      // Check texts
+      const textSnapshot = await dbGet(this.textsRef)
+      if (textSnapshot.exists()) {
+        const texts = Object.values(textSnapshot.val() as Record<string, TextShape>)
+        const textMin = Math.min(...texts.map(t => t.zIndex))
+        minZ = Math.min(minZ, textMin)
+      }
+
+      return minZ === Infinity ? 0 : minZ
+    } catch (error) {
+      console.error('Error fetching min zIndex across shapes:', error)
+      return 0 // Fallback
+    }
+  }
+
+  /**
    * REFACTORED (Post-3C): Generic select shape method
    * Eliminates 100% duplication across circle/line/text selection
    * @private
@@ -354,34 +401,80 @@ export class CanvasService {
    * Bring rectangle to front (sets zIndex to max + 1000)
    * @param rectangleId - ID of the rectangle to bring to front
    */
-  async bringToFront(rectangleId: string): Promise<void> {
+  async bringToFront(shapeId: string): Promise<void> {
     try {
-      const allRectangles = await this.getAllRectangles()
-      const maxZ = this.getMaxZIndex(allRectangles)
+      // Get max zIndex across ALL shape types
+      const maxZ = await this.getMaxZIndexAcrossAllShapes()
       
-      await this.updateRectangle(rectangleId, {
-        zIndex: maxZ + 1000
-      })
+      // Determine which shape type this is and update accordingly
+      const rectSnapshot = await dbGet(dbRef(firebaseDatabase, `rectangles/${shapeId}`))
+      if (rectSnapshot.exists()) {
+        await this.updateRectangle(shapeId, { zIndex: maxZ + 1000 })
+        return
+      }
+
+      const circleSnapshot = await dbGet(dbRef(firebaseDatabase, `circles/${shapeId}`))
+      if (circleSnapshot.exists()) {
+        await dbUpdate(dbRef(firebaseDatabase, `circles/${shapeId}`), { zIndex: maxZ + 1000 })
+        return
+      }
+
+      const lineSnapshot = await dbGet(dbRef(firebaseDatabase, `lines/${shapeId}`))
+      if (lineSnapshot.exists()) {
+        await dbUpdate(dbRef(firebaseDatabase, `lines/${shapeId}`), { zIndex: maxZ + 1000 })
+        return
+      }
+
+      const textSnapshot = await dbGet(dbRef(firebaseDatabase, `texts/${shapeId}`))
+      if (textSnapshot.exists()) {
+        await dbUpdate(dbRef(firebaseDatabase, `texts/${shapeId}`), { zIndex: maxZ + 1000 })
+        return
+      }
+
+      throw new Error(`Shape ${shapeId} not found`)
     } catch (error) {
-      console.error('Error bringing rectangle to front:', error)
+      console.error('Error bringing shape to front:', error)
       throw error
     }
   }
 
   /**
-   * Send rectangle to back (sets zIndex to min - 1000)
-   * @param rectangleId - ID of the rectangle to send to back
+   * Send shape to back (sets zIndex to min - 1000)
+   * @param shapeId - ID of the shape to send to back
    */
-  async sendToBack(rectangleId: string): Promise<void> {
+  async sendToBack(shapeId: string): Promise<void> {
     try {
-      const allRectangles = await this.getAllRectangles()
-      const minZ = this.getMinZIndex(allRectangles)
+      // Get min zIndex across ALL shape types
+      const minZ = await this.getMinZIndexAcrossAllShapes()
       
-      await this.updateRectangle(rectangleId, {
-        zIndex: minZ - 1000
-      })
+      // Determine which shape type this is and update accordingly
+      const rectSnapshot = await dbGet(dbRef(firebaseDatabase, `rectangles/${shapeId}`))
+      if (rectSnapshot.exists()) {
+        await this.updateRectangle(shapeId, { zIndex: minZ - 1000 })
+        return
+      }
+
+      const circleSnapshot = await dbGet(dbRef(firebaseDatabase, `circles/${shapeId}`))
+      if (circleSnapshot.exists()) {
+        await dbUpdate(dbRef(firebaseDatabase, `circles/${shapeId}`), { zIndex: minZ - 1000 })
+        return
+      }
+
+      const lineSnapshot = await dbGet(dbRef(firebaseDatabase, `lines/${shapeId}`))
+      if (lineSnapshot.exists()) {
+        await dbUpdate(dbRef(firebaseDatabase, `lines/${shapeId}`), { zIndex: minZ - 1000 })
+        return
+      }
+
+      const textSnapshot = await dbGet(dbRef(firebaseDatabase, `texts/${shapeId}`))
+      if (textSnapshot.exists()) {
+        await dbUpdate(dbRef(firebaseDatabase, `texts/${shapeId}`), { zIndex: minZ - 1000 })
+        return
+      }
+
+      throw new Error(`Shape ${shapeId} not found`)
     } catch (error) {
-      console.error('Error sending rectangle to back:', error)
+      console.error('Error sending shape to back:', error)
       throw error
     }
   }

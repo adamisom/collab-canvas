@@ -1623,25 +1623,25 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     return clipboardShapes.length > 0
   }, [clipboardShapes])
 
-  // Bring rectangle to front
-  const bringToFront = useCallback(async (rectangleId: string): Promise<void> => {
+  // Bring shape to front (works for all shape types)
+  const bringToFront = useCallback(async (shapeId: string): Promise<void> => {
     try {
-      await canvasService.bringToFront(rectangleId)
+      await canvasService.bringToFront(shapeId)
       setToastMessage('Brought to front')
     } catch (error) {
-      console.error('Error bringing rectangle to front:', error)
-      setError('Failed to bring rectangle to front')
+      console.error('Error bringing shape to front:', error)
+      setError('Failed to bring shape to front')
     }
   }, [])
 
-  // Send rectangle to back
-  const sendToBack = useCallback(async (rectangleId: string): Promise<void> => {
+  // Send shape to back (works for all shape types)
+  const sendToBack = useCallback(async (shapeId: string): Promise<void> => {
     try {
-      await canvasService.sendToBack(rectangleId)
+      await canvasService.sendToBack(shapeId)
       setToastMessage('Sent to back')
     } catch (error) {
-      console.error('Error sending rectangle to back:', error)
-      setError('Failed to send rectangle to back')
+      console.error('Error sending shape to back:', error)
+      setError('Failed to send shape to back')
     }
   }, [])
 
