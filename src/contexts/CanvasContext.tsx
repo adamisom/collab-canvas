@@ -243,6 +243,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
 
     // PR #6: Set up real-time listener for circles
     const unsubscribeCircles = canvasService.onCirclesChange((newCircles) => {
+      console.log('🔄 Circles updated from database:', newCircles.map(c => ({ id: c.id, zIndex: c.zIndex })))
       setCircles(newCircles)
       
       // Similar cleanup logic for circles

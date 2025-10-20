@@ -405,29 +405,30 @@ export class CanvasService {
     try {
       // Get max zIndex across ALL shape types
       const maxZ = await this.getMaxZIndexAcrossAllShapes()
+      const newZ = maxZ + 1000
       
       // Determine which shape type this is and update accordingly
       const rectSnapshot = await dbGet(dbRef(firebaseDatabase, `rectangles/${shapeId}`))
       if (rectSnapshot.exists()) {
-        await this.updateRectangle(shapeId, { zIndex: maxZ + 1000 })
+        await this.updateRectangle(shapeId, { zIndex: newZ })
         return
       }
 
       const circleSnapshot = await dbGet(dbRef(firebaseDatabase, `circles/${shapeId}`))
       if (circleSnapshot.exists()) {
-        await dbUpdate(dbRef(firebaseDatabase, `circles/${shapeId}`), { zIndex: maxZ + 1000 })
+        await dbUpdate(dbRef(firebaseDatabase, `circles/${shapeId}`), { zIndex: newZ })
         return
       }
 
       const lineSnapshot = await dbGet(dbRef(firebaseDatabase, `lines/${shapeId}`))
       if (lineSnapshot.exists()) {
-        await dbUpdate(dbRef(firebaseDatabase, `lines/${shapeId}`), { zIndex: maxZ + 1000 })
+        await dbUpdate(dbRef(firebaseDatabase, `lines/${shapeId}`), { zIndex: newZ })
         return
       }
 
       const textSnapshot = await dbGet(dbRef(firebaseDatabase, `texts/${shapeId}`))
       if (textSnapshot.exists()) {
-        await dbUpdate(dbRef(firebaseDatabase, `texts/${shapeId}`), { zIndex: maxZ + 1000 })
+        await dbUpdate(dbRef(firebaseDatabase, `texts/${shapeId}`), { zIndex: newZ })
         return
       }
 
@@ -479,31 +480,6 @@ export class CanvasService {
     }
   }
 
-  /**
-   * Get maximum zIndex from rectangles (defaults to 1000 if no rectangles)
-   * @param rectangles - Array of rectangles to search
-   * @returns Maximum zIndex value
-   */
-  private getMaxZIndex(rectangles: Rectangle[]): number {
-    if (rectangles.length === 0) return 1000
-    
-    return Math.max(
-      ...rectangles.map(r => r.zIndex ?? 0)
-    )
-  }
-
-  /**
-   * Get minimum zIndex from rectangles (defaults to 0 if no rectangles)
-   * @param rectangles - Array of rectangles to search
-   * @returns Minimum zIndex value
-   */
-  private getMinZIndex(rectangles: Rectangle[]): number {
-    if (rectangles.length === 0) return 0
-    
-    return Math.min(
-      ...rectangles.map(r => r.zIndex ?? 0)
-    )
-  }
 
   /**
    * Get all rectangles from the database (one-time fetch)

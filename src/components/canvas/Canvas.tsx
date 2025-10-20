@@ -1008,7 +1008,16 @@ const Canvas: React.FC<CanvasProps> = ({
     otherLines.forEach(l => shapes.push({ shape: l, type: 'line', zIndex: l.zIndex ?? 0 }))
     otherTexts.forEach(t => shapes.push({ shape: t, type: 'text', zIndex: t.zIndex ?? 0 }))
     
-    return shapes.sort((a, b) => a.zIndex - b.zIndex)
+    const sorted = shapes.sort((a, b) => a.zIndex - b.zIndex)
+    
+    // Debug logging
+    console.log('🎨 All shapes sorted by zIndex:', sorted.map(s => ({
+      type: s.type,
+      id: s.shape.id,
+      zIndex: s.zIndex
+    })))
+    
+    return sorted
   }, [otherRectangles, otherCircles, otherLines, otherTexts])
 
   // Keep clipboard operation refs updated
