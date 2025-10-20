@@ -5,6 +5,7 @@ import type { KonvaEventObject } from 'konva/lib/Node'
 import type { TextShape } from '../../shared/shapes'
 import { getShapeSelectionStyle, isShapeDraggable } from '../../utils/shapeStyleHelpers'
 import * as canvasService from '../../services/canvasService'
+import RotateHandle from './RotateHandle'
 
 interface TextProps {
   textShape: TextShape
@@ -17,19 +18,21 @@ interface TextProps {
   onDragEnd: (id: string, x: number, y: number) => void
   onTextChange: (id: string, newText: string) => void
   onEditingChange: (editing: boolean) => void
+  onRotate?: (shapeId: string, rotation: number) => void
 }
 
 const Text: React.FC<TextProps> = ({
   textShape,
   isSelected,
-  // isPrimary - not used yet, but kept in interface for consistency
+  isPrimary,
   isShiftPressed,
   isInMultiSelectGroup = false,
   onClick,
   onDragStart,
   onDragEnd,
   onTextChange,
-  onEditingChange
+  onEditingChange,
+  onRotate
 }) => {
   const [isEditing, setIsEditing] = useState(false)
   const textRef = useRef<Konva.Text | null>(null)
@@ -186,6 +189,18 @@ const Text: React.FC<TextProps> = ({
         strokeWidth={isSelected ? 1 : 0}  // Subtle stroke for text selection
         listening={!isEditing}
       />
+      
+      {/* Rotate handle (center of text, only when primary and not editing/multi-select) */}
+      {isPrimary && !isShiftPressed && !isInMultiSelectGroup && !isEditing && onRotate && (
+        <RotateHandle
+          shapeId={textShape.id}
+          centerX={(textShape.measuredWidth || 100) / 2}
+          centerY={(textShape.measuredHeight || 20) / 2}
+          currentRotation={textShape.rotation || 0}
+          isShiftPressed={isShiftPressed}
+          onRotate={onRotate}
+        />
+      )}
     </Group>
   )
 }

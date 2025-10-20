@@ -1486,6 +1486,7 @@ const Canvas: React.FC<CanvasProps> = ({
                 onEndpointsChange={handleLineEndpointsChange}
                 onResizeStart={handleResizeStart}
                 onResizeEnd={handleResizeEnd}
+                onRotate={handleRotate}
               />
             ))}
             
@@ -1514,6 +1515,7 @@ const Canvas: React.FC<CanvasProps> = ({
                 onDragEnd={handleTextDragEnd}
                 onTextChange={handleTextChange}
                 onEditingChange={setIsTextEditing}
+                onRotate={handleRotate}
               />
             ))}
             
