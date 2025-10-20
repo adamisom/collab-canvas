@@ -1408,6 +1408,8 @@ const Canvas: React.FC<CanvasProps> = ({
             
             return (
               <>
+                <div className="canvas-info-divider" />
+                
                 <button
                   className={`comment-icon-button ${hasComments ? 'has-comments' : ''}`}
                   onClick={handleCommentIconClick}

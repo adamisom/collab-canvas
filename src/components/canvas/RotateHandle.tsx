@@ -60,7 +60,7 @@ const RotateHandle: React.FC<RotateHandleProps> = ({
       <Line
         points={[centerX, centerY, centerX, handleY]}
         stroke="#8b5cf6"
-        strokeWidth={1}
+        strokeWidth={2}
         dash={[3, 3]}
         listening={false}
       />
