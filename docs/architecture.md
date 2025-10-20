@@ -14,7 +14,7 @@ Collab Canvas is a real-time collaborative canvas application with AI-powered na
 **Development Phases:**
 - **Phase 1:** Collaborative canvas with rectangles, real-time cursors, anonymous auth
 - **Phase 2:** AI Agent with natural language control (OpenAI GPT-4o)
-- **Phase 3:** Multiple shape types, Google Auth, comments, rotation, alignment, lasso selection, production security rules
+- **Phase 3:** Multiple shape types (circles, lines, text), Google Sign-In, comments, rotation, alignment, lasso selection, voice input, production security rules
 
 > **Quick Start:** For setup instructions, see the [Setup Guide](setup-guide.md).
 > 
@@ -30,12 +30,12 @@ Collab Canvas is a real-time collaborative canvas application with AI-powered na
 
 ```
 App
-├── AuthContext (Firebase Anonymous Auth)
+├── AuthContext (Firebase Google Sign-In)
 ├── CanvasContext (Canvas state management)
 │   ├── Header
-│   │   └── LoginForm (Anonymous username entry)
+│   │   └── LoginForm (Google Sign-In button)
 │   ├── Canvas (Konva Stage + Layer)
-│   │   ├── Rectangle[] (canvas objects)
+│   │   ├── Shapes[] (rectangles, circles, lines, text)
 │   │   ├── Cursor[] (other users' cursors)
 │   │   └── ResizeHandle[] (selection handles)
 │   └── AIChat (AI command interface)
@@ -48,22 +48,28 @@ App
 #### Core Contexts
 
 **1. AuthContext** (`/src/contexts/AuthContext.tsx`)
-- Manages Firebase Anonymous Authentication
-- Provides: `user`, `username`, `signIn()`, `signOut()`
-- Stores username in localStorage for persistence
-- Creates anonymous Firebase user on first visit
+- Manages Firebase Google Sign-In (OAuth 2.0)
+- Provides: `user`, `userProfile`, `signIn()`, `signOut()`, `loading`
+- User profile includes: `username`, `email`, `photoURL`, `displayName`, `initials`
+- Sign-in triggers Google OAuth popup flow
+- Sign-out cleans up cursors and presence data
 
 **2. CanvasContext** (`/src/contexts/CanvasContext.tsx`)
 - Central state management for canvas operations
 - **State:**
-  - `rectangles[]` - All canvas rectangles (synced from Firebase)
-  - `selectedRectangleId` - Current selection (exclusive, per-user)
+  - `rectangles[]`, `circles[]`, `lines[]`, `texts[]` - All canvas shapes (synced from Firebase)
+  - `primarySelectionId` - Primary selected shape ID
+  - `primarySelectionType` - Type of primary selection ('rectangle' | 'circle' | 'line' | 'text')
+  - `selectedShapes` - Map of all selected shapes (for multi-select)
   - `loading` - Initial data load state
   - `selectionLocked` - Prevents selection changes during AI processing
   - `viewportInfoRef` - Current viewport (useRef, no re-renders)
 - **Methods:**
-  - Canvas operations: `createRectangle()`, `updateRectangle()`, `resizeRectangle()`, `deleteRectangle()`, `changeRectangleColor()`
-  - Selection: `selectRectangle()`, `clearSelection()`
+  - Shape operations: `createRectangle()`, `createCircle()`, `createLine()`, `createText()`
+  - Updates: `updateRectangle()`, `updateCircle()`, `updateLine()`, `updateText()`
+  - Deletion: `deleteRectangle()`, `deleteCircle()`, `deleteLine()`, `deleteText()`
+  - Selection: `selectShape()`, `selectAllOfType()`, `clearSelection()`
+  - Batch operations: `deleteSelectedShapes()`, `changeSelectedShapesColor()`, `alignShapes()`, `rotateShape()`
   - Viewport: `getViewportInfo()`, `updateViewportInfo()`
   - AI support: `setSelectionLocked()`
 - **Critical Pattern:** All Firebase writes happen here (single source of truth)
@@ -205,22 +211,28 @@ App
 - **Deployment:** `firebase deploy --only functions`
 
 **Tool Definitions** (`/functions/src/tools.ts`)
-- 6 tools using Vercel AI SDK `tool()` function
+- 25+ tools using Vercel AI SDK `tool()` function
 - Zod schema validation for parameters
-- Tools:
-  1. `createRectangle` - Single rectangle creation
-  2. `changeColor` - Modify rectangle color (red/blue/green)
-  3. `moveRectangle` - Update position
-  4. `resizeRectangle` - Change dimensions
-  5. `deleteRectangle` - Remove rectangle
-  6. `createMultipleRectangles` - Batch creation (max 50, layout options)
+- **Shape-agnostic tools** (work on all shapes):
+  - `moveShape`, `deleteShape`, `duplicateShape`, `changeColor`
+  - `bringToFront`, `sendToBack`
+- **Batch operations** (work on all selected shapes):
+  - `moveBatch`, `deleteBatch`, `rotateBatch`, `changeColorBatch`, `resizeBatch`
+- **Shape creation**:
+  - `createRectangle`, `createCircle`, `createLine`, `createText`
+  - `createMultipleRectangles` (batch creation, max 50)
+- **Rectangle-only**: `resizeRectangle` (different sizing properties)
+- **Selection tools**: `selectAllOfType`, `selectShapesByColor`, `clearSelection`
+- **Alignment**: `alignShapes` (left, center, right, top, middle, bottom, distribute)
+- **Text formatting**: `updateTextContent`, `updateTextFontSize`, `toggleTextBold`, `toggleTextItalic`
 - Constants-driven descriptions (no magic numbers)
 
 **System Prompt Builder** (`/functions/src/utils/systemPrompt.ts`)
 - Dynamic prompt with canvas context
-- Includes: rectangle count, viewport center, selected shape
+- Includes: shape counts (rectangles, circles, lines, text), viewport center, selected shapes
+- Clear tool categorization: shape-agnostic, batch operations, shape-specific
 - Defines parameter ranges and validation rules
-- Multi-step command rules (max 5 steps, only if first creates single rectangle)
+- Multi-step command rules (max 5 steps, only if first creates single shape)
 - Color mapping (red/blue/green → hex codes)
 
 **Rate Limiter** (`/functions/src/utils/rateLimiter.ts`)
@@ -255,10 +267,10 @@ firebase functions:config:get
 
 #### Firebase Auth
 
-- **Method:** Anonymous Authentication
-- **Username:** Stored in `/users/{userId}/username`
+- **Method:** Google Sign-In (OAuth 2.0)
+- **User Profile:** Stored in `/users/{userId}` with `username`, `email`, `photoURL`, `displayName`
 - **Session:** Persists across browser sessions
-- **Limitation:** No password, no email (MVP only)
+- **Sign-out:** Cleans up user cursors and presence data
 
 #### Firebase Hosting
 
@@ -684,9 +696,9 @@ firebase functions:config:get
 2. **Rectangle Limit:** 1000 rectangles per canvas
 3. **AI Command Limit:** 1000 commands per user (lifetime)
 4. **Batch Creation:** Max 50 rectangles at once
-5. **Rectangle Colors:** 3 options only (red, blue, green)
-6. **Authentication:** Anonymous only (no persistent accounts)
-7. **Multi-step Commands:** Max 5 steps, only if first creates single rectangle
+5. **Shape Colors:** 3 options only (red, blue, green)
+6. **Authentication:** Google Sign-In required for all operations
+7. **Multi-step Commands:** Max 5 steps, only if first creates single shape
 8. **Cold Start Latency:** Cloud Functions may have 2-5 second cold start
 
 ---
@@ -695,9 +707,10 @@ firebase functions:config:get
 
 #### Authentication & Authorization
 
-- Firebase Anonymous Auth (MVP)
+- Firebase Google Sign-In (OAuth 2.0)
 - All database operations require authentication
-- Users can modify any rectangle (collaborative editing)
+- Users can modify shapes they created or shapes created by others (collaborative editing)
+- Database security rules enforce user ownership and permissions
 - Selection is per-user and exclusive
 
 #### Database Security Rules
