@@ -274,16 +274,19 @@ firebase functions:config:get
 
 **1. AIChat Component** (`/src/components/ai/AIChat.tsx`)
 - **UI States:**
-  - Input form (text + submit button)
+  - Input form (text + submit button + voice button)
   - Loading (spinner + "Processing your command...")
   - Success (green checkmark + message + OK button)
   - Error (red X + message + Retry/OK based on retryability)
 - **Features:**
   - Form submission with Enter key
+  - **Voice input** (Web Speech API, Chrome/Edge only)
+  - **Command history** (last 10 commands, collapsible, localStorage)
   - Disabled state during processing
   - Auto-clear input after submission
   - Retry preserves original command
   - Focus management (auto-focus after clear)
+  - Click history item to reuse command
 - **Hints:** "Try: 'Create a blue rectangle' or 'Make it bigger'"
 - **Position:** Fixed bottom-right (380px wide, responsive on mobile)
 
@@ -739,7 +742,7 @@ firebase functions:config:get
 - **Rotation:** All shapes rotatable with dropdown selector (0-360° in 15° increments)
 - **Alignment:** Align/distribute multiple shapes (left, center, right, top, middle, bottom)
 - **Lasso Selection:** Freehand multi-select with curved path
-- **Multi-Select:** Drag-select, Shift+Click, Cmd/Ctrl+Click, Cmd/Ctrl+A, lasso
+- **Multi-Select:** Drag-select, Shift+Click, Cmd/Ctrl+Click, Cmd/Ctrl+A, Cmd/Ctrl+Shift+A (cycle by type), lasso
 - **Comments:** Attach comments to shapes, unread indicators, localStorage tracking
 
 **Authentication & Security:**
@@ -753,6 +756,9 @@ firebase functions:config:get
 - Batch operations on multi-selected shapes
 - Rotation, alignment commands
 - Text formatting commands
+- Select shapes by color or type
+- **Voice input** (Web Speech API, Chrome/Edge)
+- **Command history** (last 10 commands, localStorage, collapsible UI)
 
 **New Services & Contexts:**
 - `commentsService.ts`, `CommentsContext` - Comments system

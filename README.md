@@ -122,13 +122,15 @@ docs/                # Documentation
 - 🎯 Context-aware (viewport, selection)
 - 📊 Rate limiting (1000 commands per user)
 - 💬 User-friendly error messages
+- 📜 Command history (last 10 commands)
+- 🎤 Voice input (Web Speech API, Chrome/Edge)
 
 ### Phase 3: Advanced Features
 - ✨ **Shapes:** Circles, lines, text (with formatting)
 - 🎨 **Styling:** Color picker, text formatting (bold, italic, font size)
 - 📐 **Alignment:** Align/distribute shapes (left, center, right, top, middle, bottom)
 - 🔄 **Rotation:** Rotate all shape types with dropdown selector
-- 🎯 **Lasso Selection:** Freehand multi-select
+- 🎯 **Selection:** Lasso select, select all by type (Cmd+Shift+A to cycle)
 - 💬 **Comments:** Attach comments to shapes with unread indicators
 - 🔐 **Security:** Production-grade database rules with field validation
 - 👤 **Auth:** Google sign-in, user profiles, auth triggers
@@ -140,21 +142,25 @@ The AI Canvas Agent (bottom-right corner) allows natural language canvas control
 **Example Commands:**
 ```
 "Create a blue rectangle"
+"Create a red circle with radius 50"
 "Add 3 red circles in a row"
-"Draw a line from the top left to bottom right"
+"Draw a line from 100, 100 to 200, 200"
 "Add text that says Hello World"
 "Make the selected shape bigger"
 "Rotate it 45 degrees"
-"Change color to red"
+"Change all blue shapes to red"
+"Select all circles"
 "Align all selected shapes to the left"
 "Delete the selected shapes"
 ```
 
-The AI understands:
-- All shape types (rectangles, circles, lines, text)
-- Multi-select operations
-- Rotation, alignment, styling
-- Viewport-relative positioning
+**Features:**
+- 🎨 All shape types (rectangles, circles, lines, text)
+- 🔄 Multi-select operations and batch commands
+- 📐 Rotation, alignment, styling
+- 🎯 Select by color or type
+- 🗣️ **Voice input** (click microphone icon, Chrome/Edge only)
+- 📜 **Command history** (collapsible, click to reuse)
 
 **Quota:** 1000 commands per user (lifetime)
 

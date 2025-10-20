@@ -321,8 +321,10 @@ const Canvas: React.FC<CanvasProps> = ({
       return
     }
 
-    // If Shift is pressed, start selection box
-    if (isShiftPressed) {
+    // If Shift is pressed (but NOT Cmd/Ctrl), start selection box
+    // Cmd/Ctrl+Click should allow individual shape selection, not create a bounding box
+    const isCmdOrCtrl = e.evt.metaKey || e.evt.ctrlKey
+    if (isShiftPressed && !isCmdOrCtrl) {
       setSelectionBoxStart(canvasCoords)
       setSelectionBoxEnd(canvasCoords)
     }
@@ -508,6 +510,12 @@ const Canvas: React.FC<CanvasProps> = ({
     }
   }, [updateRectangle])
 
+  // NEW: Handle multi-select group drag start
+  const handleMultiSelectGroupDragStart = useCallback((e: KonvaEventObject<DragEvent>) => {
+    e.cancelBubble = true  // Prevent Stage from starting drag
+    setIsRectangleDragging(true)
+  }, [])
+
   // NEW: Handle multi-select group drag end (Konva Group approach - all shape types)
   const handleMultiSelectGroupDragEnd = useCallback(async () => {
     if (!multiSelectGroupRef.current) return
@@ -518,6 +526,9 @@ const Canvas: React.FC<CanvasProps> = ({
     
     // Reset group position immediately (shapes will update via Firebase)
     group.position({ x: 0, y: 0 })
+    
+    // Re-enable stage dragging
+    setIsRectangleDragging(false)
     
     try {
       const updates = []
@@ -1743,6 +1754,10 @@ const Canvas: React.FC<CanvasProps> = ({
                 <Group
                   ref={multiSelectGroupRef}
                   draggable={true}
+                  onMouseDown={(e) => {
+                    e.cancelBubble = true  // Prevent Stage from capturing
+                  }}
+                  onDragStart={handleMultiSelectGroupDragStart}
                   onDragEnd={handleMultiSelectGroupDragEnd}
                 >
                   {/* Render bounding box */}
@@ -1755,7 +1770,7 @@ const Canvas: React.FC<CanvasProps> = ({
                     strokeWidth={2}
                     dash={[8, 4]}
                     fill="transparent"
-                    listening={false}
+                    listening={true}  // Allow capturing drag events for the entire bounding box
                   />
                   
                   {/* Render selected rectangles inside group */}

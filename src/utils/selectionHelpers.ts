@@ -77,8 +77,21 @@ export const boundsIntersect = (a: Bounds, b: Bounds): boolean => {
 }
 
 /**
- * Check if a shape is inside the lasso selection
- * Uses bounding box pre-filter for performance
+ * Check if a shape is inside the lasso selection (partial containment)
+ * 
+ * Algorithm:
+ * - First, quick reject using bounding box intersection
+ * - Then, check if center OR any corner of the bounding box is inside lasso
+ * 
+ * Note: This checks the BOUNDING BOX corners, not the actual shape geometry:
+ * - Rectangle: checks actual corners
+ * - Circle: checks corners of the square that contains the circle
+ * - Line: checks the two endpoints + two other bounding box corners
+ * - Text: checks corners of the text's rectangular bounds
+ * 
+ * This is a performance-optimized approximation that provides good UX for most cases.
+ * True polygon intersection (checking if lasso boundary intersects shape boundary)
+ * would be more accurate but significantly more expensive.
  */
 export const isShapeInLasso = (shape: Shape, lassoPoints: number[]): boolean => {
   if (lassoPoints.length < INTERACTION_CONSTANTS.MIN_LASSO_POINTS) return false
@@ -90,10 +103,21 @@ export const isShapeInLasso = (shape: Shape, lassoPoints: number[]): boolean => 
   const shapeBounds = getShapeBounds(shape)
   if (!boundsIntersect(shapeBounds, lassoBounds)) return false
 
-  // Check if shape center is inside lasso
+  // Check if ANY part of the shape is inside lasso (center or corners)
   const centerX = shapeBounds.x + shapeBounds.width / 2
   const centerY = shapeBounds.y + shapeBounds.height / 2
 
-  return isPointInPolygon({ x: centerX, y: centerY }, lassoPoints)
+  // Check center point
+  if (isPointInPolygon({ x: centerX, y: centerY }, lassoPoints)) return true
+
+  // Check all four corners for partial containment
+  const corners = [
+    { x: shapeBounds.x, y: shapeBounds.y }, // top-left
+    { x: shapeBounds.x + shapeBounds.width, y: shapeBounds.y }, // top-right
+    { x: shapeBounds.x, y: shapeBounds.y + shapeBounds.height }, // bottom-left
+    { x: shapeBounds.x + shapeBounds.width, y: shapeBounds.y + shapeBounds.height } // bottom-right
+  ]
+
+  return corners.some(corner => isPointInPolygon(corner, lassoPoints))
 }
 

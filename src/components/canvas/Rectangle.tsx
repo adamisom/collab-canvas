@@ -229,6 +229,7 @@ const RectangleComponent: React.FC<RectangleProps> = ({
         }
         dash={isSelectedByOther ? [5, 5] : undefined}
         draggable={isSelected && !isResizing && !isShiftPressed && !isInMultiSelectGroup && dragEnabled}
+        listening={!isInMultiSelectGroup}  // Don't capture events when in multi-select group - let Group handle drag
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
