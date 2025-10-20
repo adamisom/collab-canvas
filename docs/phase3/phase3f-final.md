@@ -81,8 +81,10 @@ Phase 3F adds the final documentation and polish features that complete CollabCa
 ## PR #17: AI Agent Enhancements
 
 **Branch**: `feature/ai-enhancements`  
-**Work Level**: Medium-High  
+**Work Level**: Medium  
 **Breaking Changes**: None
+
+> **⚠️ SIMPLIFIED SCOPE:** Focus on command history, suggestions, and enhanced prompts. Voice input deferred. Canvas state snapshots removed (unnecessary for read-only history).
 
 ### Why This PR?
 - Make AI agent more powerful and intelligent
@@ -99,7 +101,7 @@ Phase 3F adds the final documentation and polish features that complete CollabCa
 3. **Voice Input** (BONUS) - Speak commands to AI
 
 **Improved UX:**
-- AI typing indicator (show when AI is thinking)
+- AI typing indicator (✅ **Already exists** - shows "Processing your command..." in AIChat.tsx)
 - Better error messages with suggestions
 - Command confirmation for destructive operations
 
@@ -120,16 +122,18 @@ Phase 3F adds the final documentation and polish features that complete CollabCa
   - "Multiple similar shapes. Want to distribute them evenly?"
 
 **Command History:**
-- Simple read-only list of past commands
-- Store user input and AI response
+- Simple read-only list of **last 10 commands only**
+- Store user input and AI response (success/failure)
+- **No canvas snapshots** - just the text commands and results
 - No state snapshots or undo/redo (out of scope)
-- Just for reference/learning
+- Purpose: Learning tool, quick retry, command discovery, debugging
 
-**Voice Input:**
-- Use Web Speech API
+**Voice Input (TRULY BONUS - Skip for MVP):**
+- Use Web Speech API (Chrome-only, limited browser support)
 - Microphone button in AI chat
 - Convert speech to text
 - Send to AI agent
+- **Recommendation:** Defer to future work due to browser compatibility concerns
 
 ### Files to Create
 
@@ -418,39 +422,33 @@ Add new features to AI chat:
 ```typescript
 import AICommandHistory from './AICommandHistory'
 import AISuggestions from './AISuggestions'
-import VoiceInput from './VoiceInput'
+// import VoiceInput from './VoiceInput'  // SKIP FOR MVP
 import { useAIHistory } from '../../contexts/AIHistoryContext'
 
 const AIChat: React.FC = () => {
   const { addCommand } = useAIHistory()
-  const [isTyping, setIsTyping] = useState(false)
 
   const handleSendMessage = async (message: string) => {
-    // Capture state before
-    const stateBefore = captureCanvasSnapshot()
-    
-    setIsTyping(true)
-    
     try {
       const response = await sendToAI(message)
       
-      // Capture state after
-      const stateAfter = captureCanvasSnapshot()
-      
-      // Add to history
+      // Add to history (simple - no canvas snapshots)
       addCommand({
         id: Date.now().toString(),
         timestamp: Date.now(),
         userInput: message,
         aiResponse: response.message,
-        canvasStateBefore: stateBefore,
-        canvasStateAfter: stateAfter,
         success: true
       })
     } catch (error) {
-      // Handle error
-    } finally {
-      setIsTyping(false)
+      // Add error to history
+      addCommand({
+        id: Date.now().toString(),
+        timestamp: Date.now(),
+        userInput: message,
+        aiResponse: error.message,
+        success: false
+      })
     }
   }
 
@@ -461,14 +459,7 @@ const AIChat: React.FC = () => {
       <AISuggestions />
       
       <div className="chat-messages">
-        {/* Messages */}
-        
-        {isTyping && (
-          <div className="ai-typing">
-            <span>AI is thinking</span>
-            <span className="typing-dots">...</span>
-          </div>
-        )}
+        {/* Existing chat UI - already has typing indicator */}
       </div>
 
       <div className="chat-input-container">
@@ -477,7 +468,7 @@ const AIChat: React.FC = () => {
           className="ai-input"
           placeholder="Ask AI to create, modify, or arrange shapes..."
         />
-        <VoiceInput onTranscript={(text) => handleSendMessage(text)} />
+        {/* <VoiceInput onTranscript={handleSendMessage} /> SKIP FOR MVP */}
         <button onClick={() => handleSendMessage(inputValue)}>Send</button>
       </div>
     </div>
@@ -557,34 +548,73 @@ BEST PRACTICES:
 - [ ] Final transcript sent to AI
 - [ ] Error handling works (no mic permission, etc.)
 
-**Manual Testing - Advanced AI:**
-- [ ] Batch operations work ("Create 10 circles")
-- [ ] Conditional operations work ("Change all red to blue")
-- [ ] Relative positioning works
-- [ ] AI typing indicator shows
-- [ ] Better error messages displayed
+**Manual Testing - AI Command Coverage (Test each major feature once):**
 
-**AI Testing:**
-- [ ] AI can create multiple shapes in patterns
-- [ ] AI can perform conditional operations
-- [ ] AI gives helpful suggestions
-- [ ] All enhancements sync to all users
+*Shape Creation & Types:*
+- [ ] "Create a blue rectangle at 200, 300"
+- [ ] "Create a red circle with radius 50"
+- [ ] "Create a line from 100, 100 to 200, 200"
+- [ ] "Add text saying Hello World"
+
+*Multi-Select Operations:*
+- [ ] "Select all rectangles"
+- [ ] "Select the 3 blue shapes"
+- [ ] "Deselect everything"
+
+*Multi-Shape Batch Operations:*
+- [ ] "Create 5 rectangles in a row"
+- [ ] "Delete all the circles"
+- [ ] "Change all red shapes to blue"
+- [ ] "Make all rectangles 100 pixels wide"
+
+*Rotation:*
+- [ ] "Rotate the selected shape 45 degrees"
+- [ ] "Rotate all selected shapes 90 degrees"
+
+*Alignment & Distribution:*
+- [ ] "Align all selected shapes to the left"
+- [ ] "Center the selected shapes vertically"
+- [ ] "Distribute the selected shapes horizontally"
+
+*Text Formatting:*
+- [ ] "Make the text bold"
+- [ ] "Change font size to 24"
+- [ ] "Make the text italic"
+
+*Shape Manipulation:*
+- [ ] "Move the rectangle to 400, 200"
+- [ ] "Make it twice as big"
+- [ ] "Duplicate the selected shapes"
+
+*Conditional/Spatial (If AI can understand):*
+- [ ] "Select all shapes in the top-left area"
+- [ ] "Find all blue rectangles"
+
+**Note:** ~20 focused commands hitting each major feature. Document which commands work, which need tool additions, and which need system prompt improvements.
 
 ### Success Criteria
-- ✅ Command history is comprehensive (read-only)
-- ✅ AI suggestions are helpful
-- ✅ Voice input works (if implemented)
-- ✅ Advanced AI features work
-- ✅ Better UX throughout
+- ✅ Command history works (last 10 commands, read-only)
+- ✅ AI suggestions are helpful and context-aware
+- ✅ AI command coverage tested (~20 commands hitting all features)
+- ✅ Advanced AI features work (batch, conditional, relative)
+- ✅ Better error messages and UX
 - ✅ Real-time sync verified
+
+### Future Work (Deferred)
+- Voice input (Web Speech API - Chrome only)
+- Command undo/redo (requires canvas state snapshots)
+- AI learning from user corrections
+- Natural language improvements over time
 
 ---
 
 ## PR #18: Comments & Annotations
 
 **Branch**: `feature/comments-annotations`  
-**Work Level**: High  
+**Work Level**: Medium-High  
 **Breaking Changes**: None
+
+> **⚠️ MVP FOCUS:** Shape comments only (no canvas comments). Comment icon in info bar with color states (white/yellow) and unread indicator (red dot). Comments panel dropdown shows newest-first. No resolution, @mentions, threading, or editing. localStorage-based unread tracking (Option A - simple). Text validation: 1-500 chars.
 
 ### Why This PR?
 - Essential for asynchronous collaboration
@@ -596,117 +626,174 @@ BEST PRACTICES:
 ### What This PR Delivers
 
 **Comments System:**
-1. **Shape Comments** - Attach comments to specific shapes
-2. **Canvas Comments** - Place comments anywhere on canvas
-3. **@Mentions** - Notify specific users
-4. **Comment Resolution** - Mark comments as resolved
+1. **Shape Comments** - Attach comments to specific shapes (rectangles, circles, lines, text)
+2. **Comment Deletion** - Authors can delete their own comments
+3. **Unread Indicator** - Red dot shows when unread comments exist
 
-> **Note**: Threading/replies are out of scope for this phase. Each comment stands alone.
+> **Note**: Canvas comments (not attached to shapes), threading/replies, @mentions, and comment resolution are out of scope for this phase (defer to future work). Each comment stands alone. Comment editing is also skipped - users should delete and repost instead.
 
 **Annotations:**
-1. **Sticky Notes** - Add notes to canvas
-2. **Arrows/Callouts** - Point to specific areas
-3. **Highlight Shapes** - Temporary visual emphasis
+1. **Sticky Notes** - Add notes to canvas *(Out of scope - future work)*
+2. **Arrows/Callouts** - Point to specific areas *(Out of scope - future work)*
+3. **Highlight Shapes** - Temporary visual emphasis *(Out of scope - future work)*
+
+> **MVP Focus**: Ship basic comments first. Annotations can be added later.
 
 **UI:**
-- Comment indicator on shapes (count badge)
-- Comment panel (sidebar)
-- Inline comment bubbles on canvas
-- Notification system for mentions
+- Comment icon in CanvasInfo bar (shows when shape is selected)
+  - **White**: No comments yet
+  - **Yellow**: Shape has comments
+  - **Red dot** (top-right): Unread comments exist
+- Comments dropdown panel (appears below info bar when icon clicked)
+- Add comment input at top of panel
+- Comments listed newest-first (reverse chronological)
+- Clean, minimal design using initials and user colors
+
+**UI Design Diagram:**
+```
+┌─────────────────────────────────────────────────────────┐
+│  CanvasInfo Bar                                         │
+│  [Zoom] [Pan] [Shape Count] ... [💬] ← Comment Icon    │
+│                                    ↑                    │
+│                                    └─ Yellow if comments│
+│                                       White if none     │
+│                                       Red dot if unread │
+└─────────────────────────────────────────────────────────┘
+                                    │
+                                    │ Click icon
+                                    ↓
+                            ┌───────────────┐
+                            │  Comments (5) │ ← Header with count
+                            │       [X]     │    & close button
+                            ├───────────────┤
+                            │ [Add comment] │ ← Input at TOP
+                            │ [Post] 0/500  │    (newest-first)
+                            ├───────────────┤
+                            │ 💬 Comment 3  │ ← Newest
+                            │   "Great!"    │
+                            │   [Delete]    │
+                            ├───────────────┤
+                            │ 💬 Comment 2  │
+                            │   "Nice work" │
+                            ├───────────────┤
+                            │ 💬 Comment 1  │ ← Oldest
+                            │   "Looks good"│
+                            └───────────────┘
+```
 
 ### Implementation Strategy
 
 **Data Model:**
 ```typescript
-interface Comment {
+// Define in /src/types/comment.ts
+export interface Comment {
   id: string
-  canvasId: string
-  shapeId: string | null  // null for canvas comments
-  x: number  // position for canvas comments
-  y: number
-  text: string
+  shapeId: string  // REQUIRED - always attached to a shape (no canvas comments)
+  text: string     // Min 1 char, max 500 chars
   authorId: string
   authorName: string
-  authorAvatar: string
   createdAt: number
   updatedAt: number
-  resolved: boolean
-  mentions: string[]  // user IDs
+  // No authorAvatar - use initials system from Phase 3E instead
+  // No resolved field - resolution concept removed
+  // No mentions array - @mentions deferred to future work
+  // No parentId - threading not supported
+}
+
+// Local storage for unread tracking (per user)
+interface CommentReadState {
+  lastViewedAt: { [shapeId: string]: number }
 }
 ```
 
-> **Note**: No `parentId` field - threading is not supported.
+> **Note**: Comments are ALWAYS attached to shapes (no canvas comments). No resolution, threading, or @mentions in MVP.
 
 **Firebase Structure:**
 ```
 /comments
   /{commentId}
     - id
-    - canvasId
-    - shapeId
-    - x, y
-    - text
+    - shapeId (required)
+    - text (1-500 chars)
     - authorId
+    - authorName
     - createdAt
-    - resolved
-    - mentions
+    - updatedAt
 ```
 
 **Real-Time Sync:**
-- Comments sync in real-time
-- Notifications for @mentions
-- Visual indicators for unread comments
+- Comments sync in real-time across all users
+- Unread indicator (red dot) appears when new comments arrive since last view
+- Comment icon changes color (white → yellow) when comments exist
+
+**Unread Tracking (Simple - Option A):**
+- Store `lastViewedAt` timestamp in localStorage per shape
+- Any comment with `createdAt > lastViewedAt[shapeId]` is "unread"
+- When user opens comments panel for a shape, update `lastViewedAt[shapeId] = Date.now()`
+- Show red dot if ANY comment for selected shape is unread
 
 ### Files to Create
 
 #### `/src/components/comments/CommentBubble.tsx`
 ```typescript
-import React, { useState } from 'react'
+import React from 'react'
 import { Comment } from '../../types/comment'
+import { getUserColor } from '../../utils/userColors'
 import './CommentBubble.css'
 
 interface CommentBubbleProps {
   comment: Comment
-  onResolve: () => void
   onDelete: () => void
   isOwner: boolean
 }
 
+// Helper to derive initials (reuse from Phase 3E pattern)
+const getInitials = (name: string): string => {
+  if (!name) return '?'
+  const initials = name
+    .split(' ')
+    .filter(n => n.length > 0)
+    .map(n => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2)
+  return initials || '?'
+}
+
 const CommentBubble: React.FC<CommentBubbleProps> = ({
   comment,
-  onResolve,
   onDelete,
   isOwner
 }) => {
-  const [isExpanded, setIsExpanded] = useState(false)
+  const initials = getInitials(comment.authorName)
+  const userColor = getUserColor(comment.authorId)
 
   return (
-    <div className={`comment-bubble ${comment.resolved ? 'resolved' : ''}`}>
-      <div className="comment-header" onClick={() => setIsExpanded(!isExpanded)}>
-        <img src={comment.authorAvatar} alt={comment.authorName} className="avatar" />
+    <div className="comment-bubble">
+      <div className="comment-header">
+        <div 
+          className="comment-avatar-initials"
+          style={{ backgroundColor: userColor }}
+        >
+          {initials}
+        </div>
         <div className="comment-info">
           <span className="author">{comment.authorName}</span>
           <span className="timestamp">
             {new Date(comment.createdAt).toLocaleString()}
           </span>
         </div>
-        {comment.resolved && <span className="resolved-badge">✓ Resolved</span>}
       </div>
 
-      {isExpanded && (
-        <div className="comment-body">
-          <p className="comment-text">{comment.text}</p>
+      <div className="comment-body">
+        <p className="comment-text">{comment.text}</p>
 
+        {isOwner && (
           <div className="comment-actions">
-            {!comment.resolved && (
-              <button onClick={onResolve}>Resolve</button>
-            )}
-            {isOwner && (
-              <button onClick={onDelete} className="danger">Delete</button>
-            )}
+            <button onClick={onDelete} className="danger">Delete</button>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 }
@@ -716,72 +803,83 @@ export default CommentBubble
 
 #### `/src/components/comments/CommentsPanel.tsx`
 ```typescript
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
+import { useAuth } from '../../contexts/AuthContext'
 import { useComments } from '../../contexts/CommentsContext'
 import CommentBubble from './CommentBubble'
 import './CommentsPanel.css'
 
-const CommentsPanel: React.FC = () => {
-  const {
-    comments,
-    addComment,
-    resolveComment,
-    deleteComment,
-    unresolvedCount
-  } = useComments()
-  const [filter, setFilter] = useState<'all' | 'unresolved' | 'resolved'>('all')
+interface CommentsPanelProps {
+  shapeId: string
+  onClose: () => void
+}
 
-  const filteredComments = comments.filter(comment => {
-    if (filter === 'unresolved') return !comment.resolved
-    if (filter === 'resolved') return comment.resolved
-    return true
-  })
+const CommentsPanel: React.FC<CommentsPanelProps> = ({ shapeId, onClose }) => {
+  const { user } = useAuth()
+  const { getCommentsForShape, addComment, deleteComment } = useComments()
+  const [commentText, setCommentText] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const shapeComments = getCommentsForShape(shapeId)
+    .sort((a, b) => b.createdAt - a.createdAt)  // Newest first
+
+  const handleSubmit = async () => {
+    if (!commentText.trim() || commentText.length > 500 || isSubmitting) return
+
+    setIsSubmitting(true)
+    try {
+      await addComment(shapeId, commentText.trim())
+      setCommentText('')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const charCount = commentText.length
+  const isValid = charCount >= 1 && charCount <= 500
 
   return (
     <div className="comments-panel">
       <div className="panel-header">
-        <h3>
-          Comments
-          {unresolvedCount > 0 && (
-            <span className="unresolved-badge">{unresolvedCount}</span>
-          )}
-        </h3>
-        
-        <div className="filter-buttons">
+        <h3>Comments ({shapeComments.length})</h3>
+        <button onClick={onClose} className="close-button">✕</button>
+      </div>
+
+      {/* Add comment input at TOP */}
+      <div className="comment-input-container">
+        <textarea
+          value={commentText}
+          onChange={(e) => setCommentText(e.target.value)}
+          placeholder="Add a comment..."
+          maxLength={500}
+        />
+        <div className="comment-input-actions">
+          <span className={`comment-char-count ${!isValid && charCount > 0 ? 'error' : ''}`}>
+            {charCount}/500
+          </span>
           <button
-            className={filter === 'all' ? 'active' : ''}
-            onClick={() => setFilter('all')}
+            className="submit"
+            onClick={handleSubmit}
+            disabled={!isValid || isSubmitting}
           >
-            All
-          </button>
-          <button
-            className={filter === 'unresolved' ? 'active' : ''}
-            onClick={() => setFilter('unresolved')}
-          >
-            Unresolved
-          </button>
-          <button
-            className={filter === 'resolved' ? 'active' : ''}
-            onClick={() => setFilter('resolved')}
-          >
-            Resolved
+            {isSubmitting ? 'Posting...' : 'Post'}
           </button>
         </div>
       </div>
 
+      {/* Comments list (newest first) */}
       <div className="comments-list">
-        {filteredComments.length === 0 ? (
+        {shapeComments.length === 0 ? (
           <div className="empty-state">
-            No comments yet. Click on a shape to add a comment!
+            No comments yet. Be the first to comment!
           </div>
         ) : (
-          filteredComments.map(comment => (
+          shapeComments.map(comment => (
             <CommentBubble
               key={comment.id}
               comment={comment}
-              onResolve={() => resolveComment(comment.id)}
               onDelete={() => deleteComment(comment.id)}
-              isOwner={comment.authorId === currentUserId}
+              isOwner={comment.authorId === user?.uid}
             />
           ))
         )}
@@ -798,30 +896,15 @@ export default CommentsPanel
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react'
 import { useAuth } from './AuthContext'
 import * as commentsService from '../services/commentsService'
-
-interface Comment {
-  id: string
-  canvasId: string
-  shapeId: string | null
-  x: number
-  y: number
-  text: string
-  authorId: string
-  authorName: string
-  authorAvatar: string
-  createdAt: number
-  updatedAt: number
-  resolved: boolean
-  mentions: string[]
-}
+import type { Comment } from '../types/comment'
 
 interface CommentsContextType {
   comments: Comment[]
-  unresolvedCount: number
-  addComment: (shapeId: string | null, x: number, y: number, text: string) => Promise<void>
-  resolveComment: (commentId: string) => Promise<void>
+  addComment: (shapeId: string, text: string) => Promise<void>
   deleteComment: (commentId: string) => Promise<void>
   getCommentsForShape: (shapeId: string) => Comment[]
+  hasUnreadComments: (shapeId: string) => boolean
+  markShapeAsRead: (shapeId: string) => void
 }
 
 const CommentsContext = createContext<CommentsContextType | undefined>(undefined)
@@ -844,44 +927,18 @@ export const CommentsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return unsubscribe
   }, [user])
 
-  const addComment = useCallback(async (
-    shapeId: string | null,
-    x: number,
-    y: number,
-    text: string
-  ) => {
-    if (!user) return
-
-    // Extract mentions from text (@username)
-    const mentions = extractMentions(text)
+  const addComment = useCallback(async (shapeId: string, text: string) => {
+    if (!user || !text.trim() || text.length > 500) return
 
     await commentsService.createComment({
-      canvasId: 'default',  // In multi-canvas app, use actual canvas ID
       shapeId,
-      x,
-      y,
-      text,
+      text: text.trim(),
       authorId: user.uid,
-      authorName: user.displayName || 'User',
-      authorAvatar: user.photoURL || '',
+      authorName: user.displayName || user.email?.split('@')[0] || 'User',
       createdAt: Date.now(),
-      updatedAt: Date.now(),
-      resolved: false,
-      mentions
-    })
-
-    // Send notifications for mentions
-    if (mentions.length > 0) {
-      await commentsService.sendMentionNotifications(mentions, text)
-    }
-  }, [user])
-
-  const resolveComment = useCallback(async (commentId: string) => {
-    await commentsService.updateComment(commentId, {
-      resolved: true,
       updatedAt: Date.now()
     })
-  }, [])
+  }, [user])
 
   const deleteComment = useCallback(async (commentId: string) => {
     await commentsService.deleteComment(commentId)
@@ -891,16 +948,25 @@ export const CommentsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return comments.filter(c => c.shapeId === shapeId)
   }, [comments])
 
-  const unresolvedCount = comments.filter(c => !c.resolved).length
+  // Unread tracking using localStorage (Option A - Simple)
+  const hasUnreadComments = useCallback((shapeId: string) => {
+    const lastViewed = commentsService.getLastViewedAt(shapeId)
+    const shapeComments = comments.filter(c => c.shapeId === shapeId)
+    return shapeComments.some(c => c.createdAt > lastViewed && c.authorId !== user?.uid)
+  }, [comments, user])
+
+  const markShapeAsRead = useCallback((shapeId: string) => {
+    commentsService.updateLastViewedAt(shapeId, Date.now())
+  }, [])
 
   return (
     <CommentsContext.Provider value={{
       comments,
-      unresolvedCount,
       addComment,
-      resolveComment,
       deleteComment,
-      getCommentsForShape
+      getCommentsForShape,
+      hasUnreadComments,
+      markShapeAsRead
     }}>
       {children}
     </CommentsContext.Provider>
@@ -914,19 +980,14 @@ export const useComments = () => {
   }
   return context
 }
-
-// Helper to extract @mentions from text
-const extractMentions = (text: string): string[] => {
-  const mentionRegex = /@(\w+)/g
-  const matches = text.matchAll(mentionRegex)
-  return Array.from(matches, m => m[1])
-}
 ```
 
 #### `/src/services/commentsService.ts`
 ```typescript
-import { dbRef, dbPush, dbSet, dbUpdate, dbRemove, dbOnValue, dbGet } from './firebaseService'
-import type { Comment } from '../contexts/CommentsContext'
+import { dbRef, dbPush, dbSet, dbRemove, dbOnValue } from './firebaseService'
+import type { Comment } from '../types/comment'
+
+const LAST_VIEWED_KEY = 'collab-canvas-comments-last-viewed'
 
 export const createComment = async (comment: Omit<Comment, 'id'>): Promise<Comment | null> => {
   try {
@@ -944,14 +1005,6 @@ export const createComment = async (comment: Omit<Comment, 'id'>): Promise<Comme
     console.error('Error creating comment:', error)
     throw error
   }
-}
-
-export const updateComment = async (
-  commentId: string,
-  updates: Partial<Comment>
-): Promise<void> => {
-  const commentRef = dbRef(`comments/${commentId}`)
-  await dbUpdate(commentRef, updates)
 }
 
 export const deleteComment = async (commentId: string): Promise<void> => {
@@ -974,66 +1027,101 @@ export const onCommentsChange = (callback: (comments: Comment[]) => void): (() =
   })
 }
 
-export const sendMentionNotifications = async (
-  mentionedUsernames: string[],
-  commentText: string
-): Promise<void> => {
-  // Implementation depends on notification system
-  // Could use Firebase Cloud Messaging, email, or in-app notifications
-  console.log('Sending notifications to:', mentionedUsernames)
+// === Unread Tracking (localStorage - Option A) ===
+
+export const getLastViewedAt = (shapeId: string): number => {
+  try {
+    const data = localStorage.getItem(LAST_VIEWED_KEY)
+    if (!data) return 0
+    const parsed = JSON.parse(data)
+    return parsed[shapeId] || 0
+  } catch {
+    return 0
+  }
+}
+
+export const updateLastViewedAt = (shapeId: string, timestamp: number): void => {
+  try {
+    const data = localStorage.getItem(LAST_VIEWED_KEY)
+    const parsed = data ? JSON.parse(data) : {}
+    parsed[shapeId] = timestamp
+    localStorage.setItem(LAST_VIEWED_KEY, JSON.stringify(parsed))
+  } catch (error) {
+    console.error('Error updating last viewed timestamp:', error)
+  }
 }
 ```
 
 ### Files to Update
 
-#### 1. Update shape components to show comment indicators
-In `/src/components/canvas/Rectangle.tsx` (and similar for other shapes):
+#### 1. Add comment icon to CanvasInfo bar
+In `/src/components/canvas/CanvasInfo.tsx`:
 
 ```typescript
 import { useComments } from '../../contexts/CommentsContext'
+import CommentsPanel from '../comments/CommentsPanel'
 
-const { getCommentsForShape } = useComments()
-const commentCount = getCommentsForShape(rectangle.id).length
-
-// Render comment badge
-{commentCount > 0 && (
-  <Circle
-    x={rectangle.width - 10}
-    y={10}
-    radius={8}
-    fill="#3b82f6"
-  />
-  <Text
-    x={rectangle.width - 13}
-    y={5}
-    text={commentCount.toString()}
-    fontSize={10}
-    fill="white"
-  />
-)}
-```
-
-#### 2. Add comment mode to Canvas
-In `/src/components/canvas/Canvas.tsx`:
-
-```typescript
-const [commentMode, setCommentMode] = useState(false)
-const { addComment } = useComments()
-
-const handleCanvasClick = useCallback((e: KonvaEventObject<MouseEvent>) => {
-  if (commentMode) {
-    const pos = e.target.getStage()!.getPointerPosition()
-    if (pos) {
-      const canvasPos = transformToCanvasCoords(pos)
-      // Show comment input dialog
-      showCommentDialog(null, canvasPos.x, canvasPos.y)
+const CanvasInfo: React.FC = () => {
+  const { selectedShapes, getCommentsForShape, hasUnreadComments, markShapeAsRead } = useComments()
+  const [commentsPanelOpen, setCommentsPanelOpen] = useState(false)
+  
+  // Get currently selected shape (single selection only)
+  const selectedShape = /* logic to get single selected shape */
+  const selectedShapeId = selectedShape?.id
+  
+  const commentCount = selectedShapeId ? getCommentsForShape(selectedShapeId).length : 0
+  const hasComments = commentCount > 0
+  const hasUnread = selectedShapeId ? hasUnreadComments(selectedShapeId) : false
+  
+  const handleCommentIconClick = () => {
+    if (!selectedShapeId) return
+    
+    setCommentsPanelOpen(!commentsPanelOpen)
+    
+    // Mark as read when opening panel
+    if (!commentsPanelOpen) {
+      markShapeAsRead(selectedShapeId)
     }
   }
-}, [commentMode, transformToCanvasCoords])
 
-// Keyboard shortcut: C for comment mode
-if (e.key === 'c' && !e.metaKey && !e.ctrlKey) {
-  setCommentMode(!commentMode)
+  return (
+    <div className="canvas-info">
+      {/* Existing info bar content */}
+      
+      {/* Comment icon (only show when shape is selected) */}
+      {selectedShapeId && (
+        <button
+          className={`comment-icon-button ${hasComments ? 'has-comments' : ''}`}
+          onClick={handleCommentIconClick}
+          title={`Comments (${commentCount})`}
+        >
+          💬
+          {hasUnread && <div className="comment-unread-indicator" />}
+        </button>
+      )}
+      
+      {/* Comments panel dropdown */}
+      {commentsPanelOpen && selectedShapeId && (
+        <CommentsPanel
+          shapeId={selectedShapeId}
+          onClose={() => setCommentsPanelOpen(false)}
+        />
+      )}
+    </div>
+  )
+}
+```
+
+#### 2. Create /src/types/comment.ts
+```typescript
+export interface Comment {
+  id: string
+  shapeId: string
+  text: string
+  authorId: string
+  authorName: string
+  createdAt: number
+  updatedAt: number
 }
 ```
 
@@ -1047,47 +1135,371 @@ In `/database.rules.json`:
       ".read": "auth != null",
       "$commentId": {
         ".write": "auth != null && (!data.exists() || data.child('authorId').val() === auth.uid)",
-        ".validate": "newData.hasChildren(['id', 'text', 'authorId', 'createdAt'])"
+        ".validate": "newData.hasChildren(['id', 'shapeId', 'text', 'authorId', 'authorName', 'createdAt', 'updatedAt'])",
+        "id": {
+          ".validate": "newData.isString() && newData.val() === $commentId"
+        },
+        "shapeId": {
+          ".validate": "newData.isString() && newData.val().length > 0"
+        },
+        "text": {
+          ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 500"
+        },
+        "authorId": {
+          ".validate": "newData.isString() && newData.val() === auth.uid"
+        },
+        "authorName": {
+          ".validate": "newData.isString() && newData.val().length > 0"
+        },
+        "createdAt": {
+          ".validate": "newData.isNumber() && (!data.exists() || newData.val() === data.val())"
+        },
+        "updatedAt": {
+          ".validate": "newData.isNumber()"
+        }
       }
     }
   }
 }
 ```
 
+> **Note**: `createdAt` is immutable after creation. `authorId` must match the authenticated user.
+
+### CSS Files to Create
+
+#### `/src/components/comments/CommentBubble.css`
+```css
+.comment-bubble {
+  padding: 12px;
+  border-bottom: 1px solid #e5e7eb;
+  transition: background-color 0.2s;
+}
+
+.comment-bubble:hover {
+  background-color: #f9fafb;
+}
+
+.comment-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.comment-avatar-initials {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 600;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.comment-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.comment-info .author {
+  font-weight: 600;
+  font-size: 14px;
+  color: #1f2937;
+  display: block;
+}
+
+.comment-info .timestamp {
+  font-size: 12px;
+  color: #6b7280;
+  display: block;
+}
+
+.comment-body {
+  margin-top: 8px;
+  padding-left: 42px;
+}
+
+.comment-text {
+  margin: 0 0 12px 0;
+  color: #374151;
+  font-size: 14px;
+  line-height: 1.5;
+  word-wrap: break-word;
+}
+
+.comment-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.comment-actions button {
+  padding: 4px 12px;
+  font-size: 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  background: white;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.comment-actions button:hover {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+}
+
+.comment-actions button.danger {
+  color: #dc2626;
+  border-color: #fca5a5;
+}
+
+.comment-actions button.danger:hover {
+  background: #fee2e2;
+  border-color: #ef4444;
+}
+```
+
+#### `/src/components/comments/CommentsPanel.css`
+```css
+.comments-panel {
+  position: absolute;
+  top: 60px;  /* Below info bar */
+  right: 20px;
+  width: 360px;
+  max-height: 500px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.panel-header {
+  padding: 16px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f9fafb;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.panel-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.panel-header .close-button {
+  background: none;
+  border: none;
+  font-size: 18px;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 4px;
+  line-height: 1;
+  transition: color 0.2s;
+}
+
+.panel-header .close-button:hover {
+  color: #1f2937;
+}
+
+.comment-input-container {
+  padding: 12px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.comment-input-container textarea {
+  width: 100%;
+  min-height: 60px;
+  padding: 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 14px;
+  font-family: inherit;
+  resize: vertical;
+  margin-bottom: 8px;
+}
+
+.comment-input-container textarea:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
+.comment-input-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.comment-char-count {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.comment-char-count.error {
+  color: #dc2626;
+}
+
+.comment-input-actions button {
+  padding: 6px 16px;
+  font-size: 13px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.comment-input-actions button.submit {
+  background: #3b82f6;
+  color: white;
+}
+
+.comment-input-actions button.submit:hover:not(:disabled) {
+  background: #2563eb;
+}
+
+.comment-input-actions button.submit:disabled {
+  background: #cbd5e1;
+  cursor: not-allowed;
+}
+
+.comments-list {
+  flex: 1;
+  overflow-y: auto;
+  max-height: 350px;
+}
+
+.empty-state {
+  padding: 40px 20px;
+  text-align: center;
+  color: #9ca3af;
+  font-size: 14px;
+}
+```
+
+#### `/src/components/canvas/CanvasInfo.css` (Additions)
+Add to existing CanvasInfo.css:
+
+```css
+/* Comment icon button */
+.comment-icon-button {
+  position: relative;
+  padding: 6px 12px;
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-left: 8px;
+  font-size: 16px;
+}
+
+.comment-icon-button:hover {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+}
+
+.comment-icon-button.has-comments {
+  background: #fef3c7;
+  border-color: #fbbf24;
+  color: #92400e;
+}
+
+.comment-icon-button.has-comments:hover {
+  background: #fde68a;
+}
+
+.comment-unread-indicator {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 10px;
+  height: 10px;
+  background: #ef4444;
+  border: 2px solid white;
+  border-radius: 50%;
+}
+```
+
 ### Testing Checklist
 
-**Manual Testing - Comments:**
-- [ ] Can add comment to shape
-- [ ] Can add comment to canvas
-- [ ] Can resolve comment
-- [ ] Can delete own comment
-- [ ] Cannot delete others' comments
-- [ ] Comment count badge shows on shapes
-- [ ] Comments panel shows all comments
-- [ ] Filter buttons work (all/unresolved/resolved)
+**Manual Testing - Comments UI:**
+- [ ] Comment icon appears in info bar when shape is selected
+- [ ] Icon is white when no comments exist
+- [ ] Icon is yellow when comments exist
+- [ ] Red dot appears when unread comments exist
+- [ ] Clicking icon toggles comments panel
+- [ ] Panel appears below info bar
+- [ ] Panel shows correct comment count in header
+- [ ] Add comment input at TOP of panel
+- [ ] Comments listed newest-first (reverse chronological)
+- [ ] User initials and colors display correctly
 
-**Manual Testing - @Mentions:**
-- [ ] Can @mention users in comments
-- [ ] Mentions extracted correctly
-- [ ] Notifications sent (if implemented)
+**Manual Testing - Comment Actions:**
+- [ ] Can add comment (min 1 char, max 500 chars)
+- [ ] Cannot submit empty comment
+- [ ] Cannot submit comment over 500 chars
+- [ ] Character count updates live
+- [ ] Post button disabled when invalid
+- [ ] Can delete own comment (no confirmation)
+- [ ] Cannot delete others' comments (no delete button)
+- [ ] Comments panel updates immediately after actions
+
+**Manual Testing - Unread Tracking:**
+- [ ] Red dot appears when new comment added by another user
+- [ ] Red dot disappears when opening comments panel
+- [ ] Red dot persists across page refreshes (localStorage)
+- [ ] No red dot for own comments
 
 **Manual Testing - Real-Time Sync:**
 - [ ] Comments sync across users in real-time
-- [ ] New comments appear immediately
-- [ ] Resolved comments update for all users
+- [ ] New comments appear immediately for all users
 - [ ] Deleted comments disappear for all users
+- [ ] Comment icon color updates for all users
 
-**AI Testing:**
+**Manual Testing - Multi-Shape:**
+- [ ] Comments work for rectangles
+- [ ] Comments work for circles
+- [ ] Comments work for lines
+- [ ] Comments work for text
+- [ ] Switching selected shape updates comment icon/panel correctly
+
+**Integration Testing:**
 - [ ] Comments system doesn't interfere with AI agent
 - [ ] Can still use AI while comments panel open
-- [ ] All features work together
+- [ ] All features work together (selection, comments, AI, etc.)
 
 ### Success Criteria
-- ✅ Comments system fully functional
+- ✅ Comments system fully functional (create, delete)
+- ✅ Comment icon in info bar with state indicators (white/yellow/red dot)
+- ✅ Comments panel dropdown UI works correctly
 - ✅ Real-time sync verified
-- ✅ UI is intuitive
+- ✅ UI is intuitive (initials, user colors, newest-first ordering)
+- ✅ Unread tracking works (localStorage-based)
+- ✅ Text validation enforced (1-500 chars)
 - ✅ Performance acceptable
 - ✅ No console errors
+
+### Future Work (Deferred)
+- Canvas comments (not attached to shapes)
+- Comment resolution/unresolved tracking
+- @Mentions (user tagging and notifications)
+- Comment threading/replies
+- Comment editing (currently delete/repost only)
+- Annotations: Sticky notes, arrows/callouts, shape highlighting
+- Comment search/filter
+- Rich text formatting in comments
+- File attachments
+- Comment history/audit log
+- Comment reactions (emoji)
+- Multi-device unread sync (database-based instead of localStorage)
 
 ---
 
