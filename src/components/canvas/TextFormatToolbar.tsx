@@ -29,8 +29,8 @@ const TextFormatToolbar: React.FC<TextFormatToolbarProps> = ({
       className="text-format-toolbar"
       style={{
         position: 'absolute',
-        left: `${x}px`,
-        top: `${y - 50}px`, // Position 50px above the text
+        left: `${x + 100}px`, // Position 100px to the right of text start
+        top: `${y - 20}px`, // Position 20px above the text
         zIndex: 1000
       }}
     >

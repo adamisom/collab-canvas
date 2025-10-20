@@ -76,8 +76,8 @@ const Text: React.FC<TextProps> = ({
     const absPos = textNode.getAbsolutePosition()
     const scale = stage.scaleX()
     
-    input.style.left = `${absPos.x}px`
-    input.style.top = `${absPos.y}px`
+    input.style.left = `${absPos.x + 104}px`  // Position 104px to the right (4px offset from toolbar)
+    input.style.top = `${absPos.y + 30}px`  // Position 30px below the text
     input.style.fontSize = `${16 * scale}px`  // Scale with zoom for better UX
     input.style.fontFamily = textShape.fontFamily
     input.style.fontWeight = textShape.fontWeight || 'normal'  // PR #9
