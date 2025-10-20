@@ -41,8 +41,8 @@ const Canvas: React.FC<CanvasProps> = ({
   
   // Canvas viewport state
   const [isDragging, setIsDragging] = useState(false)
-  const [isRectangleDragging, setIsRectangleDragging] = useState(false)
-  const [isRectangleResizing, setIsRectangleResizing] = useState(false)
+  const [isShapeDragging, setIsRectangleDragging] = useState(false)
+  const [isShapeResizing, setIsRectangleResizing] = useState(false)
   
   // NEW: Selection box state (for Shift+Drag multi-select)
   const [selectionBoxStart, setSelectionBoxStart] = useState<{ x: number; y: number } | null>(null)
@@ -216,13 +216,13 @@ const Canvas: React.FC<CanvasProps> = ({
     }
     
     // Broadcast cursor position (skip if panning, dragging, or resizing)
-    if (isDragging || isRectangleDragging || isRectangleResizing) return // Don't broadcast while panning, dragging, or resizing
+    if (isDragging || isShapeDragging || isShapeResizing) return // Don't broadcast while panning, dragging, or resizing
     
     const canvasCoords = transformToCanvasCoords(pointer.x, pointer.y)
     if (canvasCoords) {
       updateCursor(canvasCoords.x, canvasCoords.y)
     }
-  }, [updateCursor, isDragging, isRectangleDragging, isRectangleResizing, selectionBoxStart, lineCreationStart, transformToCanvasCoords, isLassoMode, lassoPoints])
+  }, [updateCursor, isDragging, isShapeDragging, isShapeResizing, selectionBoxStart, lineCreationStart, transformToCanvasCoords, isLassoMode, lassoPoints])
 
   // Handle wheel zoom
   const handleWheel = useCallback((e: KonvaEventObject<WheelEvent>) => {
@@ -265,12 +265,12 @@ const Canvas: React.FC<CanvasProps> = ({
   // Handle drag start
   const handleDragStart = useCallback((e: KonvaEventObject<MouseEvent>) => {
     // Don't allow stage dragging if we're interacting with rectangles
-    if (isRectangleDragging || isRectangleResizing) {
+    if (isShapeDragging || isShapeResizing) {
       stopEventPropagation(e)
       return false
     }
     setIsDragging(true)
-  }, [isRectangleDragging, isRectangleResizing])
+  }, [isShapeDragging, isShapeResizing])
 
   // Handle drag end  
   const handleDragEnd = useCallback(() => {
@@ -973,7 +973,7 @@ const Canvas: React.FC<CanvasProps> = ({
         if (isTyping) return
         
         // Prevent deletion during active operations
-        if (!isRectangleDragging && !isRectangleResizing) {
+        if (!isShapeDragging && !isShapeResizing) {
           e.preventDefault()
           deleteSelectedRectangles()
           return
@@ -1072,7 +1072,7 @@ const Canvas: React.FC<CanvasProps> = ({
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)
     }
-  }, [primarySelectionId, rectangles, circles, lines, texts, primarySelectionType, handleRectangleResize, deleteRectangle, deleteSelectedRectangles, isRectangleDragging, isRectangleResizing, getCurrentStagePosition, selectionLocked, selectedShapes, isShiftPressed, selectAll, clearSelection, selectionBoxStart, lineCreationStart, setShapeMode, alignShapes, isLassoMode, rotateShape, sendViewportInfo, showToast, duplicateShape])
+  }, [primarySelectionId, rectangles, circles, lines, texts, primarySelectionType, handleRectangleResize, deleteRectangle, deleteSelectedRectangles, isShapeDragging, isShapeResizing, getCurrentStagePosition, selectionLocked, selectedShapes, isShiftPressed, selectAll, clearSelection, selectionBoxStart, lineCreationStart, setShapeMode, alignShapes, isLassoMode, rotateShape, sendViewportInfo, showToast, duplicateShape])
 
   // Detect when rectangle is selected after AI command (input was focused)
   useEffect(() => {
@@ -1189,7 +1189,7 @@ const Canvas: React.FC<CanvasProps> = ({
           ref={stageRef}
           width={width}
           height={height}
-          draggable={!isShiftPressed && !isRectangleDragging && !isRectangleResizing && !isTextEditing && !lineCreationStart && !isLassoMode}  // Disable drag during line creation, lasso, shift-select, shape manipulation, or text editing
+          draggable={!isShiftPressed && !isShapeDragging && !isShapeResizing && !isTextEditing && !lineCreationStart && !isLassoMode}  // Disable drag during line creation, lasso, shift-select, shape manipulation, or text editing
           onWheel={handleWheel}
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
