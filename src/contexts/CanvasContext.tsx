@@ -91,6 +91,7 @@ interface CanvasContextType {
   // Selection tools (Phase 3D PR #11)
   selectShapesInLasso: (lassoPoints: number[]) => Promise<void>
   selectAllOfType: (shapeType: ShapeType) => Promise<void>
+  selectAllCycleByType: () => Promise<void>  // NEW: Cycle through shape types
   
   // Rotation operations (Phase 3D PR #12)
   rotateShape: (shapeId: string, shapeType: ShapeType, rotation: number) => Promise<void>
@@ -1888,6 +1889,55 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     setPrimarySelectionType(shapesToSelect[shapesToSelect.length - 1].type)
   }, [rectangles, circles, lines, texts, selectedShapes, selectionLocked, user, username])
 
+  // Cycle through selecting all shapes of each type (NEW)
+  const selectAllCycleByType = useCallback(async (): Promise<void> => {
+    if (selectionLocked) return
+    if (!user || !username) return
+
+    // Define the cycle order: rectangles -> circles -> lines -> texts -> all shapes
+    const types: Array<{ type: ShapeType; shapes: Shape[]; label: string }> = [
+      { type: 'rectangle', shapes: rectangles, label: 'rectangles' },
+      { type: 'circle', shapes: circles, label: 'circles' },
+      { type: 'line', shapes: lines, label: 'lines' },
+      { type: 'text', shapes: texts, label: 'texts' }
+    ]
+
+    // Determine current selection type
+    let currentTypeIndex = -1
+    if (selectedShapes.size > 0) {
+      // Check if all selected shapes are of the same type
+      const selectedTypes = new Set(Array.from(selectedShapes.values()))
+      if (selectedTypes.size === 1) {
+        const selectedType = Array.from(selectedTypes)[0]
+        currentTypeIndex = types.findIndex(t => t.type === selectedType)
+      }
+    }
+
+    // Find next type with shapes
+    let nextIndex = currentTypeIndex + 1
+    let attempts = 0
+
+    while (attempts <= types.length) {
+      if (nextIndex >= types.length) {
+        // Cycle back to "all shapes"
+        await selectAll()
+        return
+      }
+
+      if (types[nextIndex].shapes.length > 0) {
+        // Found a type with shapes - select all of this type
+        await selectAllOfType(types[nextIndex].type)
+        return
+      }
+
+      nextIndex++
+      attempts++
+    }
+
+    // Fallback: select all shapes
+    await selectAll()
+  }, [rectangles, circles, lines, texts, selectedShapes, selectionLocked, user, username, selectAll, selectAllOfType])
+
   // Rotate shape (Phase 3D PR #12)
   const rotateShape = useCallback(async (shapeId: string, shapeType: ShapeType, rotation: number): Promise<void> => {
     try {
@@ -2003,6 +2053,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     alignShapes,
     selectShapesInLasso,
     selectAllOfType,
+    selectAllCycleByType,
     rotateShape,
     getViewportInfo,
     updateViewportInfo,

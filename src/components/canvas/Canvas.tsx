@@ -112,6 +112,7 @@ const Canvas: React.FC<CanvasProps> = ({
     selectRectangle,
     selectShape,           // PR #6, updated PR #7, updated PR #8: Unified selection
     selectAll,             // Select all
+    selectAllCycleByType,  // NEW: Cycle through shape types
     clearSelection,        // Clear selection
     changeShapeColor,      // PR #6, updated PR #7, updated PR #8: Unified color change
     changeSelectedShapesColor, // NEW: Change color of all selected
@@ -1017,10 +1018,16 @@ const Canvas: React.FC<CanvasProps> = ({
         setIsShiftPressed(true)
       }
       
-      // NEW: Select All (Cmd/Ctrl+A)
+      // NEW: Select All by Type (Cmd/Ctrl+Shift+A) or Select All (Cmd/Ctrl+A)
       if ((e.metaKey || e.ctrlKey) && e.key === 'a' && !isTyping) {
         e.preventDefault()
-        selectAll()
+        if (e.shiftKey) {
+          // Cmd+Shift+A: Cycle through shape types
+          selectAllCycleByType()
+        } else {
+          // Cmd+A: Select all shapes
+          selectAll()
+        }
         return
       }
       
@@ -1310,7 +1317,7 @@ const Canvas: React.FC<CanvasProps> = ({
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)
     }
-  }, [primarySelectionId, rectangles, circles, lines, texts, primarySelectionType, handleRectangleResize, deleteRectangle, deleteSelectedShapes, isShapeDragging, isShapeResizing, getCurrentStagePosition, selectionLocked, selectedShapes, isShiftPressed, selectAll, clearSelection, selectionBoxStart, lineCreationStart, setShapeMode, alignShapes, isLassoMode, rotateShape, sendViewportInfo, showToast, duplicateShape])
+  }, [primarySelectionId, rectangles, circles, lines, texts, primarySelectionType, handleRectangleResize, deleteRectangle, deleteSelectedShapes, isShapeDragging, isShapeResizing, getCurrentStagePosition, selectionLocked, selectedShapes, isShiftPressed, selectAll, selectAllCycleByType, clearSelection, selectionBoxStart, lineCreationStart, setShapeMode, alignShapes, isLassoMode, rotateShape, sendViewportInfo, showToast, duplicateShape])
 
   // Detect when rectangle is selected after AI command (input was focused)
   useEffect(() => {

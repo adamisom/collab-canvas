@@ -9,6 +9,44 @@ import AICommandHistory from './AICommandHistory'
 import { getCommandHistory, addCommandToHistory, type AICommandEntry } from '../../services/aiCommandHistory'
 import './AIChat.css'
 
+// Web Speech API type definitions
+interface SpeechRecognitionEvent extends Event {
+  results: {
+    [index: number]: {
+      [index: number]: {
+        transcript: string
+      }
+    }
+  }
+}
+
+interface SpeechRecognitionErrorEvent extends Event {
+  error: string
+}
+
+interface SpeechRecognition extends EventTarget {
+  continuous: boolean
+  interimResults: boolean
+  lang: string
+  onstart: (() => void) | null
+  onresult: ((event: SpeechRecognitionEvent) => void) | null
+  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null
+  onend: (() => void) | null
+  start: () => void
+  stop: () => void
+}
+
+interface SpeechRecognitionConstructor {
+  new(): SpeechRecognition
+}
+
+declare global {
+  interface Window {
+    SpeechRecognition?: SpeechRecognitionConstructor
+    webkitSpeechRecognition?: SpeechRecognitionConstructor
+  }
+}
+
 export const AIChat: React.FC = () => {
   const [input, setInput] = useState('')
   const [lastCommand, setLastCommand] = useState('')
@@ -16,13 +54,13 @@ export const AIChat: React.FC = () => {
   const [isListening, setIsListening] = useState(false)
   const [voiceSupported, setVoiceSupported] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
-  const recognitionRef = useRef<any>(null)
+  const recognitionRef = useRef<SpeechRecognition | null>(null)
   
   const { isProcessing, lastResult, processCommand, clearResult } = useAIAgent()
 
   // Check voice support on mount
   useEffect(() => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
     setVoiceSupported(!!SpeechRecognition)
   }, [])
 
@@ -86,7 +124,9 @@ export const AIChat: React.FC = () => {
   const startVoiceInput = () => {
     if (!voiceSupported || isProcessing) return
 
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+    if (!SpeechRecognition) return
+    
     const recognition = new SpeechRecognition()
 
     recognition.continuous = false
@@ -97,13 +137,13 @@ export const AIChat: React.FC = () => {
       setIsListening(true)
     }
 
-    recognition.onresult = (event: any) => {
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
       const transcript = event.results[0][0].transcript
       setInput(transcript)
       setIsListening(false)
     }
 
-    recognition.onerror = (event: any) => {
+    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
       console.error('Speech recognition error:', event.error)
       setIsListening(false)
       
