@@ -52,7 +52,7 @@ export function getShapeSelectionStyle(
 
 /**
  * Calculate stroke color for lines (which show color in stroke, not fill)
- * Lines behave differently: selection adds width, doesn't change color as dramatically
+ * Lines behave differently: we keep the actual color visible and just increase width for selection
  */
 export function getLineSelectionStyle(
   lineColor: string,
@@ -66,8 +66,8 @@ export function getLineSelectionStyle(
 } {
   if (isSelected) {
     return {
-      stroke: SELECTION_COLORS.STROKE,
-      strokeWidth: baseStrokeWidth + 2,
+      stroke: lineColor,  // Keep actual color visible
+      strokeWidth: baseStrokeWidth + 2,  // Thicker to show selection
       dash: undefined
     }
   }

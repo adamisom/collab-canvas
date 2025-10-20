@@ -1,5 +1,5 @@
 import React, { useRef, useState, useCallback, useEffect, useMemo } from 'react'
-import { Stage, Layer, Text, Group, Rect } from 'react-konva'
+import { Stage, Layer, Text, Group, Rect, Line as KonvaLine } from 'react-konva'
 import type Konva from 'konva'
 import type { KonvaEventObject } from 'konva/lib/Node'
 import { useCanvas } from '../../contexts/CanvasContext'
@@ -1231,34 +1231,15 @@ const Canvas: React.FC<CanvasProps> = ({
               />
             ))}
             
-            {/* PR #7: Render line preview during creation */}
+            {/* PR #7: Render line preview during creation (non-interactive) */}
             {lineCreationStart && linePreviewEnd && (
-              <Line
-                line={{
-                  id: 'preview',
-                  type: 'line',
-                  x: lineCreationStart.x,
-                  y: lineCreationStart.y,
-                  endX: linePreviewEnd.x,
-                  endY: linePreviewEnd.y,
-                  strokeWidth: 4,
-                  color: '#3b82f6',
-                  hasArrow: false,
-                  zIndex: 999999,
-                  createdBy: '',
-                  createdAt: 0,
-                  selectedBy: null,
-                  selectedAt: null
-                }}
-                isSelected={false}
-                isPrimary={false}
-                isShiftPressed={false}
-                onClick={() => {}}
-                onDragStart={() => {}}
-                onDragEnd={() => {}}
-                onEndpointsChange={() => {}}
-                onResizeStart={() => {}}
-                onResizeEnd={() => {}}
+              <KonvaLine
+                points={[lineCreationStart.x, lineCreationStart.y, linePreviewEnd.x, linePreviewEnd.y]}
+                stroke="#3b82f6"
+                strokeWidth={4}
+                lineCap="round"
+                opacity={0.7}
+                listening={false}
               />
             )}
             

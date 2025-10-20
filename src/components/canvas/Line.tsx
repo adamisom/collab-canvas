@@ -97,6 +97,15 @@ const Line: React.FC<LineProps> = ({
       onClick={handleClick}
       onTap={handleClick}
     >
+      {/* Invisible hit area for easier clicking (wider than visible line) */}
+      <KonvaLine
+        points={points}
+        stroke="transparent"
+        strokeWidth={Math.max(20, selectionStyle.strokeWidth + 10)}
+        lineCap="round"
+        lineJoin="round"
+      />
+      
       {/* Main line or arrow */}
       {line.hasArrow ? (
         <Arrow
