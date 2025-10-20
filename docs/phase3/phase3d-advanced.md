@@ -2305,6 +2305,82 @@ Before moving to Phase 3E, verify:
 
 ---
 
+## Quick Local Testing Plan
+
+### **Setup:**
+```bash
+npm run dev
+```
+Then open `http://localhost:5173` - this will connect to production Firebase.
+
+---
+
+### **Phase 3D Feature Testing:**
+
+#### **1. Alignment Tools (Requires 2+ Shapes)**
+- ✅ Create 3 rectangles at different positions
+- ✅ Select 2 rectangles (Cmd+Click) → **Alignment toolbar** appears below canvas info bar
+- ✅ Click **Align Left** → Both shapes align to leftmost edge
+- ✅ Click **Align Center (H)** → Both shapes center horizontally
+- ✅ Click **Align Right** → Both shapes align to rightmost edge
+- ✅ Click **Align Top** → Both shapes align to topmost edge
+- ✅ Click **Align Middle (V)** → Both shapes center vertically
+- ✅ Click **Align Bottom** → Both shapes align to bottommost edge
+- ✅ Deselect → Alignment toolbar disappears
+- ✅ **Keyboard shortcuts**: Select 2 shapes, press **Cmd+Shift+L** → Aligns left (test other shortcuts: H, R, T, M, B)
+
+#### **2. Distribution Tools (Requires 3+ Shapes)**
+- ✅ Create 5 rectangles in a rough horizontal line
+- ✅ Select all 5 (Cmd+A) → Alignment toolbar appears
+- ✅ Click **Distribute Horizontally** → Even spacing between leftmost and rightmost shapes
+- ✅ Create 5 rectangles in a rough vertical line, select all
+- ✅ Click **Distribute Vertically** → Even spacing between topmost and bottommost shapes
+- ✅ **Keyboard shortcuts**: Cmd+Shift+H (distribute horizontal), Cmd+Shift+V (distribute vertical)
+
+#### **3. Mixed Shape Alignment**
+- ✅ Create 1 rectangle, 1 circle, 1 line, 1 text
+- ✅ Select all 4 mixed shapes → Alignment toolbar appears
+- ✅ Click **Align Center (H)** → All shapes align horizontally (using their bounding boxes)
+- ✅ Click **Align Middle (V)** → All shapes align vertically
+
+#### **4. Lasso Selection (Shift+L)**
+- ✅ Create 5-6 shapes scattered on canvas
+- ✅ Press and hold **Shift+L** → Cursor changes to crosshair
+- ✅ Drag to draw a lasso path around 3 shapes → Path shows as green line
+- ✅ Release mouse → Shapes inside lasso are selected (green border during lasso, red after)
+- ✅ Press **Escape** during lasso → Cancels lasso selection
+- ✅ **Selection limit**: Try lasso selecting >25 shapes → Should show toast warning
+
+#### **5. Select All of Type**
+- ✅ Create 3 rectangles, 2 circles, 1 line
+- ✅ Double-click **rectangle mode button** → Shows "Select all rectangles?" modal
+- ✅ Click **Select** → All 3 rectangles selected (toast: "Selected 3 rectangles")
+- ✅ Double-click **circle mode button** → Selects all 2 circles
+- ✅ **Single shape**: Delete all but 1 rectangle, double-click rectangle button → Auto-selects without modal
+- ✅ **No shapes**: Delete all rectangles, double-click rectangle button → Toast: "No rectangles to select"
+
+#### **6. Rotate Operation (Single Shape)**
+- ✅ Create rectangle, select it → Small blue **rotate handle** appears above center
+- ✅ Drag rotate handle → Rectangle rotates around center, angle indicator shows degrees
+- ✅ Hold **Shift** while rotating → Snaps to 15° increments (0°, 15°, 30°, 45°, etc.)
+- ✅ **Keyboard rotation**: Select shape, press **R** → Rotates +15°, **Shift+R** → Rotates -15°
+- ✅ Test with circle, line, text → All shapes can rotate
+
+#### **7. Multi-Select Rotation**
+- ✅ Create 3 rectangles in different positions
+- ✅ Select all 3 (Cmd+A) → Individual rotate handles disappear
+- ✅ Rotate handle appears at center of **multi-select bounding box**
+- ✅ Drag rotate handle → All shapes rotate around group center
+- ✅ Hold **Shift** → Snaps to 15° increments
+
+#### **8. AI Agent with New Features**
+- ✅ Select 3 shapes, ask AI: **"Align them to the left"** → Shapes align left
+- ✅ Select 3 shapes, ask AI: **"Distribute them horizontally"** → Even spacing
+- ✅ Select 1 shape, ask AI: **"Rotate it 45 degrees"** → Shape rotates
+- ✅ Ask AI: **"Create 5 rectangles and make them all 200px wide"** → Uses batch resize
+
+---
+
 ## Next Steps
 
 **Proceed to Phase 3E**: [Infrastructure & Production Readiness](./phase3e-infrastructure.md)

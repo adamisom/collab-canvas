@@ -2774,6 +2774,65 @@ export interface CircleComponentProps extends BaseShapeProps<{...}> {
 
 ---
 
+## Quick Local Testing Plan
+
+### **Setup:**
+```bash
+npm run dev
+```
+Then open `http://localhost:5173` - this will connect to production Firebase.
+
+---
+
+### **Phase 3C Feature Testing:**
+
+#### **1. Shape Mode Selector**
+- ✅ Check canvas info bar → Should see 4 shape mode buttons (rectangle, circle, line, text)
+- ✅ Click each button → Active mode should have blue background
+- ✅ Default mode should be **rectangle**
+
+#### **2. Circle Shape**
+- ✅ Select circle mode, double-click canvas → Creates circle with default radius
+- ✅ Select circle → Shows resize handle on right edge
+- ✅ Drag resize handle → Changes radius (maintains circular shape)
+- ✅ Circle works with: selection, delete (Del/Backspace), copy/paste (Cmd+C/V), duplicate (Cmd+D), color picker
+
+#### **3. Line Shape**
+- ✅ Select line mode, double-click canvas → Starts line creation (preview line appears)
+- ✅ Move mouse → Preview line follows cursor
+- ✅ Double-click to finish → Creates line from start to end point
+- ✅ Select line → Shows two endpoint handles (start and end)
+- ✅ Drag endpoint handle → Moves that end of the line
+- ✅ **Selection UX**: Line has invisible wider hit area (easier to click)
+- ✅ Line color: Selected line shows thicker stroke (preserves color, unlike rectangles/circles)
+- ✅ Line works with: delete, copy/paste, duplicate, color picker
+
+#### **4. Text Shape**
+- ✅ Select text mode, double-click canvas → Creates text with placeholder "Double-click to edit"
+- ✅ Double-click text → Shows input field overlay, can type text
+- ✅ Press **Enter** or click outside → Saves text, hides input
+- ✅ Press **Escape** during editing → Cancels edit, reverts to previous text
+- ✅ Empty text: If you leave it empty → Shows placeholder again
+- ✅ Text works with: selection, delete, copy/paste, duplicate, color picker
+
+#### **5. Mixed Shape Operations**
+- ✅ Create 2 rectangles, 1 circle, 1 line, 1 text
+- ✅ **Multi-select**: Cmd+A → Selects all 5 shapes (mixed types)
+- ✅ **Color change**: Change color → All shapes change color
+- ✅ **Delete**: Press Delete → All shapes deleted
+- ✅ **Copy/paste**: Select multiple mixed shapes, Cmd+C, Cmd+V → Pastes all with relative positions preserved
+
+#### **6. Empty Canvas Message**
+- ✅ Delete all shapes → Should see "Double-click anywhere to create your first shape!"
+- ✅ Create any shape type (not just rectangle) → Message disappears
+
+#### **7. Keyboard Shortcuts During Text Editing**
+- ✅ Double-click text to edit → Start typing
+- ✅ Press Cmd+C, Cmd+V, Cmd+D → Should NOT trigger canvas shortcuts (only text editing)
+- ✅ Press Escape → Exits text editing, then Cmd+D should work for duplicate
+
+---
+
 ## Next Steps
 
 **Proceed to Phase 3D**: [Advanced Features](./phase3d-advanced.md)
