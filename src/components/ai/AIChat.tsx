@@ -5,14 +5,22 @@
 
 import React, { useState, useRef, useEffect } from 'react'
 import { useAIAgent } from '../../hooks/useAIAgent'
+import AICommandHistory from './AICommandHistory'
+import { getCommandHistory, addCommandToHistory, type AICommandEntry } from '../../services/aiCommandHistory'
 import './AIChat.css'
 
 export const AIChat: React.FC = () => {
   const [input, setInput] = useState('')
   const [lastCommand, setLastCommand] = useState('')
+  const [history, setHistory] = useState<AICommandEntry[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
   
   const { isProcessing, lastResult, processCommand, clearResult } = useAIAgent()
+
+  // Load command history on mount
+  useEffect(() => {
+    setHistory(getCommandHistory())
+  }, [])
 
   // Focus input after result is cleared or on mount
   useEffect(() => {
@@ -26,10 +34,28 @@ export const AIChat: React.FC = () => {
     
     if (!input.trim() || isProcessing) return
 
-    setLastCommand(input)
+    const command = input.trim()
+    setLastCommand(command)
     setInput('')
-    await processCommand(input)
+    
+    await processCommand(command)
   }
+
+  // Save to history when result changes
+  useEffect(() => {
+    if (lastResult && lastCommand) {
+      addCommandToHistory({
+        userInput: lastCommand,
+        success: lastResult.success,
+        resultMessage: lastResult.success 
+          ? (lastResult.message || 'Success') 
+          : (lastResult.error?.message || 'Command failed')
+      })
+      
+      // Refresh history display
+      setHistory(getCommandHistory())
+    }
+  }, [lastResult, lastCommand])
 
   const handleRetry = async () => {
     if (lastCommand) {
@@ -43,6 +69,11 @@ export const AIChat: React.FC = () => {
     inputRef.current?.focus()
   }
 
+  const handleCommandClick = (command: string) => {
+    setInput(command)
+    inputRef.current?.focus()
+  }
+
   return (
     <div className="ai-chat">
       <div className="ai-chat-header">
@@ -51,6 +82,12 @@ export const AIChat: React.FC = () => {
           Try: "Create a blue rectangle" or "Make it bigger"
         </span>
       </div>
+
+      {/* Command History */}
+      <AICommandHistory 
+        history={history}
+        onCommandClick={handleCommandClick}
+      />
 
       <form onSubmit={handleSubmit} className="ai-chat-form">
         <input
