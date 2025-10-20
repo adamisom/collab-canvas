@@ -59,7 +59,7 @@ const RotateHandle: React.FC<RotateHandleProps> = ({
       {/* Line connecting shape to rotate handle */}
       <Line
         points={[centerX, centerY, centerX, handleY]}
-        stroke="#3b82f6"
+        stroke="#8b5cf6"
         strokeWidth={1}
         dash={[3, 3]}
         listening={false}
@@ -71,7 +71,7 @@ const RotateHandle: React.FC<RotateHandleProps> = ({
         y={handleY}
         radius={6}
         fill="white"
-        stroke="#3b82f6"
+        stroke="#8b5cf6"
         strokeWidth={2}
         draggable
         onDragMove={handleDrag}

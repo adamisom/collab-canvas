@@ -48,6 +48,8 @@
   cursor: pointer;
   transition: all 0.2s;
   margin-left: 8px;
+  margin-top: -2px;
+  margin-bottom: 2px;
   font-size: 16px;
 }
 
@@ -615,6 +617,7 @@
   background: #f1f5f9;
   padding: 1px;
   border-radius: 3px;
+  margin-right: -4px;
 }
 
 .shape-mode-btn {

@@ -1391,17 +1391,6 @@ const Canvas: React.FC<CanvasProps> = ({
             onModeChange={setShapeMode}
           />
           
-          {/* Color Picker */}
-          {selectedShape && (
-            <div className="header-color-picker">
-              <span className="color-label">Color:</span>
-              <ColorPicker
-                selectedColor={displayColor}  // CHANGED: Use displayColor (shows ? for mixed)
-                onColorChange={handleColorChange}
-              />
-            </div>
-          )}
-          
           {/* Phase 3F PR #18: Comment Icon (only for single shape selection) */}
           {selectedShape && selectedShapes.size === 1 && (() => {
             const selectedShapeId = selectedShape.id
@@ -1438,6 +1427,17 @@ const Canvas: React.FC<CanvasProps> = ({
               </>
             )
           })()}
+          
+          {/* Color Picker */}
+          {selectedShape && (
+            <div className="header-color-picker">
+              <span className="color-label">Color:</span>
+              <ColorPicker
+                selectedColor={displayColor}  // CHANGED: Use displayColor (shows ? for mixed)
+                onColorChange={handleColorChange}
+              />
+            </div>
+          )}
           
           {/* PR #9: Text Format Toolbar - positioned above selected text */}
           {selectedText && (() => {
