@@ -1072,7 +1072,7 @@ const Canvas: React.FC<CanvasProps> = ({
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)
     }
-  }, [primarySelectionId, rectangles, circles, lines, texts, primarySelectionType, handleRectangleResize, deleteRectangle, deleteSelectedRectangles, isRectangleDragging, isRectangleResizing, getCurrentStagePosition, selectionLocked, selectedShapes, isShiftPressed, selectAll, clearSelection, selectionBoxStart, lineCreationStart, setShapeMode, alignShapes, isLassoMode, rotateShape, sendViewportInfo, showToast])
+  }, [primarySelectionId, rectangles, circles, lines, texts, primarySelectionType, handleRectangleResize, deleteRectangle, deleteSelectedRectangles, isRectangleDragging, isRectangleResizing, getCurrentStagePosition, selectionLocked, selectedShapes, isShiftPressed, selectAll, clearSelection, selectionBoxStart, lineCreationStart, setShapeMode, alignShapes, isLassoMode, rotateShape, sendViewportInfo, showToast, duplicateShape])
 
   // Detect when rectangle is selected after AI command (input was focused)
   useEffect(() => {

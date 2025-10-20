@@ -47,11 +47,13 @@ describe('Shape Components - Selection Visual Feedback', () => {
   })
 
   describe('getLineSelectionStyle', () => {
-    it('should add 2px to stroke width for selected lines', () => {
+    it('should add 2px to stroke width for selected lines and preserve color', () => {
+      const lineColor = '#000000'
       const baseStrokeWidth = 3
-      const style = getLineSelectionStyle('#000000', baseStrokeWidth, true, false)
+      const style = getLineSelectionStyle(lineColor, baseStrokeWidth, true, false)
       
-      expect(style.stroke).toBe(SELECTION_COLORS.STROKE)
+      // Lines keep their actual color when selected (unlike rectangles/circles)
+      expect(style.stroke).toBe(lineColor)
       expect(style.strokeWidth).toBe(baseStrokeWidth + 2) // 5
     })
 
@@ -78,14 +80,21 @@ describe('Shape Components - Selection Visual Feedback', () => {
   })
 
   describe('Consistent Styling Across Shape Types', () => {
-    it('should use same selection color for all shape types', () => {
+    it('should use same selection color for rectangles and circles', () => {
       const rectStyle = getShapeSelectionStyle('#3b82f6', true, false)
       const circleStyle = getShapeSelectionStyle('#ef4444', true, false)
-      const lineStyle = getLineSelectionStyle('#10b981', 3, true, false)
       
       expect(rectStyle.stroke).toBe(circleStyle.stroke)
-      expect(rectStyle.stroke).toBe(lineStyle.stroke)
       expect(rectStyle.stroke).toBe(SELECTION_COLORS.STROKE)
+    })
+
+    it('should preserve line color when selected (different from rect/circle)', () => {
+      const lineColor = '#10b981'
+      const lineStyle = getLineSelectionStyle(lineColor, 3, true, false)
+      
+      // Lines intentionally keep their color visible (stroke IS the color for lines)
+      expect(lineStyle.stroke).toBe(lineColor)
+      expect(lineStyle.stroke).not.toBe(SELECTION_COLORS.STROKE)
     })
 
     it('should use same other-user selection color for all shape types', () => {
