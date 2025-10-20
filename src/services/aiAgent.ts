@@ -96,7 +96,7 @@ export class AIAgent {
       canvasState: this.executor.getCanvasState(),
       viewportInfo: viewportInfo || undefined,
       selectedShapeId: this.context.primarySelectionId,  // CHANGED: Use primary selection for AI
-      selectedShapesCount: this.context.selectedShapes.size  // Total number of selected shapes
+      selectedShapesCount: this.context.selectedShapes?.size || 0  // Total number of selected shapes
     }
   }
 
@@ -118,7 +118,8 @@ export class AIAgent {
       userMessage,
       canvasState: snapshot.canvasState,
       viewportInfo: snapshot.viewportInfo!,
-      selectedShape: this.getSelectedShapeFromSnapshot(snapshot)
+      selectedShape: this.getSelectedShapeFromSnapshot(snapshot),
+      selectedShapesCount: snapshot.selectedShapesCount  // Include multi-select count
     }
 
     const result = await processAICommand(request)
@@ -127,24 +128,72 @@ export class AIAgent {
 
   /**
    * Get selected shape info from snapshot
+   * Searches across all shape types (rectangles, circles, lines, text)
    */
   private getSelectedShapeFromSnapshot(snapshot: CommandSnapshot): SelectedShape | null {
     if (!snapshot.selectedShapeId) return null
 
+    // Search rectangles
     const rect = snapshot.canvasState.rectangles.find(
       r => r.id === snapshot.selectedShapeId
     )
-
-    if (!rect) return null
-
-    return {
-      id: rect.id,
-      color: rect.color,
-      x: rect.x,
-      y: rect.y,
-      width: rect.width,
-      height: rect.height
+    if (rect) {
+      return {
+        id: rect.id,
+        color: rect.color,
+        x: rect.x,
+        y: rect.y,
+        width: rect.width,
+        height: rect.height
+      }
     }
+
+    // Search circles
+    const circle = snapshot.canvasState.circles?.find(
+      c => c.id === snapshot.selectedShapeId
+    )
+    if (circle) {
+      return {
+        id: circle.id,
+        color: circle.color,
+        x: circle.x,
+        y: circle.y,
+        width: circle.radius * 2,
+        height: circle.radius * 2
+      }
+    }
+
+    // Search lines
+    const line = snapshot.canvasState.lines?.find(
+      l => l.id === snapshot.selectedShapeId
+    )
+    if (line) {
+      return {
+        id: line.id,
+        color: line.color,
+        x: line.x,
+        y: line.y,
+        width: Math.abs(line.endX - line.x),
+        height: Math.abs(line.endY - line.y)
+      }
+    }
+
+    // Search text
+    const text = snapshot.canvasState.texts?.find(
+      t => t.id === snapshot.selectedShapeId
+    )
+    if (text) {
+      return {
+        id: text.id,
+        color: text.color,
+        x: text.x,
+        y: text.y,
+        width: text.measuredWidth || 100,
+        height: text.measuredHeight || 20
+      }
+    }
+
+    return null
   }
 
   /**

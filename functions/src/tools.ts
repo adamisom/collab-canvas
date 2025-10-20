@@ -39,10 +39,10 @@ export const changeColorTool = tool({
 });
 
 /**
- * Tool 3: Move rectangle to new position
+ * Tool 3: Move shape to new absolute position
  */
-export const moveRectangleTool = tool({
-  description: "Move an existing rectangle to a new position. Requires a rectangle to be selected.",
+export const moveShapeTool = tool({
+  description: "Move any selected shape (rectangle, circle, line, text) to a new absolute position. Requires a shape to be selected.",
   inputSchema: z.object({
     shapeId: z.string().optional().describe(PARAM_DESCRIPTIONS.SHAPE_ID),
     x: z.number().min(CANVAS_BOUNDS.MIN_X).max(CANVAS_BOUNDS.MAX_X).describe(PARAM_DESCRIPTIONS.X_COORD),
@@ -63,10 +63,10 @@ export const resizeRectangleTool = tool({
 });
 
 /**
- * Tool 5: Delete existing rectangle
+ * Tool 5: Delete existing shape
  */
-export const deleteRectangleTool = tool({
-  description: "Delete an existing rectangle. Requires a rectangle to be selected.",
+export const deleteShapeTool = tool({
+  description: "Delete any selected shape (rectangle, circle, line, text). Requires a shape to be selected.",
   inputSchema: z.object({
     shapeId: z.string().optional().describe(PARAM_DESCRIPTIONS.SHAPE_ID),
   }),
@@ -86,30 +86,30 @@ export const createMultipleRectanglesTool = tool({
 });
 
 /**
- * Tool 7: Duplicate existing rectangle
+ * Tool 7: Duplicate existing shape
  */
-export const duplicateRectangleTool = tool({
-  description: "Duplicate the currently selected rectangle with a slight offset. Creates a copy of the rectangle 20 pixels offset from the original.",
+export const duplicateShapeTool = tool({
+  description: "Duplicate any selected shape (rectangle, circle, line, text) with a slight offset. Creates a copy of the shape 20 pixels offset from the original.",
   inputSchema: z.object({
     shapeId: z.string().optional().describe(PARAM_DESCRIPTIONS.SHAPE_ID),
   }),
 });
 
 /**
- * Tool 8: Bring rectangle to front
+ * Tool 8: Bring shape to front
  */
 export const bringToFrontTool = tool({
-  description: "Bring the selected rectangle to the front (on top of all other rectangles). Requires a rectangle to be selected.",
+  description: "Bring any selected shape (rectangle, circle, line, text) to the front (on top of all other shapes). Requires a shape to be selected.",
   inputSchema: z.object({
     shapeId: z.string().optional().describe(PARAM_DESCRIPTIONS.SHAPE_ID),
   }),
 });
 
 /**
- * Tool 9: Send rectangle to back
+ * Tool 9: Send shape to back
  */
 export const sendToBackTool = tool({
-  description: "Send the selected rectangle to the back (behind all other rectangles). Requires a rectangle to be selected.",
+  description: "Send any selected shape (rectangle, circle, line, text) to the back (behind all other shapes). Requires a shape to be selected.",
   inputSchema: z.object({
     shapeId: z.string().optional().describe(PARAM_DESCRIPTIONS.SHAPE_ID),
   }),
@@ -207,7 +207,18 @@ export const rotateBatchTool = tool({
 });
 
 /**
- * Tool 17: Create a circle (Phase 3C)
+ * Tool 17: Move all selected shapes (Batch)
+ */
+export const moveBatchTool = tool({
+  description: "Move ALL currently selected shapes by a relative offset. Use positive/negative values for dx/dy to move right/left or down/up.",
+  inputSchema: z.object({
+    dx: z.number().describe("Horizontal offset in pixels (positive = right, negative = left)"),
+    dy: z.number().describe("Vertical offset in pixels (positive = down, negative = up)"),
+  }),
+});
+
+/**
+ * Tool 18: Create a circle (Phase 3C)
  */
 export const createCircleTool = tool({
   description: "Create a circle on the canvas. Position defaults to viewport center if not specified. Color defaults to blue if not specified.",
@@ -289,11 +300,11 @@ export const toggleTextItalicTool = tool({
 export const tools = {
   createRectangle: createRectangleTool,
   changeColor: changeColorTool,
-  moveRectangle: moveRectangleTool,
-  resizeRectangle: resizeRectangleTool,
-  deleteRectangle: deleteRectangleTool,
+  moveShape: moveShapeTool, // Renamed from moveRectangle - works on all shapes
+  resizeRectangle: resizeRectangleTool, // Still rectangle-only
+  deleteShape: deleteShapeTool, // Renamed from deleteRectangle - works on all shapes
   createMultipleRectangles: createMultipleRectanglesTool,
-  duplicateRectangle: duplicateRectangleTool,
+  duplicateShape: duplicateShapeTool, // Renamed from duplicateRectangle - works on all shapes
   bringToFront: bringToFrontTool,
   sendToBack: sendToBackTool,
   alignShapes: alignShapesTool,
@@ -305,6 +316,7 @@ export const tools = {
   resizeBatch: resizeBatchTool,
   deleteBatch: deleteBatchTool,
   rotateBatch: rotateBatchTool,
+  moveBatch: moveBatchTool,
   createCircle: createCircleTool,
   createLine: createLineTool,
   createText: createTextTool,

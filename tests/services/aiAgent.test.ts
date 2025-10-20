@@ -51,7 +51,12 @@ describe('AIAgent', () => {
     // Create mock context
     mockContext = {
       rectangles: [...mockRectangles],
-      selectedRectangleId: 'rect1',
+      circles: [],  // Phase 3F
+      lines: [],    // Phase 3F
+      texts: [],    // Phase 3F
+      primarySelectionId: 'rect1',  // Updated from selectedRectangleId
+      primarySelectionType: 'rectangle',  // NEW: Required for shape-agnostic tools
+      selectedShapes: new Map([['rect1', 'rectangle']]),  // Phase 3D
       getViewportInfo: vi.fn(() => mockViewportInfo),
       createRectangle: mockCreateRectangle,
       updateRectangle: mockUpdateRectangle,
@@ -59,8 +64,33 @@ describe('AIAgent', () => {
       deleteRectangle: vi.fn(),
       changeRectangleColor: vi.fn(),
       selectRectangle: vi.fn(),
-      setSelectionLocked: mockSetSelectionLocked
-    }
+      setSelectionLocked: mockSetSelectionLocked,
+      // Shape operations
+      updateCircle: vi.fn(),
+      deleteCircle: vi.fn(),
+      updateLine: vi.fn(),
+      deleteLine: vi.fn(),
+      deleteText: vi.fn(),
+      // Batch/selection operations (stubs for now)
+      alignShapes: vi.fn(),
+      selectAllOfType: vi.fn(),
+      selectShape: vi.fn(),
+      clearSelection: vi.fn(),
+      rotateShape: vi.fn(),
+      deleteSelectedShapes: vi.fn(),
+      changeSelectedShapesColor: vi.fn(),
+      duplicateShape: vi.fn(),
+      bringToFront: vi.fn(),
+      sendToBack: vi.fn(),
+      duplicateRectangle: vi.fn(),
+      createCircle: vi.fn(),
+      createLine: vi.fn(),
+      createText: vi.fn(),
+      updateText: vi.fn(),
+      changeTextFontSize: vi.fn(),
+      toggleTextBold: vi.fn(),
+      toggleTextItalic: vi.fn()
+    } as CanvasContextMethods
 
     // Setup default mock responses
     mockCreateRectangle.mockResolvedValue({
@@ -211,11 +241,11 @@ describe('AIAgent', () => {
     it('should stop at first error (partial execution)', async () => {
       mockCallableFunction.mockImplementation(async () => ({
         data: {
-          commands: [
-            { tool: 'createRectangle', parameters: { x: 100, y: 100, width: 100, height: 80, color: '#3b82f6' } },
-            { tool: 'changeColor', parameters: { shapeId: 'non-existent', color: '#ef4444' } },
-            { tool: 'deleteRectangle', parameters: { shapeId: 'rect1' } }
-          ]
+        commands: [
+          { tool: 'createRectangle', parameters: { x: 100, y: 100, width: 100, height: 80, color: '#3b82f6' } },
+          { tool: 'changeColor', parameters: { shapeId: 'non-existent', color: '#ef4444' } },
+          { tool: 'deleteShape', parameters: { shapeId: 'rect1' } }  // Renamed from deleteRectangle
+        ]
         } as ProcessAICommandResponse
       }))
 
@@ -232,13 +262,13 @@ describe('AIAgent', () => {
     it('should report partial success (e.g. 3/5 succeeded)', async () => {
       mockCallableFunction.mockImplementation(async () => ({
         data: {
-          commands: [
-            { tool: 'createRectangle', parameters: { x: 100, y: 100, width: 100, height: 80, color: '#3b82f6' } },
-            { tool: 'resizeRectangle', parameters: { width: 200, height: 150 } },
-            { tool: 'moveRectangle', parameters: { x: 300, y: 300 } },
-            { tool: 'changeColor', parameters: { shapeId: 'non-existent', color: '#ef4444' } },
-            { tool: 'deleteRectangle', parameters: { shapeId: 'rect1' } }
-          ]
+        commands: [
+          { tool: 'createRectangle', parameters: { x: 100, y: 100, width: 100, height: 80, color: '#3b82f6' } },
+          { tool: 'resizeRectangle', parameters: { width: 200, height: 150 } },
+          { tool: 'moveShape', parameters: { x: 300, y: 300 } },  // Renamed from moveRectangle
+          { tool: 'changeColor', parameters: { shapeId: 'non-existent', color: '#ef4444' } },
+          { tool: 'deleteShape', parameters: { shapeId: 'rect1' } }  // Renamed from deleteRectangle
+        ]
         } as ProcessAICommandResponse
       }))
 

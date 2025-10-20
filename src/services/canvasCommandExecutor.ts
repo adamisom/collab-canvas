@@ -21,7 +21,7 @@ import type {
   SendToBackParams,
   CreateMultipleRectanglesParams
 } from '../shared/types'
-import type { CircleShape, LineShape, TextShape } from '../shared/shapes'
+import type { CircleShape, LineShape, TextShape, Shape } from '../shared/shapes'
 import { 
   DEFAULT_RECT, 
   RECTANGLE_CONSTRAINTS, 
@@ -54,6 +54,14 @@ export interface CanvasContextMethods {
   changeRectangleColor: (rectangleId: string, color: string) => Promise<void>
   selectRectangle: (rectangleId: string, additive?: boolean) => Promise<void>  // CHANGED: selectRectangle no longer takes null
   setSelectionLocked: (locked: boolean) => void
+  // Circle operations
+  updateCircle: (circleId: string, updates: Partial<CircleShape>) => Promise<void>
+  deleteCircle: (circleId: string) => Promise<void>
+  // Line operations
+  updateLine: (lineId: string, updates: Partial<LineShape>) => Promise<void>
+  deleteLine: (lineId: string) => Promise<void>
+  // Text operations
+  deleteText: (textId: string) => Promise<void>
   // Phase 3D: Alignment, Selection, Rotation
   alignShapes: (alignType: 'left' | 'center-horizontal' | 'right' | 'top' | 'center-vertical' | 'bottom' | 'distribute-horizontal' | 'distribute-vertical') => Promise<void>
   selectAllOfType: (shapeType: 'rectangle' | 'circle' | 'line' | 'text') => Promise<void>
@@ -63,6 +71,8 @@ export interface CanvasContextMethods {
   // Batch operations
   deleteSelectedShapes: () => Promise<void>
   changeSelectedShapesColor: (color: string) => Promise<void>
+  // Shape operations (all types)
+  duplicateShape: (shapeId: string, shapeType: 'rectangle' | 'circle' | 'line' | 'text') => Promise<boolean>
   // Phase 3F: Shape creation
   createCircle: (x: number, y: number, radius: number, color: string) => Promise<CircleShape | null>
   createLine: (x: number, y: number, endX: number, endY: number, hasArrow: boolean, color: string) => Promise<LineShape | null>
@@ -92,6 +102,31 @@ export class CanvasCommandExecutor {
         width: r.width,
         height: r.height,
         color: r.color
+      })),
+      circles: (this.context.circles || []).map(c => ({
+        id: c.id,
+        x: c.x,
+        y: c.y,
+        radius: c.radius,
+        color: c.color
+      })),
+      lines: (this.context.lines || []).map(l => ({
+        id: l.id,
+        x: l.x,
+        y: l.y,
+        endX: l.endX,
+        endY: l.endY,
+        color: l.color
+      })),
+      texts: (this.context.texts || []).map(t => ({
+        id: t.id,
+        x: t.x,
+        y: t.y,
+        text: t.text,
+        fontSize: t.fontSize,
+        color: t.color,
+        measuredWidth: t.measuredWidth,
+        measuredHeight: t.measuredHeight
       }))
     }
   }
@@ -187,20 +222,20 @@ export class CanvasCommandExecutor {
         await this.executeChangeColor(parameters as ChangeColorParams, createdRectangleId)
         break
 
-      case 'moveRectangle':
-        await this.executeMoveRectangle(parameters as MoveRectangleParams, createdRectangleId)
+      case 'moveShape': // Renamed from moveRectangle - now works on all shapes
+        await this.executeMoveShape(parameters as MoveRectangleParams, createdRectangleId)
         break
 
-      case 'resizeRectangle':
+      case 'resizeRectangle': // Still rectangle-only
         await this.executeResizeRectangle(parameters as ResizeRectangleParams, createdRectangleId)
         break
 
-      case 'deleteRectangle':
-        await this.executeDeleteRectangle(parameters as DeleteRectangleParams, createdRectangleId)
+      case 'deleteShape': // Renamed from deleteRectangle - now works on all shapes
+        await this.executeDeleteShape(parameters as DeleteRectangleParams, createdRectangleId)
         break
 
-      case 'duplicateRectangle':
-        await this.executeDuplicateRectangle(parameters as DuplicateRectangleParams, createdRectangleId)
+      case 'duplicateShape': // Renamed from duplicateRectangle - now works on all shapes
+        await this.executeDuplicateShape(parameters as DuplicateRectangleParams, createdRectangleId)
         break
 
       case 'bringToFront':
@@ -249,6 +284,10 @@ export class CanvasCommandExecutor {
 
       case 'rotateBatch':
         await this.executeRotateBatch(parameters as { angle: number })
+        break
+
+      case 'moveBatch':
+        await this.executeMoveBatch(parameters as { dx: number; dy: number })
         break
 
       case 'createCircle':
@@ -370,26 +409,45 @@ export class CanvasCommandExecutor {
   }
 
   /**
-   * Move rectangle to new position
+   * Move shape to new absolute position (works for all shape types)
    */
-  private async executeMoveRectangle(params: MoveRectangleParams, createdRectangleId?: string): Promise<void> {
-    // Use provided shapeId, or createdRectangleId from multi-step, or fall back to selected rectangle
+  private async executeMoveShape(params: MoveRectangleParams, createdRectangleId?: string): Promise<void> {
+    // Use provided shapeId, or createdRectangleId from multi-step, or fall back to selected shape
     const shapeId = createdRectangleId || params.shapeId || this.context.primarySelectionId
 
     // Validate shapeId exists
     if (!shapeId) {
-      throw new Error('No rectangle ID provided')
-    }
-
-    // Only validate existence if not using createdRectangleId (to avoid race condition)
-    if (!createdRectangleId && !this.rectangleExists(shapeId)) {
-      throw new Error(`Rectangle ${shapeId} not found or was deleted`)
+      throw new Error('No shape ID provided')
     }
 
     const x = this.clampNumber(params.x, CANVAS_BOUNDS.MIN_X, CANVAS_BOUNDS.MAX_X)
     const y = this.clampNumber(params.y, CANVAS_BOUNDS.MIN_Y, CANVAS_BOUNDS.MAX_Y)
 
-    await this.context.updateRectangle(shapeId, { x, y })
+    // Determine shape type and update accordingly
+    const shapeType = this.context.primarySelectionType
+    
+    switch (shapeType) {
+      case 'rectangle':
+        await this.context.updateRectangle(shapeId, { x, y })
+        break
+      case 'circle':
+        await this.context.updateCircle(shapeId, { x, y })
+        break
+      case 'line': {
+        const line = this.context.lines.find(l => l.id === shapeId)
+        if (line) {
+          const dx = x - line.x
+          const dy = y - line.y
+          await this.context.updateLine(shapeId, { x, y, endX: line.endX + dx, endY: line.endY + dy })
+        }
+        break
+      }
+      case 'text':
+        await this.context.updateText(shapeId, { x, y })
+        break
+      default:
+        throw new Error(`Unknown shape type: ${shapeType}`)
+    }
   }
 
   /**
@@ -427,43 +485,58 @@ export class CanvasCommandExecutor {
   }
 
   /**
-   * Delete existing rectangle
+   * Delete existing shape (works for all shape types)
    */
-  private async executeDeleteRectangle(params: DeleteRectangleParams, createdRectangleId?: string): Promise<void> {
-    // Use provided shapeId, or createdRectangleId from multi-step, or fall back to selected rectangle
+  private async executeDeleteShape(params: DeleteRectangleParams, createdRectangleId?: string): Promise<void> {
+    // Use provided shapeId, or createdRectangleId from multi-step, or fall back to selected shape
     const shapeId = createdRectangleId || params.shapeId || this.context.primarySelectionId
 
     // Validate shapeId exists
     if (!shapeId) {
-      throw new Error('No rectangle ID provided')
+      throw new Error('No shape ID provided')
     }
 
-    // Only validate existence if not using createdRectangleId (to avoid race condition)
-    if (!createdRectangleId && !this.rectangleExists(shapeId)) {
-      throw new Error(`Rectangle ${shapeId} not found or was deleted`)
+    // Determine shape type and delete accordingly
+    const shapeType = this.context.primarySelectionType
+    
+    switch (shapeType) {
+      case 'rectangle':
+        await this.context.deleteRectangle(shapeId)
+        break
+      case 'circle':
+        await this.context.deleteCircle(shapeId)
+        break
+      case 'line':
+        await this.context.deleteLine(shapeId)
+        break
+      case 'text':
+        await this.context.deleteText(shapeId)
+        break
+      default:
+        throw new Error(`Unknown shape type: ${shapeType}`)
     }
-
-    await this.context.deleteRectangle(shapeId)
   }
 
   /**
-   * Duplicate existing rectangle
+   * Duplicate existing shape (works for all shape types)
    */
-  private async executeDuplicateRectangle(params: DuplicateRectangleParams, createdRectangleId?: string): Promise<void> {
-    // Use provided shapeId, or createdRectangleId from multi-step, or fall back to selected rectangle
+  private async executeDuplicateShape(params: DuplicateRectangleParams, createdRectangleId?: string): Promise<void> {
+    // Use provided shapeId, or createdRectangleId from multi-step, or fall back to selected shape
     const shapeId = createdRectangleId || params.shapeId || this.context.primarySelectionId
 
     // Validate shapeId exists
     if (!shapeId) {
-      throw new Error('No rectangle selected to duplicate')
+      throw new Error('No shape selected to duplicate')
     }
 
-    // Only validate existence if not using createdRectangleId (to avoid race condition)
-    if (!createdRectangleId && !this.rectangleExists(shapeId)) {
-      throw new Error(`Rectangle ${shapeId} not found or was deleted`)
+    // Determine shape type and duplicate accordingly
+    const shapeType = this.context.primarySelectionType
+    
+    if (!shapeType) {
+      throw new Error('Unknown shape type for duplication')
     }
 
-    await this.context.duplicateRectangle(shapeId)
+    await this.context.duplicateShape(shapeId, shapeType)
   }
 
   /**
@@ -733,6 +806,45 @@ export class CanvasCommandExecutor {
     for (const [shapeId, shapeType] of this.context.selectedShapes.entries()) {
       await this.context.rotateShape(shapeId, shapeType, angle)
     }
+  }
+
+  /**
+   * Phase 3F: Move all selected shapes by offset (Batch)
+   */
+  private async executeMoveBatch(params: { dx: number; dy: number }): Promise<void> {
+    const { dx, dy } = params
+
+    if (this.context.selectedShapes.size === 0) {
+      throw new Error('No shapes selected. Please select one or more shapes first.')
+    }
+
+    const updates = []
+    for (const [shapeId, shapeType] of this.context.selectedShapes.entries()) {
+      // Find the actual shape object to get its current position
+      let shape: Shape | undefined
+      switch (shapeType) {
+        case 'rectangle':
+          shape = this.context.rectangles.find(r => r.id === shapeId)
+          if (shape) updates.push(this.context.updateRectangle(shape.id, { x: shape.x + dx, y: shape.y + dy }))
+          break
+        case 'circle':
+          shape = this.context.circles.find(c => c.id === shapeId)
+          if (shape) updates.push(this.context.updateCircle(shape.id, { x: shape.x + dx, y: shape.y + dy }))
+          break
+        case 'line':
+          shape = this.context.lines.find(l => l.id === shapeId)
+          if (shape) {
+            const line = shape as LineShape
+            updates.push(this.context.updateLine(shape.id, { x: line.x + dx, y: line.y + dy, endX: line.endX + dx, endY: line.endY + dy }))
+          }
+          break
+        case 'text':
+          shape = this.context.texts.find(t => t.id === shapeId)
+          if (shape) updates.push(this.context.updateText(shape.id, { x: shape.x + dx, y: shape.y + dy }))
+          break
+      }
+    }
+    await Promise.all(updates)
   }
 
   /**

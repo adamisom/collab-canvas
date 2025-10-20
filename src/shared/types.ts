@@ -27,6 +27,31 @@ export interface CanvasState {
     height: number;
     color: string;
   }>;
+  circles?: Array<{
+    id: string;
+    x: number;
+    y: number;
+    radius: number;
+    color: string;
+  }>;
+  lines?: Array<{
+    id: string;
+    x: number;
+    y: number;
+    endX: number;
+    endY: number;
+    color: string;
+  }>;
+  texts?: Array<{
+    id: string;
+    x: number;
+    y: number;
+    text: string;
+    fontSize: number;
+    color: string;
+    measuredWidth?: number;
+    measuredHeight?: number;
+  }>;
 }
 
 export interface ViewportInfo {

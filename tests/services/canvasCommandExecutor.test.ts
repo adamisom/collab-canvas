@@ -192,12 +192,13 @@ describe('CanvasCommandExecutor', () => {
     })
 
     it('should throw error when moving deleted rectangle', async () => {
+      mockContext.primarySelectionType = null  // Simulate deleted/non-existent shape
       await expect(
         executor.executeCommand({
-          tool: 'moveRectangle',
+          tool: 'moveShape',  // Renamed from moveRectangle
           parameters: { shapeId: 'deleted-rect', x: 200, y: 300 }
         })
-      ).rejects.toThrow('not found')
+      ).rejects.toThrow('Unknown shape type')
     })
 
     it('should allow operations on existing rectangles', async () => {
