@@ -1,8 +1,7 @@
 import React from 'react'
-import { Group, Circle, Text, Rect, Line } from 'react-konva'
+import { Group, Text, Rect, Line } from 'react-konva'
 import type { CursorPosition } from '../../services/cursorService'
 import { getUserColor } from '../../utils/userColors'
-import { useUserProfile } from '../../contexts/UserProfilesContext'
 
 interface CursorProps {
   cursor: CursorPosition
@@ -10,14 +9,13 @@ interface CursorProps {
 }
 
 const Cursor: React.FC<CursorProps> = ({ cursor, isOwnCursor = false }) => {
-  const { profile, initials } = useUserProfile(cursor.userId)
-
-  // Don't render own cursor or if profile not loaded yet
-  if (isOwnCursor || !profile || !profile.displayName) {
+  // Don't render own cursor
+  if (isOwnCursor) {
     return null
   }
 
   const userColor = getUserColor(cursor.userId)
+  const displayName = cursor.username || 'User'
   
   return (
     <Group x={cursor.x} y={cursor.y}>
@@ -30,39 +28,23 @@ const Cursor: React.FC<CursorProps> = ({ cursor, isOwnCursor = false }) => {
         closed
       />
       
-      {/* User info badge */}
+      {/* User name badge */}
       <Group x={16} y={0}>
         {/* Background pill */}
         <Rect
           x={0}
           y={0}
-          width={Math.max(profile.displayName.length * 7 + 40, 80)}
-          height={24}
+          width={displayName.length * 7 + 16}
+          height={20}
           fill="rgba(0, 0, 0, 0.8)"
-          cornerRadius={12}
-        />
-        
-        {/* Initials circle */}
-        <Circle
-          x={12}
-          y={12}
-          radius={8}
-          fill={userColor}
-        />
-        <Text
-          x={8}
-          y={7}
-          text={initials}
-          fontSize={8}
-          fill="white"
-          fontStyle="bold"
+          cornerRadius={10}
         />
         
         {/* User name */}
         <Text
-          x={24}
-          y={7}
-          text={profile.displayName}
+          x={8}
+          y={5}
+          text={displayName}
           fontSize={11}
           fill="white"
         />

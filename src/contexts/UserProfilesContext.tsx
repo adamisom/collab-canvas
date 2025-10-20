@@ -1,6 +1,10 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react'
 import { firebaseDatabase, dbRef, dbOnValue } from '../services/firebaseService'
 
+// we don't use this data (this interface, etc) after all
+// it could theoretically come in handy. i'm so tired i don't even want to decide to delete dead code though...
+// so i'll make an exception and leave it in, but feel free to delete it.
+
 interface UserProfile {
   uid: string
   displayName: string
