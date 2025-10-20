@@ -305,6 +305,11 @@ export const tools = {
   deleteShape: deleteShapeTool, // Renamed from deleteRectangle - works on all shapes
   createMultipleRectangles: createMultipleRectanglesTool,
   duplicateShape: duplicateShapeTool, // Renamed from duplicateRectangle - works on all shapes
+  
+  // Legacy aliases for backward compatibility with AI model
+  deleteRectangle: deleteShapeTool, // Alias for deleteShape
+  duplicateRectangle: duplicateShapeTool, // Alias for duplicateShape
+  
   bringToFront: bringToFrontTool,
   sendToBack: sendToBackTool,
   alignShapes: alignShapesTool,

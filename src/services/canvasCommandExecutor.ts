@@ -254,10 +254,12 @@ export class CanvasCommandExecutor {
         break
 
       case 'deleteShape': // Renamed from deleteRectangle - now works on all shapes
+      case 'deleteRectangle': // Legacy alias for backward compatibility
         await this.executeDeleteShape(parameters as DeleteRectangleParams, createdRectangleId)
         break
 
       case 'duplicateShape': // Renamed from duplicateRectangle - now works on all shapes
+      case 'duplicateRectangle': // Legacy alias for backward compatibility
         await this.executeDuplicateShape(parameters as DuplicateRectangleParams, createdRectangleId)
         break
 
