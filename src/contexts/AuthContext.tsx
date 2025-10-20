@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react'
-import { signInWithRedirect, GoogleAuthProvider } from 'firebase/auth'
+import { signInWithRedirect, getRedirectResult, GoogleAuthProvider } from 'firebase/auth'
 import {
   firebaseAuth,
   onAuthStateChange
@@ -37,8 +37,24 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
 
-  // Simplified auth state listener - user profile created by Cloud Function
+  // Handle redirect result and auth state changes
   useEffect(() => {
+    // Check if user is returning from Google redirect
+    getRedirectResult(firebaseAuth)
+      .then((result) => {
+        if (result) {
+          // User successfully signed in via redirect
+          setUser(result.user)
+        }
+      })
+      .catch((error) => {
+        console.error('Error getting redirect result:', error)
+      })
+      .finally(() => {
+        setLoading(false)
+      })
+
+    // Listen for auth state changes
     const unsubscribe = onAuthStateChange(firebaseAuth, (firebaseUser) => {
       setUser(firebaseUser)
       setLoading(false)
