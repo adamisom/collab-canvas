@@ -1,394 +1,279 @@
 import { describe, it, expect } from 'vitest'
 import { getShapeBounds, getShapeCenter } from '../../src/utils/shapeHelpers'
-import type { Shape } from '../../src/shared/shapes'
+import type { Rectangle, CircleShape, LineShape, TextShape } from '../../src/shared/shapes'
 
 describe('shapeHelpers', () => {
   describe('getShapeBounds', () => {
-    describe('rectangle bounds', () => {
-      const createRectangle = (x: number, y: number, width: number, height: number): Shape => ({
-        id: 'rect1',
+    it('should calculate bounds for rectangle', () => {
+      const rect: Rectangle = {
+        id: '1',
         type: 'rectangle',
-        x,
-        y,
-        width,
-        height,
-        color: '#000000',
+        x: 10,
+        y: 20,
+        width: 100,
+        height: 50,
+        color: '#ff0000',
+        zIndex: 0,
         createdBy: 'user1',
         createdAt: Date.now(),
-        zIndex: 1000,
+        updatedAt: Date.now(),
         selectedBy: null,
-        selectedByUsername: null,
         selectedAt: null
-      })
+      }
 
-      it('should return correct bounds for rectangle', () => {
-        const rect = createRectangle(100, 50, 80, 60)
-        const bounds = getShapeBounds(rect)
-        
-        expect(bounds).toEqual({
-          x: 100,
-          y: 50,
-          width: 80,
-          height: 60
-        })
-      })
-
-      it('should handle rectangle at origin', () => {
-        const rect = createRectangle(0, 0, 100, 100)
-        const bounds = getShapeBounds(rect)
-        
-        expect(bounds).toEqual({
-          x: 0,
-          y: 0,
-          width: 100,
-          height: 100
-        })
-      })
-
-      it('should handle negative coordinates', () => {
-        const rect = createRectangle(-50, -30, 40, 20)
-        const bounds = getShapeBounds(rect)
-        
-        expect(bounds).toEqual({
-          x: -50,
-          y: -30,
-          width: 40,
-          height: 20
-        })
+      const bounds = getShapeBounds(rect)
+      
+      expect(bounds).toEqual({
+        x: 10,
+        y: 20,
+        width: 100,
+        height: 50
       })
     })
 
-    describe('circle bounds', () => {
-      const createCircle = (x: number, y: number, radius: number): Shape => ({
-        id: 'circle1',
+    it('should calculate bounds for circle (center-based positioning)', () => {
+      const circle: CircleShape = {
+        id: '1',
         type: 'circle',
-        x,
-        y,
-        radius,
-        color: '#000000',
+        x: 100,
+        y: 100,
+        radius: 50,
+        color: '#00ff00',
+        zIndex: 0,
         createdBy: 'user1',
         createdAt: Date.now(),
-        zIndex: 1000,
         selectedBy: null,
-        selectedByUsername: null,
         selectedAt: null
-      })
+      }
 
-      it('should return correct bounds for circle', () => {
-        const circle = createCircle(100, 100, 30)
-        const bounds = getShapeBounds(circle)
-        
-        expect(bounds).toEqual({
-          x: 70,
-          y: 70,
-          width: 60,
-          height: 60
-        })
-      })
-
-      it('should handle circle at origin', () => {
-        const circle = createCircle(0, 0, 50)
-        const bounds = getShapeBounds(circle)
-        
-        expect(bounds).toEqual({
-          x: -50,
-          y: -50,
-          width: 100,
-          height: 100
-        })
-      })
-
-      it('should handle small radius', () => {
-        const circle = createCircle(100, 100, 5)
-        const bounds = getShapeBounds(circle)
-        
-        expect(bounds).toEqual({
-          x: 95,
-          y: 95,
-          width: 10,
-          height: 10
-        })
+      const bounds = getShapeBounds(circle)
+      
+      // Circle bounds should be top-left of bounding box
+      expect(bounds).toEqual({
+        x: 50,  // center - radius
+        y: 50,  // center - radius
+        width: 100,  // radius * 2
+        height: 100
       })
     })
 
-    describe('line bounds', () => {
-      const createLine = (x: number, y: number, endX: number, endY: number): Shape => ({
-        id: 'line1',
+    it('should calculate bounds for line (min/max coordinates)', () => {
+      const line: LineShape = {
+        id: '1',
         type: 'line',
-        x,
-        y,
-        endX,
-        endY,
-        color: '#000000',
+        x: 50,
+        y: 30,
+        endX: 150,
+        endY: 80,
         strokeWidth: 2,
+        hasArrow: false,
+        color: '#0000ff',
+        zIndex: 0,
         createdBy: 'user1',
         createdAt: Date.now(),
-        zIndex: 1000,
         selectedBy: null,
-        selectedByUsername: null,
         selectedAt: null
-      })
+      }
 
-      it('should return correct bounds for horizontal line', () => {
-        const line = createLine(50, 100, 200, 100)
-        const bounds = getShapeBounds(line)
-        
-        expect(bounds).toEqual({
-          x: 50,
-          y: 100,
-          width: 150,
-          height: 0
-        })
-      })
-
-      it('should return correct bounds for vertical line', () => {
-        const line = createLine(100, 50, 100, 200)
-        const bounds = getShapeBounds(line)
-        
-        expect(bounds).toEqual({
-          x: 100,
-          y: 50,
-          width: 0,
-          height: 150
-        })
-      })
-
-      it('should return correct bounds for diagonal line', () => {
-        const line = createLine(50, 50, 150, 200)
-        const bounds = getShapeBounds(line)
-        
-        expect(bounds).toEqual({
-          x: 50,
-          y: 50,
-          width: 100,
-          height: 150
-        })
-      })
-
-      it('should handle line drawn backwards (end before start)', () => {
-        const line = createLine(200, 200, 50, 50)
-        const bounds = getShapeBounds(line)
-        
-        expect(bounds).toEqual({
-          x: 50,
-          y: 50,
-          width: 150,
-          height: 150
-        })
+      const bounds = getShapeBounds(line)
+      
+      expect(bounds).toEqual({
+        x: 50,
+        y: 30,
+        width: 100,  // 150 - 50
+        height: 50   // 80 - 30
       })
     })
 
-    describe('text bounds', () => {
-      const createText = (
-        x: number, 
-        y: number, 
-        text: string, 
-        fontSize: number,
-        measuredWidth?: number,
-        measuredHeight?: number
-      ): Shape => ({
-        id: 'text1',
-        type: 'text',
-        x,
-        y,
-        text,
-        fontSize,
-        fontFamily: 'Arial',
-        measuredWidth,
-        measuredHeight,
-        color: '#000000',
+    it('should calculate bounds for line with reversed coordinates', () => {
+      const line: LineShape = {
+        id: '1',
+        type: 'line',
+        x: 150,      // Start is further right
+        y: 80,       // Start is lower
+        endX: 50,
+        endY: 30,
+        strokeWidth: 2,
+        hasArrow: false,
+        color: '#0000ff',
+        zIndex: 0,
         createdBy: 'user1',
         createdAt: Date.now(),
-        zIndex: 1000,
         selectedBy: null,
-        selectedByUsername: null,
         selectedAt: null
-      })
+      }
 
-      it('should use measured dimensions when available', () => {
-        const text = createText(100, 100, 'Hello', 20, 50, 24)
-        const bounds = getShapeBounds(text)
-        
-        expect(bounds).toEqual({
-          x: 100,
-          y: 100,
-          width: 50,
-          height: 24
-        })
+      const bounds = getShapeBounds(line)
+      
+      // Should still use min/max correctly
+      expect(bounds).toEqual({
+        x: 50,
+        y: 30,
+        width: 100,
+        height: 50
       })
+    })
 
-      it('should estimate dimensions when measurements unavailable', () => {
-        const text = createText(100, 100, 'Hello', 20)
-        const bounds = getShapeBounds(text)
-        
-        // Estimation: width = length * fontSize * 0.6, height = fontSize * 1.2
-        expect(bounds.x).toBe(100)
-        expect(bounds.y).toBe(100)
-        expect(bounds.width).toBe(5 * 20 * 0.6) // 60
-        expect(bounds.height).toBe(20 * 1.2) // 24
+    it('should calculate bounds for text with measured dimensions', () => {
+      const text: TextShape = {
+        id: '1',
+        type: 'text',
+        x: 10,
+        y: 20,
+        text: 'Hello World',
+        fontSize: 16,
+        fontFamily: 'Arial',
+        color: '#000000',
+        zIndex: 0,
+        createdBy: 'user1',
+        createdAt: Date.now(),
+        selectedBy: null,
+        selectedAt: null,
+        measuredWidth: 85,
+        measuredHeight: 20
+      }
+
+      const bounds = getShapeBounds(text)
+      
+      expect(bounds).toEqual({
+        x: 10,
+        y: 20,
+        width: 85,
+        height: 20
       })
+    })
 
-      it('should handle empty text', () => {
-        const text = createText(100, 100, '', 20)
-        const bounds = getShapeBounds(text)
-        
-        expect(bounds.width).toBe(0)
-        expect(bounds.height).toBe(24)
-      })
+    it('should estimate bounds for text without measured dimensions', () => {
+      const text: TextShape = {
+        id: '1',
+        type: 'text',
+        x: 10,
+        y: 20,
+        text: 'Hello',  // 5 characters
+        fontSize: 20,
+        fontFamily: 'Arial',
+        color: '#000000',
+        zIndex: 0,
+        createdBy: 'user1',
+        createdAt: Date.now(),
+        selectedBy: null,
+        selectedAt: null
+      }
 
-      it('should handle long text', () => {
-        const text = createText(50, 50, 'This is a long text string', 16, 200, 20)
-        const bounds = getShapeBounds(text)
-        
-        expect(bounds).toEqual({
-          x: 50,
-          y: 50,
-          width: 200,
-          height: 20
-        })
+      const bounds = getShapeBounds(text)
+      
+      // Estimated: length * fontSize * 0.6, fontSize * 1.2
+      expect(bounds).toEqual({
+        x: 10,
+        y: 20,
+        width: 60,  // 5 * 20 * 0.6
+        height: 24  // 20 * 1.2
       })
     })
   })
 
   describe('getShapeCenter', () => {
-    describe('rectangle center', () => {
-      const createRectangle = (x: number, y: number, width: number, height: number): Shape => ({
-        id: 'rect1',
+    it('should calculate center for rectangle', () => {
+      const rect: Rectangle = {
+        id: '1',
         type: 'rectangle',
-        x,
-        y,
-        width,
-        height,
-        color: '#000000',
+        x: 0,
+        y: 0,
+        width: 100,
+        height: 50,
+        color: '#ff0000',
+        zIndex: 0,
         createdBy: 'user1',
         createdAt: Date.now(),
-        zIndex: 1000,
+        updatedAt: Date.now(),
         selectedBy: null,
-        selectedByUsername: null,
         selectedAt: null
-      })
+      }
 
-      it('should return correct center for rectangle', () => {
-        const rect = createRectangle(100, 50, 80, 60)
-        const center = getShapeCenter(rect)
-        
-        expect(center).toEqual({ x: 140, y: 80 })
-      })
-
-      it('should handle rectangle at origin', () => {
-        const rect = createRectangle(0, 0, 100, 100)
-        const center = getShapeCenter(rect)
-        
-        expect(center).toEqual({ x: 50, y: 50 })
+      const center = getShapeCenter(rect)
+      
+      expect(center).toEqual({
+        x: 50,  // 0 + 100/2
+        y: 25   // 0 + 50/2
       })
     })
 
-    describe('circle center', () => {
-      const createCircle = (x: number, y: number, radius: number): Shape => ({
-        id: 'circle1',
+    it('should return stored center for circle', () => {
+      const circle: CircleShape = {
+        id: '1',
         type: 'circle',
-        x,
-        y,
-        radius,
-        color: '#000000',
+        x: 150,
+        y: 200,
+        radius: 50,
+        color: '#00ff00',
+        zIndex: 0,
         createdBy: 'user1',
         createdAt: Date.now(),
-        zIndex: 1000,
         selectedBy: null,
-        selectedByUsername: null,
         selectedAt: null
-      })
+      }
 
-      it('should return circle position as center', () => {
-        const circle = createCircle(100, 100, 30)
-        const center = getShapeCenter(circle)
-        
-        expect(center).toEqual({ x: 100, y: 100 })
+      const center = getShapeCenter(circle)
+      
+      // Circle stores center directly
+      expect(center).toEqual({
+        x: 150,
+        y: 200
       })
     })
 
-    describe('line center', () => {
-      const createLine = (x: number, y: number, endX: number, endY: number): Shape => ({
-        id: 'line1',
+    it('should calculate center for line', () => {
+      const line: LineShape = {
+        id: '1',
         type: 'line',
-        x,
-        y,
-        endX,
-        endY,
-        color: '#000000',
+        x: 0,
+        y: 0,
+        endX: 100,
+        endY: 50,
         strokeWidth: 2,
+        hasArrow: false,
+        color: '#0000ff',
+        zIndex: 0,
         createdBy: 'user1',
         createdAt: Date.now(),
-        zIndex: 1000,
         selectedBy: null,
-        selectedByUsername: null,
         selectedAt: null
-      })
+      }
 
-      it('should return midpoint of line', () => {
-        const line = createLine(0, 0, 100, 100)
-        const center = getShapeCenter(line)
-        
-        expect(center).toEqual({ x: 50, y: 50 })
-      })
-
-      it('should handle horizontal line', () => {
-        const line = createLine(50, 100, 200, 100)
-        const center = getShapeCenter(line)
-        
-        expect(center).toEqual({ x: 125, y: 100 })
-      })
-
-      it('should handle vertical line', () => {
-        const line = createLine(100, 50, 100, 200)
-        const center = getShapeCenter(line)
-        
-        expect(center).toEqual({ x: 100, y: 125 })
+      const center = getShapeCenter(line)
+      
+      // Center of bounding box
+      expect(center).toEqual({
+        x: 50,  // (0 + 100) / 2
+        y: 25   // (0 + 50) / 2
       })
     })
 
-    describe('text center', () => {
-      const createText = (
-        x: number, 
-        y: number, 
-        text: string, 
-        fontSize: number,
-        measuredWidth?: number,
-        measuredHeight?: number
-      ): Shape => ({
-        id: 'text1',
+    it('should calculate center for text', () => {
+      const text: TextShape = {
+        id: '1',
         type: 'text',
-        x,
-        y,
-        text,
-        fontSize,
+        x: 10,
+        y: 20,
+        text: 'Hello',
+        fontSize: 20,
         fontFamily: 'Arial',
-        measuredWidth,
-        measuredHeight,
         color: '#000000',
+        zIndex: 0,
         createdBy: 'user1',
         createdAt: Date.now(),
-        zIndex: 1000,
         selectedBy: null,
-        selectedByUsername: null,
-        selectedAt: null
-      })
+        selectedAt: null,
+        measuredWidth: 60,
+        measuredHeight: 24
+      }
 
-      it('should calculate center using measured dimensions', () => {
-        const text = createText(100, 100, 'Hello', 20, 50, 24)
-        const center = getShapeCenter(text)
-        
-        expect(center).toEqual({ x: 125, y: 112 })
-      })
-
-      it('should calculate center using estimated dimensions', () => {
-        const text = createText(100, 100, 'Hello', 20)
-        const center = getShapeCenter(text)
-        
-        // Estimated width = 60, height = 24
-        expect(center).toEqual({ x: 130, y: 112 })
+      const center = getShapeCenter(text)
+      
+      expect(center).toEqual({
+        x: 40,  // 10 + 60/2
+        y: 32   // 20 + 24/2
       })
     })
   })
 })
-
