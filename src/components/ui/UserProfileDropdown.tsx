@@ -1,12 +1,26 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
-import { useUserProfile } from '../../contexts/UserProfilesContext'
 import { getUserColor } from '../../utils/userColors'
 import './UserProfileDropdown.css'
 
+// Helper to derive initials from displayName or email
+const getInitials = (displayName: string | null, email: string | null): string => {
+  const name = (displayName || email?.split('@')[0] || '').trim()
+  if (!name) return '?'
+  
+  const initials = name
+    .split(' ')
+    .filter(n => n.length > 0)
+    .map(n => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2)
+  
+  return initials || '?'
+}
+
 const UserProfileDropdown: React.FC = () => {
   const { user, signOut } = useAuth()
-  const { initials } = useUserProfile(user?.uid || '')
   const [isOpen, setIsOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
@@ -30,6 +44,7 @@ const UserProfileDropdown: React.FC = () => {
 
   const displayName = user.displayName || user.email || 'User'
   const userColor = getUserColor(user.uid)
+  const initials = getInitials(user.displayName, user.email)
 
   return (
     <div className="user-profile-dropdown" ref={dropdownRef}>
