@@ -140,6 +140,24 @@ export const selectAllOfTypeTool = tool({
 });
 
 /**
+ * Tool 11b: Select shapes by color (Phase 3F)
+ */
+export const selectShapesByColorTool = tool({
+  description: "Select all shapes of a specific color on the canvas. Works across all shape types (rectangles, circles, lines, text).",
+  inputSchema: z.object({
+    color: z.enum(VALID_RECTANGLE_COLORS).describe("The color to filter by: red (#ef4444), blue (#3b82f6), or green (#22c55e)"),
+  }),
+});
+
+/**
+ * Tool 11c: Clear selection / Deselect all (Phase 3F)
+ */
+export const clearSelectionTool = tool({
+  description: "Clear all selections / deselect everything on the canvas. Use when user wants to deselect all shapes.",
+  inputSchema: z.object({}), // No parameters needed
+});
+
+/**
  * Tool 12: Rotate shape (Phase 3D)
  */
 export const rotateShapeTool = tool({
@@ -179,6 +197,83 @@ export const deleteBatchTool = tool({
 });
 
 /**
+ * Tool 16: Create a circle (Phase 3C)
+ */
+export const createCircleTool = tool({
+  description: "Create a circle on the canvas. Position defaults to viewport center if not specified. Color defaults to blue if not specified.",
+  inputSchema: z.object({
+    x: z.number().min(CANVAS_BOUNDS.MIN_X).max(CANVAS_BOUNDS.MAX_X).optional().describe(PARAM_DESCRIPTIONS.X_COORD),
+    y: z.number().min(CANVAS_BOUNDS.MIN_Y).max(CANVAS_BOUNDS.MAX_Y).optional().describe(PARAM_DESCRIPTIONS.Y_COORD),
+    radius: z.number().min(10).max(500).optional().describe("Radius of the circle in pixels. Defaults to 50."),
+    color: z.enum(VALID_RECTANGLE_COLORS).optional().describe(PARAM_DESCRIPTIONS.COLOR + " (defaults to blue)"),
+  }),
+});
+
+/**
+ * Tool 17: Create a line (Phase 3C)
+ */
+export const createLineTool = tool({
+  description: "Create a line on the canvas. Requires start and end coordinates. Color defaults to blue if not specified.",
+  inputSchema: z.object({
+    x: z.number().min(CANVAS_BOUNDS.MIN_X).max(CANVAS_BOUNDS.MAX_X).describe("X coordinate of the line's start point"),
+    y: z.number().min(CANVAS_BOUNDS.MIN_Y).max(CANVAS_BOUNDS.MAX_Y).describe("Y coordinate of the line's start point"),
+    endX: z.number().min(CANVAS_BOUNDS.MIN_X).max(CANVAS_BOUNDS.MAX_X).describe("X coordinate of the line's end point"),
+    endY: z.number().min(CANVAS_BOUNDS.MIN_Y).max(CANVAS_BOUNDS.MAX_Y).describe("Y coordinate of the line's end point"),
+    color: z.enum(VALID_RECTANGLE_COLORS).optional().describe(PARAM_DESCRIPTIONS.COLOR + " (defaults to blue)"),
+  }),
+});
+
+/**
+ * Tool 18: Create text (Phase 3C)
+ */
+export const createTextTool = tool({
+  description: "Create text on the canvas. Position defaults to viewport center if not specified. Color defaults to blue if not specified.",
+  inputSchema: z.object({
+    x: z.number().min(CANVAS_BOUNDS.MIN_X).max(CANVAS_BOUNDS.MAX_X).optional().describe(PARAM_DESCRIPTIONS.X_COORD),
+    y: z.number().min(CANVAS_BOUNDS.MIN_Y).max(CANVAS_BOUNDS.MAX_Y).optional().describe(PARAM_DESCRIPTIONS.Y_COORD),
+    text: z.string().min(1).max(200).describe("The text content (max 200 characters)"),
+    fontSize: z.number().min(8).max(72).optional().describe("Font size in pixels. Defaults to 16."),
+    color: z.enum(VALID_RECTANGLE_COLORS).optional().describe(PARAM_DESCRIPTIONS.COLOR + " (defaults to blue)"),
+  }),
+});
+
+/**
+ * Tool 19: Change text content (Phase 3C)
+ */
+export const updateTextContentTool = tool({
+  description: "Update the text content of the selected text shape. Requires a text shape to be selected.",
+  inputSchema: z.object({
+    text: z.string().min(1).max(200).describe("The new text content (max 200 characters)"),
+  }),
+});
+
+/**
+ * Tool 20: Change text font size (Phase 3C)
+ */
+export const updateTextFontSizeTool = tool({
+  description: "Change the font size of the selected text shape. Requires a text shape to be selected.",
+  inputSchema: z.object({
+    fontSize: z.number().min(8).max(72).describe("New font size in pixels"),
+  }),
+});
+
+/**
+ * Tool 21: Toggle text bold (Phase 3C)
+ */
+export const toggleTextBoldTool = tool({
+  description: "Toggle bold formatting on the selected text shape. Requires a text shape to be selected.",
+  inputSchema: z.object({}), // No parameters needed
+});
+
+/**
+ * Tool 22: Toggle text italic (Phase 3C)
+ */
+export const toggleTextItalicTool = tool({
+  description: "Toggle italic formatting on the selected text shape. Requires a text shape to be selected.",
+  inputSchema: z.object({}), // No parameters needed
+});
+
+/**
  * Export all tools as an object
  */
 export const tools = {
@@ -193,8 +288,17 @@ export const tools = {
   sendToBack: sendToBackTool,
   alignShapes: alignShapesTool,
   selectAllOfType: selectAllOfTypeTool,
+  selectShapesByColor: selectShapesByColorTool,
+  clearSelection: clearSelectionTool,
   rotateShape: rotateShapeTool,
   changeColorBatch: changeColorBatchTool,
   resizeBatch: resizeBatchTool,
   deleteBatch: deleteBatchTool,
+  createCircle: createCircleTool,
+  createLine: createLineTool,
+  createText: createTextTool,
+  updateTextContent: updateTextContentTool,
+  updateTextFontSize: updateTextFontSizeTool,
+  toggleTextBold: toggleTextBoldTool,
+  toggleTextItalic: toggleTextItalicTool,
 };

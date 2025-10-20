@@ -21,6 +21,7 @@ import type {
   SendToBackParams,
   CreateMultipleRectanglesParams
 } from '../shared/types'
+import type { CircleShape, LineShape, TextShape } from '../shared/shapes'
 import { 
   DEFAULT_RECT, 
   RECTANGLE_CONSTRAINTS, 
@@ -36,6 +37,9 @@ import type { Rectangle } from './canvasService'
  */
 export interface CanvasContextMethods {
   rectangles: Rectangle[]
+  circles: CircleShape[]  // Phase 3F
+  lines: LineShape[]  // Phase 3F
+  texts: TextShape[]  // Phase 3F
   primarySelectionId: string | null  // CHANGED: AI operates on primary selection
   primarySelectionType: 'rectangle' | 'circle' | 'line' | 'text' | null  // Phase 3D
   selectedShapes: Map<string, 'rectangle' | 'circle' | 'line' | 'text'>  // Phase 3D
@@ -53,10 +57,20 @@ export interface CanvasContextMethods {
   // Phase 3D: Alignment, Selection, Rotation
   alignShapes: (alignType: 'left' | 'center-horizontal' | 'right' | 'top' | 'center-vertical' | 'bottom' | 'distribute-horizontal' | 'distribute-vertical') => Promise<void>
   selectAllOfType: (shapeType: 'rectangle' | 'circle' | 'line' | 'text') => Promise<void>
+  selectShape: (shapeId: string, shapeType: 'rectangle' | 'circle' | 'line' | 'text', additive?: boolean) => Promise<void>
+  clearSelection: () => Promise<void>
   rotateShape: (shapeId: string, shapeType: 'rectangle' | 'circle' | 'line' | 'text', rotation: number) => Promise<void>
   // Batch operations
   deleteSelectedShapes: () => Promise<void>
   changeSelectedShapesColor: (color: string) => Promise<void>
+  // Phase 3F: Shape creation
+  createCircle: (x: number, y: number, radius: number, color: string) => Promise<CircleShape | null>
+  createLine: (x: number, y: number, endX: number, endY: number, hasArrow: boolean, color: string) => Promise<LineShape | null>
+  createText: (x: number, y: number, text: string, fontSize: number, color: string) => Promise<TextShape | null>
+  updateText: (textId: string, updates: Partial<TextShape>) => Promise<void>
+  changeTextFontSize: (textId: string, fontSize: number) => Promise<void>
+  toggleTextBold: (textId: string) => Promise<void>
+  toggleTextItalic: (textId: string) => Promise<void>
 }
 
 export class CanvasCommandExecutor {
@@ -161,6 +175,14 @@ export class CanvasCommandExecutor {
         await this.executeSelectAllOfType(parameters as { shapeType: string })
         break
 
+      case 'selectShapesByColor':
+        await this.executeSelectShapesByColor(parameters as { color: string })
+        break
+
+      case 'clearSelection':
+        await this.executeClearSelection()
+        break
+
       case 'rotateShape':
         await this.executeRotateShape(parameters as { angle: number })
         break
@@ -175,6 +197,34 @@ export class CanvasCommandExecutor {
 
       case 'deleteBatch':
         await this.executeDeleteBatch()
+        break
+
+      case 'createCircle':
+        await this.executeCreateCircle(parameters as { x?: number; y?: number; radius?: number; color?: string })
+        break
+
+      case 'createLine':
+        await this.executeCreateLine(parameters as { x: number; y: number; endX: number; endY: number; color?: string })
+        break
+
+      case 'createText':
+        await this.executeCreateText(parameters as { x?: number; y?: number; text: string; fontSize?: number; color?: string })
+        break
+
+      case 'updateTextContent':
+        await this.executeUpdateTextContent(parameters as { text: string })
+        break
+
+      case 'updateTextFontSize':
+        await this.executeUpdateTextFontSize(parameters as { fontSize: number })
+        break
+
+      case 'toggleTextBold':
+        await this.executeToggleTextBold()
+        break
+
+      case 'toggleTextItalic':
+        await this.executeToggleTextItalic()
         break
 
       default:
@@ -614,6 +664,144 @@ export class CanvasCommandExecutor {
     }
 
     await this.context.deleteSelectedShapes()
+  }
+
+  /**
+   * Phase 3F: Select shapes by color
+   */
+  private async executeSelectShapesByColor(params: { color: string }): Promise<void> {
+    const { color } = params
+
+    // Validate color
+    if (!(VALID_AI_COLORS as readonly string[]).includes(color)) {
+      throw new Error(`Invalid color: ${color}. Must be one of: ${VALID_AI_COLORS.join(', ')}`)
+    }
+
+    // Get all shapes of this color across all types
+    const shapesToSelect: Array<{ id: string; type: 'rectangle' | 'circle' | 'line' | 'text' }> = []
+
+    this.context.rectangles.filter(r => r.color === color).forEach(r => shapesToSelect.push({ id: r.id, type: 'rectangle' }))
+    this.context.circles.filter(c => c.color === color).forEach(c => shapesToSelect.push({ id: c.id, type: 'circle' }))
+    this.context.lines.filter(l => l.color === color).forEach(l => shapesToSelect.push({ id: l.id, type: 'line' }))
+    this.context.texts.filter(t => t.color === color).forEach(t => shapesToSelect.push({ id: t.id, type: 'text' }))
+
+    if (shapesToSelect.length === 0) {
+      throw new Error(`No shapes found with color ${color}`)
+    }
+
+    // Clear current selection
+    await this.context.clearSelection()
+
+    // Select all shapes of this color
+    for (const { id, type } of shapesToSelect) {
+      await this.context.selectShape(id, type, true) // additive = true
+    }
+  }
+
+  /**
+   * Phase 3F: Clear selection / deselect all
+   */
+  private async executeClearSelection(): Promise<void> {
+    await this.context.clearSelection()
+  }
+
+  /**
+   * Phase 3F: Create a circle
+   */
+  private async executeCreateCircle(params: { x?: number; y?: number; radius?: number; color?: string }): Promise<void> {
+    const viewportInfo = this.getViewportInfo()
+    if (!viewportInfo) {
+      throw new Error('Viewport info not available')
+    }
+
+    const defaultX = viewportInfo.centerX
+    const defaultY = viewportInfo.centerY
+
+    const x = params.x ?? defaultX
+    const y = params.y ?? defaultY
+    const radius = params.radius ?? 50
+    const color = params.color ?? '#3b82f6'
+
+    await this.context.createCircle(x, y, radius, color)
+  }
+
+  /**
+   * Phase 3F: Create a line
+   */
+  private async executeCreateLine(params: { x: number; y: number; endX: number; endY: number; color?: string }): Promise<void> {
+    const { x, y, endX, endY } = params
+    const color = params.color ?? '#3b82f6'
+
+    await this.context.createLine(x, y, endX, endY, false, color) // hasArrow = false
+  }
+
+  /**
+   * Phase 3F: Create text
+   */
+  private async executeCreateText(params: { x?: number; y?: number; text: string; fontSize?: number; color?: string }): Promise<void> {
+    const viewportInfo = this.getViewportInfo()
+    if (!viewportInfo) {
+      throw new Error('Viewport info not available')
+    }
+
+    const defaultX = viewportInfo.centerX
+    const defaultY = viewportInfo.centerY
+
+    const x = params.x ?? defaultX
+    const y = params.y ?? defaultY
+    const fontSize = params.fontSize ?? 16
+    const color = params.color ?? '#3b82f6'
+
+    await this.context.createText(x, y, params.text, fontSize, color)
+  }
+
+  /**
+   * Phase 3F: Update text content
+   */
+  private async executeUpdateTextContent(params: { text: string }): Promise<void> {
+    if (!this.context.primarySelectionId || this.context.primarySelectionType !== 'text') {
+      throw new Error('Please select a text shape first')
+    }
+
+    const textShape = this.context.texts.find(t => t.id === this.context.primarySelectionId)
+    if (!textShape) {
+      throw new Error('Selected text shape not found')
+    }
+
+    await this.context.updateText(textShape.id, { text: params.text })
+  }
+
+  /**
+   * Phase 3F: Update text font size
+   */
+  private async executeUpdateTextFontSize(params: { fontSize: number }): Promise<void> {
+    if (!this.context.primarySelectionId || this.context.primarySelectionType !== 'text') {
+      throw new Error('Please select a text shape first')
+    }
+
+    await this.context.changeTextFontSize(this.context.primarySelectionId, params.fontSize)
+  }
+
+  /**
+   * Phase 3F: Toggle text bold
+   */
+  private async executeToggleTextBold(): Promise<void> {
+    if (!this.context.primarySelectionId || this.context.primarySelectionType !== 'text') {
+      throw new Error('Please select a text shape first')
+    }
+
+    await this.context.toggleTextBold(this.context.primarySelectionId)
+  }
+
+  /**
+   * Phase 3F: Toggle text italic
+   */
+  private async executeToggleTextItalic(): Promise<void> {
+    if (!this.context.primarySelectionId || this.context.primarySelectionType !== 'text') {
+      throw new Error('Please select a text shape first')
+    }
+
+    await this.context.toggleTextItalic(this.context.primarySelectionId)
   }
 }
 
