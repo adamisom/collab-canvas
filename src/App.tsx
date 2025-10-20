@@ -2,11 +2,14 @@ import React from 'react'
 import './App.css'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { CanvasProvider, useCanvas } from './contexts/CanvasContext'
+import { CommentsProvider } from './contexts/CommentsContext'  // Phase 3F PR #18
 import { useCursors } from './hooks/useCursors'
-import LoginForm from './components/auth/LoginForm'
+import ErrorBoundary from './components/ui/ErrorBoundary'
+import SignInModal from './components/auth/SignInModal'
 import Header from './components/layout/Header'
 import Canvas from './components/canvas/Canvas'
 import UsersList from './components/canvas/UsersList'
+import KeyboardShortcuts from './components/canvas/KeyboardShortcuts'
 import AIChat from './components/ai/AIChat'
 
 const CanvasContent: React.FC = () => {
@@ -28,7 +31,7 @@ const CanvasContent: React.FC = () => {
     <main className="app-main canvas-main">
       <div className="canvas-sidebar">
         <div className="canvas-status">
-          <h3>🎨 Canvas Workspace</h3>
+          <h3>🎨  ( • ᴗ - ) ✧</h3>
           
           {error && (
             <div className="status-item error">
@@ -42,18 +45,7 @@ const CanvasContent: React.FC = () => {
           </div>
           
           
-          <div className="canvas-instructions">
-            <h4>🖱️ How to Use:</h4>
-            <ul>
-              <li>Click empty space to create rectangle</li>
-              <li>Click rectangle to select it</li>
-              <li>Click rectangle again to deselect it</li>
-              <li>Drag a corner or an edge to resize a rectangle</li>
-              <li>Change rectangle color with color picker that appears when selected</li>
-              <li>Drag selected rectangle to move it</li>
-              <li>See real-time updates from other users</li>
-            </ul>
-          </div>
+          <KeyboardShortcuts />
         </div>
       </div>
       
@@ -82,15 +74,19 @@ const AppContent: React.FC = () => {
   }
 
   if (!user) {
-    return <LoginForm />
+    return <SignInModal />
   }
 
   return (
     <div className="App">
       <Header />
-      <CanvasProvider>
-        <CanvasContent />
-      </CanvasProvider>
+      <ErrorBoundary>
+        <CanvasProvider>
+          <CommentsProvider>
+            <CanvasContent />
+          </CommentsProvider>
+        </CanvasProvider>
+      </ErrorBoundary>
     </div>
   )
 }

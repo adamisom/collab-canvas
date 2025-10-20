@@ -1,5 +1,5 @@
 import React from 'react'
-import { Group, Circle, Text, Rect } from 'react-konva'
+import { Group, Text, Rect, Line } from 'react-konva'
 import type { CursorPosition } from '../../services/cursorService'
 import { getUserColor } from '../../utils/userColors'
 
@@ -14,62 +14,39 @@ const Cursor: React.FC<CursorProps> = ({ cursor, isOwnCursor = false }) => {
     return null
   }
 
-
-  const cursorColor = getUserColor(cursor.userId)
+  const userColor = getUserColor(cursor.userId)
+  const displayName = cursor.username || 'User'
   
   return (
     <Group x={cursor.x} y={cursor.y}>
-      {/* Cursor pointer */}
-      <Group>
-        {/* Cursor shadow */}
-        <Circle
-          x={2}
-          y={2}
-          radius={6}
-          fill="rgba(0, 0, 0, 0.2)"
-        />
-        
-        {/* Main cursor circle */}
-        <Circle
-          x={0}
-          y={0}
-          radius={5}
-          fill={cursorColor}
-          stroke="white"
-          strokeWidth={2}
-        />
-        
-        {/* Inner dot */}
-        <Circle
-          x={0}
-          y={0}
-          radius={2}
-          fill="white"
-        />
-      </Group>
+      {/* Cursor arrow */}
+      <Line
+        points={[0, 0, 0, 16, 4, 12, 8, 18, 12, 14, 8, 10, 14, 10, 0, 0]}
+        fill={userColor}
+        stroke="white"
+        strokeWidth={1}
+        closed
+      />
       
-      {/* Username label */}
-      <Group x={15} y={-15}>
-        {/* Label background */}
+      {/* User name badge */}
+      <Group x={16} y={0}>
+        {/* Background pill */}
         <Rect
-          width={cursor.username.length * 14 + 8}
-          height={28}
-          fill="rgba(0, 0, 0, 0.7)"
-          cornerRadius={4}
+          x={0}
+          y={0}
+          width={displayName.length * 7 + 16}
+          height={20}
+          fill="rgba(0, 0, 0, 0.8)"
+          cornerRadius={10}
         />
         
-        {/* Username text */}
+        {/* User name */}
         <Text
-          text={cursor.username}
-          fontSize={24}
-          fontFamily="Inter, system-ui, sans-serif"
-          fill={cursorColor}
-          stroke="white"
-          strokeWidth={1}
-          align="left"
-          verticalAlign="middle"
-          x={4}
-          y={2}
+          x={8}
+          y={5}
+          text={displayName}
+          fontSize={11}
+          fill="white"
         />
       </Group>
     </Group>

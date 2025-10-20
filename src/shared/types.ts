@@ -27,6 +27,31 @@ export interface CanvasState {
     height: number;
     color: string;
   }>;
+  circles?: Array<{
+    id: string;
+    x: number;
+    y: number;
+    radius: number;
+    color: string;
+  }>;
+  lines?: Array<{
+    id: string;
+    x: number;
+    y: number;
+    endX: number;
+    endY: number;
+    color: string;
+  }>;
+  texts?: Array<{
+    id: string;
+    x: number;
+    y: number;
+    text: string;
+    fontSize: number;
+    color: string;
+    measuredWidth?: number;
+    measuredHeight?: number;
+  }>;
 }
 
 export interface ViewportInfo {
@@ -43,6 +68,7 @@ export interface ViewportInfo {
 
 export interface SelectedShape {
   id: string;
+  type: 'rectangle' | 'circle' | 'line' | 'text';  // Shape type
   color: string;
   x: number;
   y: number;
@@ -55,6 +81,7 @@ export interface ProcessAICommandRequest {
   canvasState: CanvasState;
   viewportInfo: ViewportInfo;
   selectedShape: SelectedShape | null;
+  selectedShapesCount?: number;  // Total number of selected shapes (for multi-select)
 }
 
 export interface ProcessAICommandResponse {
@@ -92,6 +119,18 @@ export type DeleteRectangleParams = {
   shapeId?: string;
 };
 
+export type DuplicateRectangleParams = {
+  shapeId?: string;
+};
+
+export type BringToFrontParams = {
+  shapeId?: string;
+};
+
+export type SendToBackParams = {
+  shapeId?: string;
+};
+
 export type CreateMultipleRectanglesParams = {
   count: number;
   color: string;
@@ -105,6 +144,9 @@ export type AICommandParameters =
   | MoveRectangleParams
   | ResizeRectangleParams
   | DeleteRectangleParams
+  | DuplicateRectangleParams
+  | BringToFrontParams
+  | SendToBackParams
   | CreateMultipleRectanglesParams;
 
 export interface AICommand {
@@ -117,5 +159,6 @@ export interface CommandSnapshot {
   canvasState: CanvasState;
   viewportInfo?: ViewportInfo;
   selectedShapeId: string | null;
+  selectedShapesCount?: number;  // Total number of selected shapes
 }
 

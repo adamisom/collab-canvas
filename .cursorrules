@@ -5,6 +5,18 @@
 - Reason: `npm test` enters watch mode and hangs, requiring manual cancellation
 - For running tests with specific options, use `npx vitest run` with appropriate flags
 
+## Commit Workflow
+- Commit during substantial PR implementation work, before user review
+- Do NOT commit during user's PR review/approval phase unless they ask me to
+- Before each commit: lint, build, and test (using `npx vitest run`)
+- Review changes and assess if high-value unit tests should be added
+- Write succinct, clear commit messages
+- Only commit when code is working and tests pass
+
+## Deployment
+- Always prefix deploy commands with `time` to measure deployment duration
+- Example: `time firebase deploy` instead of `firebase deploy`
+
 ## Git History
 - NEVER rewrite git history (no force push, no rebase on shared branches, no --amend on pushed commits)
 - Keep commit history clean and intact for collaboration and debugging

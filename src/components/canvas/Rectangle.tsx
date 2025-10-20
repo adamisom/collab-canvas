@@ -8,27 +8,36 @@ import { calculateResizeHandlePositions, calculateResizeUpdate } from '../../uti
 import { useAuth } from '../../contexts/AuthContext'
 import { stopEventPropagation, setStageCursor } from '../../utils/eventHelpers'
 import ResizeHandle from './ResizeHandle'
+import RotateHandle from './RotateHandle'  // Phase 3D PR #12
 
 interface RectangleProps {
   rectangle: Rectangle
   isSelected?: boolean
-  onClick?: (rectangle: Rectangle) => void
+  isPrimary?: boolean  // NEW: Is this the primary selection (shows resize handles)
+  isShiftPressed?: boolean  // NEW: Is Shift key pressed (disables dragging for selection box)
+  isInMultiSelectGroup?: boolean  // NEW: Is this part of a multi-select group (disables individual dragging)
+  onClick?: (rectangle: Rectangle, cmdOrCtrlPressed: boolean) => void
   onDragStart?: (rectangle: Rectangle) => void
   onDragEnd?: (rectangle: Rectangle, newX: number, newY: number) => void
   onResize?: (rectangle: Rectangle, newWidth: number, newHeight: number, newX?: number, newY?: number) => void
   onResizeStart?: () => void
   onResizeEnd?: () => void
+  onRotate?: (shapeId: string, rotation: number) => void  // Phase 3D PR #12
 }
 
 const RectangleComponent: React.FC<RectangleProps> = ({ 
   rectangle, 
   isSelected = false,
+  isPrimary = false,  // NEW
+  isShiftPressed = false,  // NEW
+  isInMultiSelectGroup = false,  // NEW
   onClick,
   onDragStart,
   onDragEnd,
   onResize,
   onResizeStart,
-  onResizeEnd
+  onResizeEnd,
+  onRotate  // Phase 3D PR #12
 }) => {
   const [isResizing, setIsResizing] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
@@ -53,7 +62,8 @@ const RectangleComponent: React.FC<RectangleProps> = ({
   const handleClick = (e: KonvaEventObject<MouseEvent>) => {
     stopEventPropagation(e)
     if (onClick && !isResizing && !isDragging) {
-      onClick(rectangle)
+      const cmdOrCtrlPressed = e.evt.metaKey || e.evt.ctrlKey
+      onClick(rectangle, cmdOrCtrlPressed)
     }
   }
 
@@ -81,11 +91,12 @@ const RectangleComponent: React.FC<RectangleProps> = ({
       
       // Select the rectangle if not already selected
       if (!isSelected && onClick) {
-        onClick(rectangle)
+        const cmdOrCtrlPressed = e.evt.metaKey || e.evt.ctrlKey
+        onClick(rectangle, cmdOrCtrlPressed)
       }
       
       // Manually start the drag since the draggable prop update won't happen in time
-      if (rectRef.current) {
+      if (rectRef.current && !isShiftPressed && !isInMultiSelectGroup) {
         rectRef.current.startDrag()
       }
     }
@@ -179,10 +190,13 @@ const RectangleComponent: React.FC<RectangleProps> = ({
   }
 
   // Calculate resize handle positions using current visual rectangle during resize
+  // Account for offset (rotation origin at center) - visual top-left is at (x - width/2, y - height/2)
   const rectForHandles = isResizing && currentVisualRect ? currentVisualRect : rectangle
+  const visualX = rectForHandles.x - rectForHandles.width / 2
+  const visualY = rectForHandles.y - rectForHandles.height / 2
   const handlePositions = calculateResizeHandlePositions(
-    rectForHandles.x, 
-    rectForHandles.y, 
+    visualX, 
+    visualY, 
     rectForHandles.width, 
     rectForHandles.height
   )
@@ -195,6 +209,9 @@ const RectangleComponent: React.FC<RectangleProps> = ({
         y={rectangle.y}
         width={rectangle.width}
         height={rectangle.height}
+        offsetX={rectangle.width / 2}  // Phase 3D PR #12: Set rotation origin to center
+        offsetY={rectangle.height / 2}
+        rotation={rectangle.rotation || 0}  // Phase 3D PR #12
         fill={rectangle.color}
         stroke={
           isSelected 
@@ -211,7 +228,8 @@ const RectangleComponent: React.FC<RectangleProps> = ({
               : DEFAULT_RECT.STROKE_WIDTH
         }
         dash={isSelectedByOther ? [5, 5] : undefined}
-        draggable={!isResizing && dragEnabled}
+        draggable={isSelected && !isResizing && !isShiftPressed && !isInMultiSelectGroup && dragEnabled}
+        listening={!isInMultiSelectGroup}  // Don't capture events when in multi-select group - let Group handle drag
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
@@ -236,7 +254,7 @@ const RectangleComponent: React.FC<RectangleProps> = ({
       />
       
       {/* Render resize handles when selected and not dragging */}
-      {isSelected && !isDragging && (
+      {isPrimary && !isDragging && !isShiftPressed && !isInMultiSelectGroup && (  // CHANGED: Only show for primary selection, hide during Shift and multi-select
         <>
           {Object.entries(RESIZE_DIRECTIONS).map(([, direction]) => {
             const position = handlePositions[direction]
@@ -252,6 +270,18 @@ const RectangleComponent: React.FC<RectangleProps> = ({
               />
             )
           })}
+          
+          {/* Phase 3D PR #12: Rotate handle */}
+          {onRotate && (
+            <RotateHandle
+              shapeId={rectangle.id}
+              centerX={visualX + rectForHandles.width / 2}
+              centerY={visualY + rectForHandles.height / 2}
+              currentRotation={rectangle.rotation || 0}
+              isShiftPressed={isShiftPressed}
+              onRotate={onRotate}
+            />
+          )}
         </>
       )}
     </Group>

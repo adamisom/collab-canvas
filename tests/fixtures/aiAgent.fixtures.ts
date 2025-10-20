@@ -107,7 +107,7 @@ export const mockChangeColorCommand: AICommand = {
 }
 
 export const mockMoveRectangleCommand: AICommand = {
-  tool: 'moveRectangle',
+  tool: 'moveShape',  // Renamed from moveRectangle
   parameters: {
     shapeId: 'rect1',
     x: 200,
@@ -116,7 +116,7 @@ export const mockMoveRectangleCommand: AICommand = {
 }
 
 export const mockResizeRectangleCommand: AICommand = {
-  tool: 'resizeRectangle',
+  tool: 'resizeRectangle',  // Still rectangle-only
   parameters: {
     shapeId: 'rect1',
     width: 200,
@@ -125,7 +125,7 @@ export const mockResizeRectangleCommand: AICommand = {
 }
 
 export const mockDeleteRectangleCommand: AICommand = {
-  tool: 'deleteRectangle',
+  tool: 'deleteShape',  // Renamed from deleteRectangle
   parameters: {
     shapeId: 'rect1'
   }

@@ -15,7 +15,10 @@ export const CURSOR_THROTTLE_MS = 16
 export const DB_PATHS = {
   USERS: 'users',
   CURSORS: 'cursors', 
-  RECTANGLES: 'rectangles'
+  RECTANGLES: 'rectangles',
+  CIRCLES: 'circles',  // PR #6
+  LINES: 'lines',  // PR #7
+  TEXTS: 'texts'  // PR #8
 } as const
 
 // Rectangle color options
@@ -54,8 +57,9 @@ export const DEFAULT_RECT = {
 
 // Selection colors
 export const SELECTION_COLORS = {
-  STROKE: '#ef4444',
-  STROKE_WIDTH: 3
+  STROKE: '#ef4444',          // Red for current user's selection
+  STROKE_WIDTH: 3,
+  OTHER_USER: '#f59e0b'       // Orange for other users' selections
 } as const
 
 // Resize handle properties
@@ -96,6 +100,21 @@ export const CANVAS_BOUNDS = {
   MAX_Y: CANVAS_HEIGHT
 } as const
 
+// Shape-specific constants (REFACTORED Post-3C: Consolidated magic numbers)
+export const SHAPE_CONSTANTS = {
+  Z_INDEX_GAP: 1000,              // Gap between shape z-indexes for layering operations
+  DEFAULT_Z_INDEX: 1000,          // Default z-index for new shapes
+  MIN_RADIUS: 10,                 // Minimum circle radius
+  MIN_TEXT_LENGTH: 1,             // Minimum text length
+  MAX_TEXT_LENGTH: 200,           // Maximum text length
+  SELECTION_LIMIT: 25,            // Maximum shapes that can be selected at once
+  LINE_HANDLE_SIZE: 6,            // Size of line endpoint handles
+  ARROW_POINTER_LENGTH: 10,      // Arrow pointer length
+  ARROW_POINTER_WIDTH: 10,        // Arrow pointer width
+  TRANSFORMER_ANCHOR_SIZE: 8,     // Size of resize transformer anchors
+  TRANSFORMER_ANCHOR_RADIUS: 4    // Corner radius of transformer anchors
+} as const
+
 // AI Agent constants
 export const AI_CONSTANTS = {
   MAX_CANVAS_RECTANGLES: 1000,
@@ -108,3 +127,10 @@ export const AI_CONSTANTS = {
 
 // Valid colors for AI commands (imported from shared types to ensure consistency with Cloud Function)
 export const VALID_AI_COLORS = VALID_RECTANGLE_COLORS
+
+// Interaction constants (Phase 3D: Advanced features)
+export const INTERACTION_CONSTANTS = {
+  ROTATE_HANDLE_OFFSET: 30,  // Distance above shape for rotate handle
+  MIN_LASSO_POINTS: 6,        // Minimum points for valid lasso (3 points × 2 coords)
+  LASSO_SELECTION_LIMIT: 25,  // Maximum shapes that can be selected via lasso
+} as const

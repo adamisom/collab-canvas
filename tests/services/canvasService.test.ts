@@ -569,8 +569,9 @@ describe('CanvasService', () => {
 
       const result = await canvasService.createRectangle(rectangleInput)
 
-      expect(result.selectedBy).toBeUndefined()
-      expect(result.selectedByUsername).toBeUndefined()
+      // MIGRATED (Post-3C): selectedBy is now null (not undefined) per shared Rectangle type
+      expect(result.selectedBy).toBeNull()
+      expect(result.selectedByUsername).toBeNull()
     })
   })
 

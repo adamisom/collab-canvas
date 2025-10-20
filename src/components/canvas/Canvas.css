@@ -10,14 +10,15 @@
 }
 
 .canvas-info {
-  padding: 12px 16px;
+  padding: 8px 16px 4px 16px;
   background: white;
   border-bottom: 1px solid #e2e8f0;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 16px;
+  min-height: 32px;
 }
 
 .canvas-stats {
@@ -26,6 +27,56 @@
   font-size: 12px;
   color: #4a5568;
   font-family: 'SF Mono', Monaco, monospace;
+  align-items: flex-start;
+  min-height: 24px;
+}
+
+.canvas-info-divider {
+  width: 1px;
+  height: 20px;
+  background: #e2e8f0;
+  margin: 0 6px 0 0;
+}
+
+/* Phase 3F PR #18: Comment icon button */
+.comment-icon-button {
+  position: relative;
+  padding: 2px 8px;
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-left: 0;
+  margin-right: 0;
+  font-size: 16px;
+  line-height: 1.2;
+}
+
+.comment-icon-button:hover {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+}
+
+.comment-icon-button.has-comments {
+  background: #fef3c7;
+  border-color: #fbbf24;
+  color: #92400e;
+}
+
+.comment-icon-button.has-comments:hover {
+  background: #fde68a;
+}
+
+.comment-unread-indicator {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 10px;
+  height: 10px;
+  background: #ef4444;
+  border: 2px solid white;
+  border-radius: 50%;
 }
 
 .canvas-controls {
@@ -56,6 +107,25 @@
 .canvas-wrapper canvas.dragging,
 .canvas-wrapper .dragging canvas {
   cursor: grabbing;
+}
+
+/* NEW: Pan mode cursor (Spacebar held) */
+.canvas-wrapper canvas.panning {
+  cursor: grab;
+}
+
+.canvas-wrapper canvas.panning:active {
+  cursor: grabbing;
+}
+
+/* NEW: Selection mode cursor (Shift held) */
+.canvas-wrapper canvas.selection-mode {
+  cursor: crosshair;
+}
+
+/* Phase 3D PR #11: Lasso mode cursor */
+.canvas-wrapper canvas.lasso-cursor {
+  cursor: crosshair;
 }
 
 /* Canvas background pattern */
@@ -320,10 +390,10 @@
 /* Header Color Picker */
 .header-color-picker {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
-  margin-left: 16px;
-  padding-left: 16px;
+  margin-left: 6px;
+  padding-left: 6px;
   border-left: 1px solid #e2e8f0;
 }
 
@@ -331,12 +401,16 @@
   font-size: 14px;
   color: #4a5568;
   font-weight: 500;
+  line-height: 24px;
 }
 
 /* Override ColorPicker styles for header layout */
 .header-color-picker .color-picker {
   flex-direction: row;
-  gap: 6px;
+  gap: 8px;
+  align-items: flex-start;
+  max-height: 24px;
+  overflow: visible;
 }
 
 .header-color-picker .color-picker-title {
@@ -352,6 +426,21 @@
 .header-color-picker .color-option {
   width: 20px;
   height: 20px;
+  flex-shrink: 0;
+}
+
+.header-color-picker .color-hex-form {
+  margin-top: 0;
+}
+
+.header-color-picker .color-history {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+.header-color-picker .color-history-option {
+  flex-shrink: 0;
 }
 
 /* Placeholder to maintain consistent height when no rectangle is selected */
@@ -361,3 +450,296 @@
   align-items: center;
   gap: 8px; /* Same gap as the parent container */
 }
+
+/* Enhanced Color Picker Styles */
+.color-quick-options {
+  display: flex;
+  gap: 6px;
+}
+
+.color-hex-form {
+  display: flex;
+  gap: 4px;
+  margin-top: 8px;
+  align-items: center;
+}
+
+.color-hex-input {
+  width: 80px;
+  padding: 4px 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  font-size: 11px;
+  font-family: 'SF Mono', Monaco, monospace;
+  color: #374151;
+}
+
+.color-hex-input:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+}
+
+.color-hex-submit {
+  padding: 4px 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  background: white;
+  color: #374151;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s ease;
+}
+
+.color-hex-submit:hover:not(:disabled) {
+  background: #f8fafc;
+  border-color: #cbd5e0;
+}
+
+.color-hex-submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.color-history {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.color-history-option {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.color-history-option:hover {
+  transform: scale(1.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.color-history-option.selected {
+  border-color: #374151;
+  box-shadow: 0 0 0 2px white, 0 0 0 4px #374151;
+}
+
+/* Keyboard Shortcuts Collapsible Section */
+.keyboard-shortcuts {
+  padding: 12px;
+  background: #f7fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.shortcuts-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  font-size: 12px;
+  color: #4a5568;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.2s ease;
+}
+
+.shortcuts-toggle:hover {
+  color: #2d3748;
+}
+
+.shortcuts-expanded {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+  font-size: 11px;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+}
+
+.shortcuts-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.shortcuts-section strong {
+  color: #2d3748;
+  font-weight: 600;
+  margin-bottom: 2px;
+  font-size: 11px;
+  text-align: center;
+}
+
+.shortcut-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 4px 2px;
+}
+
+.shortcut-key {
+  color: #4a5568;
+  font-weight: 600;
+  font-size: 10px;
+  text-align: center;
+  line-height: 1.3;
+}
+
+.shortcut-desc {
+  color: #718096;
+  font-size: 9px;
+  text-align: center;
+  line-height: 1.2;
+}
+
+@media (max-width: 768px) {
+  .keyboard-shortcuts {
+    display: none;
+  }
+}
+
+/* PR #6: Shape Mode Selector */
+.shape-mode-selector {
+  display: flex;
+  gap: 1px;
+  background: #f1f5f9;
+  padding: 1px;
+  border-radius: 3px;
+  margin-right: 4px;
+}
+
+.shape-mode-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: transparent;
+  border: none;
+  border-radius: 2px;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.shape-mode-btn:hover {
+  background: #e2e8f0;
+  color: #334155;
+}
+
+.shape-mode-btn.active {
+  background: #3b82f6;
+  color: white;
+}
+
+.shape-mode-btn:active {
+  transform: scale(0.95);
+}
+
+/* PR #9: Text Format Toolbar */
+.text-format-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 14px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  pointer-events: auto;
+}
+
+/* Rotation Selector (for lines and text) */
+.rotation-selector {
+  display: flex;
+  align-items: center;
+  padding: 4px 8px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 14px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  pointer-events: auto;
+}
+
+.rotation-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.rotation-select {
+  padding: 2px 4px;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  font-size: 13px;
+  background: white;
+  cursor: pointer;
+}
+
+.toolbar-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.font-size-select {
+  padding: 2px 4px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  font-size: 13px;
+  background: white;
+  cursor: pointer;
+}
+
+.font-size-select:hover {
+  border-color: #94a3b8;
+}
+
+.format-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  color: #475569;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.format-btn:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+}
+
+.format-btn.active {
+  background: #3b82f6;
+  color: white;
+  border-color: #3b82f6;
+}
+
+.format-btn:active {
+  transform: scale(0.95);
+}
+

@@ -12,7 +12,7 @@ const Toast: React.FC<ToastProps> = ({ message, onDismiss }) => {
     }, 3000) // Auto-dismiss after 3 seconds
 
     return () => clearTimeout(timer)
-  }, [onDismiss])
+  }, [message, onDismiss]) // Reset timer when message changes
 
   return (
     <div className="toast">
