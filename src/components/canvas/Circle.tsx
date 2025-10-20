@@ -11,7 +11,7 @@ interface CircleProps {
   isSelected: boolean
   isPrimary: boolean
   isShiftPressed: boolean
-  onClick: (id: string) => void
+  onClick: (id: string, cmdOrCtrlPressed?: boolean) => void
   onDragStart: () => void
   onDragEnd: (id: string, x: number, y: number) => void
   onResize: (id: string, radius: number, x: number, y: number) => void
@@ -45,7 +45,8 @@ const Circle: React.FC<CircleProps> = ({
 
   const handleClick = (e: KonvaEventObject<MouseEvent>) => {
     e.cancelBubble = true
-    onClick(circle.id)
+    const cmdOrCtrlPressed = e.evt.metaKey || e.evt.ctrlKey
+    onClick(circle.id, cmdOrCtrlPressed)
   }
 
   const handleDragStart = () => {

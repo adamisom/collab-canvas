@@ -66,7 +66,6 @@ interface CanvasContextType {
   
   // Selection operations (UPDATED)
   selectRectangle: (rectangleId: string, additive?: boolean) => Promise<void>
-  selectMultiple: (rectangleIds: string[]) => Promise<void>  // NEW
   selectAll: () => Promise<void>  // NEW
   clearSelection: () => Promise<void>  // NEW
   setSelectionLocked: (locked: boolean) => void
@@ -157,6 +156,36 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
   }, [selectedShapes, primarySelectionId, primarySelectionType])
   
   const { user, username } = useAuth()
+
+  /**
+   * Helper: Get shape service methods by type
+   * Centralizes the mapping between shape types and their service operations
+   * MOVED UP: Must be defined before selectAll and other functions that use it
+   */
+  const getShapeServiceMethods = (shapeType: ShapeType) => {
+    switch (shapeType) {
+      case 'rectangle':
+        return {
+          select: canvasService.selectRectangle.bind(canvasService),
+          deselect: canvasService.deselectRectangle.bind(canvasService)
+        }
+      case 'circle':
+        return {
+          select: canvasService.selectCircle.bind(canvasService),
+          deselect: canvasService.deselectCircle.bind(canvasService)
+        }
+      case 'line':
+        return {
+          select: canvasService.selectLine.bind(canvasService),
+          deselect: canvasService.deselectLine.bind(canvasService)
+        }
+      case 'text':
+        return {
+          select: canvasService.selectText.bind(canvasService),
+          deselect: canvasService.deselectText.bind(canvasService)
+        }
+    }
+  }
 
   // Initialize canvas state and set up real-time listeners
   useEffect(() => {
@@ -516,58 +545,6 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       }
     }
   }, [user, username, rectangles, selectedShapes, primarySelectionId, selectionLocked, showToast])
-
-  // NEW: Select multiple rectangles (used by drag selection box)
-  const selectMultiple = useCallback(async (rectangleIds: string[]) => {
-    if (selectionLocked) return
-    if (!user || !username) return
-
-    // Enforce selection limit
-    if (rectangleIds.length > 25) {
-      showToast('Selection too large (max 25 rectangles)')
-      // Clear selection
-      for (const prevId of selectedShapes.keys()) {
-        await canvasService.deselectRectangle(prevId, user.uid)
-      }
-      setSelectedShapes(new Map())
-      setPrimarySelectionId(null)
-      setPrimarySelectionType(null)
-      return
-    }
-
-    // Clear previous selections
-    for (const prevId of selectedShapes.keys()) {
-      await canvasService.deselectRectangle(prevId, user.uid)
-    }
-
-    // Select new ones sequentially, checking before each write
-    const selected: string[] = []
-    const skipped: string[] = []
-
-    for (const id of rectangleIds) {
-      const rect = rectangles.find(r => r.id === id)
-
-      // Check right before writing to minimize race condition
-      if (rect && (!rect.selectedBy || rect.selectedBy === user.uid)) {
-        await canvasService.selectRectangle(id, user.uid, username)
-        selected.push(id)
-    } else {
-        skipped.push(id)
-      }
-    }
-
-    const newSelection = new Map<string, ShapeType>()
-    selected.forEach(id => newSelection.set(id, 'rectangle'))
-    setSelectedShapes(newSelection)
-    setPrimarySelectionId(selected[selected.length - 1] || null)
-    setPrimarySelectionType(selected.length > 0 ? 'rectangle' : null)
-
-    if (skipped.length > 0) {
-      showToast(`Selected ${selected.length}, ${skipped.length} already taken by other users`)
-    } else if (selected.length > 0) {
-      showToast(`Selected ${selected.length} rectangles`)
-    }
-  }, [selectionLocked, user, username, rectangles, selectedShapes, showToast])
 
   // NEW: Select all available shapes (skip those selected by others)
   const selectAll = useCallback(async () => {
@@ -1082,35 +1059,6 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
   // ============================================================================
   // UNIFIED SELECTION (REFACTORED PR #5, Optimized Post-3C)
   // ============================================================================
-
-  /**
-   * Helper: Get shape service methods by type
-   * Centralizes the mapping between shape types and their service operations
-   */
-  const getShapeServiceMethods = (shapeType: ShapeType) => {
-    switch (shapeType) {
-      case 'rectangle':
-        return {
-          select: canvasService.selectRectangle.bind(canvasService),
-          deselect: canvasService.deselectRectangle.bind(canvasService)
-        }
-      case 'circle':
-        return {
-          select: canvasService.selectCircle.bind(canvasService),
-          deselect: canvasService.deselectCircle.bind(canvasService)
-        }
-      case 'line':
-        return {
-          select: canvasService.selectLine.bind(canvasService),
-          deselect: canvasService.deselectLine.bind(canvasService)
-        }
-      case 'text':
-        return {
-          select: canvasService.selectText.bind(canvasService),
-          deselect: canvasService.deselectText.bind(canvasService)
-        }
-    }
-  }
 
   /**
    * Helper: Find shape by ID and type
@@ -1983,7 +1931,6 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     deleteShape,  // PR #6, updated PR #7, updated PR #8
     changeShapeColor,  // PR #6, updated PR #7, updated PR #8
     selectRectangle,
-    selectMultiple,
     selectAll,
     clearSelection,
     setSelectionLocked,

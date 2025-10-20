@@ -106,7 +106,6 @@ const Canvas: React.FC<CanvasProps> = ({
     deleteSelectedShapes, // NEW: Delete all selected
     selectRectangle,
     selectShape,           // PR #6, updated PR #7, updated PR #8: Unified selection
-    selectMultiple,        // Multi-select operation
     selectAll,             // Select all
     clearSelection,        // Clear selection
     changeShapeColor,      // PR #6, updated PR #7, updated PR #8: Unified color change

@@ -11,7 +11,7 @@ interface LineProps {
   isSelected: boolean
   isPrimary: boolean
   isShiftPressed: boolean
-  onClick: (id: string) => void
+  onClick: (id: string, cmdOrCtrlPressed?: boolean) => void
   onDragStart: () => void
   onDragEnd: (id: string, x: number, y: number) => void
   onEndpointsChange: (id: string, endX: number, endY: number) => void
