@@ -22,7 +22,7 @@
       }
     },
     
-    // Rectangles: any authenticated user can write, but validation protects fields
+    // Rectangles: collaborative canvas - any authenticated user can modify any shape
     "rectangles": {
       ".read": "auth != null",
       "$rectangleId": {
@@ -37,23 +37,17 @@
         "createdBy": { ".validate": "newData.isString() && (!data.exists() || newData.val() === data.val())" },
         "createdAt": { ".validate": "newData.isNumber() && (!data.exists() || newData.val() === data.val())" },
         
-        // Creator-only fields (can only change if you're the creator)
-        "x": { ".validate": "newData.isNumber() && (!data.exists() || root.child('rectangles').child($rectangleId).child('createdBy').val() === auth.uid)" },
-        "y": { ".validate": "newData.isNumber() && (!data.exists() || root.child('rectangles').child($rectangleId).child('createdBy').val() === auth.uid)" },
-        "width": { ".validate": "newData.isNumber() && newData.val() > 0 && (!data.exists() || root.child('rectangles').child($rectangleId).child('createdBy').val() === auth.uid)" },
-        "height": { ".validate": "newData.isNumber() && newData.val() > 0 && (!data.exists() || root.child('rectangles').child($rectangleId).child('createdBy').val() === auth.uid)" },
-        "color": { 
-          ".validate": "newData.isString() && newData.val().matches(/^#[0-9A-Fa-f]{6}$/) && (!data.exists() || root.child('rectangles').child($rectangleId).child('createdBy').val() === auth.uid)" 
-        },
-        "zIndex": { ".validate": "newData.isNumber() && newData.val() >= 0 && (!data.exists() || root.child('rectangles').child($rectangleId).child('createdBy').val() === auth.uid)" },
-        "rotation": { 
-          ".validate": "(!newData.exists() || (newData.isNumber() && newData.val() >= 0 && newData.val() <= 360)) && (!data.exists() || root.child('rectangles').child($rectangleId).child('createdBy').val() === auth.uid)" 
-        },
+        // Mutable fields: any authenticated user can modify (collaborative)
+        "x": { ".validate": "newData.isNumber()" },
+        "y": { ".validate": "newData.isNumber()" },
+        "width": { ".validate": "newData.isNumber() && newData.val() > 0" },
+        "height": { ".validate": "newData.isNumber() && newData.val() > 0" },
+        "color": { ".validate": "newData.isString() && newData.val().matches(/^#[0-9A-Fa-f]{6}$/)" },
+        "zIndex": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+        "rotation": { ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 0 && newData.val() <= 360)" },
         
-        // Optional fields that creator can set
+        // Optional fields
         "createdByUsername": { ".validate": "!newData.exists() || newData.isString()" },
-        
-        // Selection/update fields: any authenticated user can change
         "selectedBy": { ".validate": "!newData.exists() || newData.isString() || newData.val() === null" },
         "selectedByUsername": { ".validate": "!newData.exists() || newData.isString() || newData.val() === null" },
         "selectedAt": { ".validate": "!newData.exists() || newData.isNumber() || newData.val() === null" },
@@ -61,7 +55,7 @@
       }
     },
     
-    // Circles: same pattern as rectangles
+    // Circles: collaborative canvas - any authenticated user can modify any shape
     "circles": {
       ".read": "auth != null",
       "$circleId": {
@@ -73,16 +67,12 @@
         "createdBy": { ".validate": "newData.isString() && (!data.exists() || newData.val() === data.val())" },
         "createdAt": { ".validate": "newData.isNumber() && (!data.exists() || newData.val() === data.val())" },
         
-        "x": { ".validate": "newData.isNumber() && (!data.exists() || root.child('circles').child($circleId).child('createdBy').val() === auth.uid)" },
-        "y": { ".validate": "newData.isNumber() && (!data.exists() || root.child('circles').child($circleId).child('createdBy').val() === auth.uid)" },
-        "radius": { ".validate": "newData.isNumber() && newData.val() > 0 && (!data.exists() || root.child('circles').child($circleId).child('createdBy').val() === auth.uid)" },
-        "color": { 
-          ".validate": "newData.isString() && newData.val().matches(/^#[0-9A-Fa-f]{6}$/) && (!data.exists() || root.child('circles').child($circleId).child('createdBy').val() === auth.uid)" 
-        },
-        "zIndex": { ".validate": "newData.isNumber() && newData.val() >= 0 && (!data.exists() || root.child('circles').child($circleId).child('createdBy').val() === auth.uid)" },
-        "rotation": { 
-          ".validate": "(!newData.exists() || (newData.isNumber() && newData.val() >= 0 && newData.val() <= 360)) && (!data.exists() || root.child('circles').child($circleId).child('createdBy').val() === auth.uid)" 
-        },
+        "x": { ".validate": "newData.isNumber()" },
+        "y": { ".validate": "newData.isNumber()" },
+        "radius": { ".validate": "newData.isNumber() && newData.val() > 0" },
+        "color": { ".validate": "newData.isString() && newData.val().matches(/^#[0-9A-Fa-f]{6}$/)" },
+        "zIndex": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+        "rotation": { ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 0 && newData.val() <= 360)" },
         
         "createdByUsername": { ".validate": "!newData.exists() || newData.isString()" },
         "selectedBy": { ".validate": "!newData.exists() || newData.isString() || newData.val() === null" },
@@ -91,7 +81,7 @@
       }
     },
     
-    // Lines: same pattern with line-specific fields
+    // Lines: collaborative canvas - any authenticated user can modify any shape
     "lines": {
       ".read": "auth != null",
       "$lineId": {
@@ -103,19 +93,15 @@
         "createdBy": { ".validate": "newData.isString() && (!data.exists() || newData.val() === data.val())" },
         "createdAt": { ".validate": "newData.isNumber() && (!data.exists() || newData.val() === data.val())" },
         
-        "x": { ".validate": "newData.isNumber() && (!data.exists() || root.child('lines').child($lineId).child('createdBy').val() === auth.uid)" },
-        "y": { ".validate": "newData.isNumber() && (!data.exists() || root.child('lines').child($lineId).child('createdBy').val() === auth.uid)" },
-        "endX": { ".validate": "newData.isNumber() && (!data.exists() || root.child('lines').child($lineId).child('createdBy').val() === auth.uid)" },
-        "endY": { ".validate": "newData.isNumber() && (!data.exists() || root.child('lines').child($lineId).child('createdBy').val() === auth.uid)" },
-        "strokeWidth": { ".validate": "newData.isNumber() && newData.val() > 0 && (!data.exists() || root.child('lines').child($lineId).child('createdBy').val() === auth.uid)" },
-        "hasArrow": { ".validate": "newData.isBoolean() && (!data.exists() || root.child('lines').child($lineId).child('createdBy').val() === auth.uid)" },
-        "color": { 
-          ".validate": "newData.isString() && newData.val().matches(/^#[0-9A-Fa-f]{6}$/) && (!data.exists() || root.child('lines').child($lineId).child('createdBy').val() === auth.uid)" 
-        },
-        "zIndex": { ".validate": "newData.isNumber() && newData.val() >= 0 && (!data.exists() || root.child('lines').child($lineId).child('createdBy').val() === auth.uid)" },
-        "rotation": { 
-          ".validate": "(!newData.exists() || (newData.isNumber() && newData.val() >= 0 && newData.val() <= 360)) && (!data.exists() || root.child('lines').child($lineId).child('createdBy').val() === auth.uid)" 
-        },
+        "x": { ".validate": "newData.isNumber()" },
+        "y": { ".validate": "newData.isNumber()" },
+        "endX": { ".validate": "newData.isNumber()" },
+        "endY": { ".validate": "newData.isNumber()" },
+        "strokeWidth": { ".validate": "newData.isNumber() && newData.val() > 0" },
+        "hasArrow": { ".validate": "newData.isBoolean()" },
+        "color": { ".validate": "newData.isString() && newData.val().matches(/^#[0-9A-Fa-f]{6}$/)" },
+        "zIndex": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+        "rotation": { ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 0 && newData.val() <= 360)" },
         
         "createdByUsername": { ".validate": "!newData.exists() || newData.isString()" },
         "selectedBy": { ".validate": "!newData.exists() || newData.isString() || newData.val() === null" },
@@ -124,7 +110,7 @@
       }
     },
     
-    // Texts: same pattern with text-specific fields
+    // Texts: collaborative canvas - any authenticated user can modify any shape
     "texts": {
       ".read": "auth != null",
       "$textId": {
@@ -136,30 +122,18 @@
         "createdBy": { ".validate": "newData.isString() && (!data.exists() || newData.val() === data.val())" },
         "createdAt": { ".validate": "newData.isNumber() && (!data.exists() || newData.val() === data.val())" },
         
-        "x": { ".validate": "newData.isNumber() && (!data.exists() || root.child('texts').child($textId).child('createdBy').val() === auth.uid)" },
-        "y": { ".validate": "newData.isNumber() && (!data.exists() || root.child('texts').child($textId).child('createdBy').val() === auth.uid)" },
-        "text": { ".validate": "newData.isString() && (!data.exists() || root.child('texts').child($textId).child('createdBy').val() === auth.uid)" },
-        "fontSize": { ".validate": "newData.isNumber() && newData.val() > 0 && (!data.exists() || root.child('texts').child($textId).child('createdBy').val() === auth.uid)" },
-        "fontFamily": { ".validate": "newData.isString() && (!data.exists() || root.child('texts').child($textId).child('createdBy').val() === auth.uid)" },
-        "fontWeight": { 
-          ".validate": "(!newData.exists() || newData.val() === 'normal' || newData.val() === 'bold') && (!data.exists() || root.child('texts').child($textId).child('createdBy').val() === auth.uid)" 
-        },
-        "fontStyle": { 
-          ".validate": "(!newData.exists() || newData.val() === 'normal' || newData.val() === 'italic') && (!data.exists() || root.child('texts').child($textId).child('createdBy').val() === auth.uid)" 
-        },
-        "measuredWidth": { 
-          ".validate": "(!newData.exists() || newData.isNumber()) && (!data.exists() || root.child('texts').child($textId).child('createdBy').val() === auth.uid)" 
-        },
-        "measuredHeight": { 
-          ".validate": "(!newData.exists() || newData.isNumber()) && (!data.exists() || root.child('texts').child($textId).child('createdBy').val() === auth.uid)" 
-        },
-        "color": { 
-          ".validate": "newData.isString() && newData.val().matches(/^#[0-9A-Fa-f]{6}$/) && (!data.exists() || root.child('texts').child($textId).child('createdBy').val() === auth.uid)" 
-        },
-        "zIndex": { ".validate": "newData.isNumber() && newData.val() >= 0 && (!data.exists() || root.child('texts').child($textId).child('createdBy').val() === auth.uid)" },
-        "rotation": { 
-          ".validate": "(!newData.exists() || (newData.isNumber() && newData.val() >= 0 && newData.val() <= 360)) && (!data.exists() || root.child('texts').child($textId).child('createdBy').val() === auth.uid)" 
-        },
+        "x": { ".validate": "newData.isNumber()" },
+        "y": { ".validate": "newData.isNumber()" },
+        "text": { ".validate": "newData.isString()" },
+        "fontSize": { ".validate": "newData.isNumber() && newData.val() > 0" },
+        "fontFamily": { ".validate": "newData.isString()" },
+        "fontWeight": { ".validate": "!newData.exists() || newData.val() === 'normal' || newData.val() === 'bold'" },
+        "fontStyle": { ".validate": "!newData.exists() || newData.val() === 'normal' || newData.val() === 'italic'" },
+        "measuredWidth": { ".validate": "!newData.exists() || newData.isNumber()" },
+        "measuredHeight": { ".validate": "!newData.exists() || newData.isNumber()" },
+        "color": { ".validate": "newData.isString() && newData.val().matches(/^#[0-9A-Fa-f]{6}$/)" },
+        "zIndex": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+        "rotation": { ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 0 && newData.val() <= 360)" },
         
         "createdByUsername": { ".validate": "!newData.exists() || newData.isString()" },
         "selectedBy": { ".validate": "!newData.exists() || newData.isString() || newData.val() === null" },
@@ -185,7 +159,7 @@
     
     // Phase 3F PR #18: Comments - attached to shapes
     "comments": {
-      ".read": "auth != null",
+        ".read": "auth != null",
       "$commentId": {
         ".write": "auth != null && (!data.exists() || data.child('authorId').val() === auth.uid)",
         ".validate": "newData.hasChildren(['id', 'shapeId', 'text', 'authorId', 'authorName', 'createdAt', 'updatedAt'])",
