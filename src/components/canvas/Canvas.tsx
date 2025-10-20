@@ -639,11 +639,18 @@ const Canvas: React.FC<CanvasProps> = ({
   }, [])
 
   // PR #6: Circle handlers (circle click has special toggle behavior)
-  const handleCircleClick = useCallback(async (circleId: string) => {
+  const handleCircleClick = useCallback(async (circleId: string, cmdOrCtrlPressed: boolean = false) => {
     if (document.activeElement instanceof HTMLElement) {
       document.activeElement.blur()
     }
     
+    // Cmd/Ctrl+Click for additive selection (like rectangles)
+    if (cmdOrCtrlPressed) {
+      await selectShape(circleId, 'circle', true)  // additive = true
+      return
+    }
+    
+    // Regular click: toggle behavior
     if (primarySelectionId === circleId) {
       if (justUsedAICommandRef.current) {
         justUsedAICommandRef.current = false
@@ -680,11 +687,18 @@ const Canvas: React.FC<CanvasProps> = ({
   }, [resizeCircle])
 
   // PR #7: LINE HANDLERS (line click has toggle behavior like circle)
-  const handleLineClick = useCallback(async (lineId: string) => {
+  const handleLineClick = useCallback(async (lineId: string, cmdOrCtrlPressed: boolean = false) => {
     if (document.activeElement instanceof HTMLElement) {
       document.activeElement.blur()
     }
     
+    // Cmd/Ctrl+Click for additive selection (like rectangles and circles)
+    if (cmdOrCtrlPressed) {
+      await selectShape(lineId, 'line', true)  // additive = true
+      return
+    }
+    
+    // Regular click: toggle behavior
     if (primarySelectionId === lineId) {
       if (justUsedAICommandRef.current) {
         justUsedAICommandRef.current = false
@@ -711,11 +725,18 @@ const Canvas: React.FC<CanvasProps> = ({
   }, [updateLineEndpoints])
 
   // PR #8: TEXT HANDLERS (text click has toggle behavior like circle/line)
-  const handleTextClick = useCallback(async (textId: string) => {
+  const handleTextClick = useCallback(async (textId: string, cmdOrCtrlPressed: boolean = false) => {
     if (document.activeElement instanceof HTMLElement) {
       document.activeElement.blur()
     }
     
+    // Cmd/Ctrl+Click for additive selection (like rectangles, circles, and lines)
+    if (cmdOrCtrlPressed) {
+      await selectShape(textId, 'text', true)  // additive = true
+      return
+    }
+    
+    // Regular click: toggle behavior
     if (primarySelectionId === textId) {
       if (justUsedAICommandRef.current) {
         justUsedAICommandRef.current = false
