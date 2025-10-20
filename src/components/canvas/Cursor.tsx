@@ -13,7 +13,7 @@ const Cursor: React.FC<CursorProps> = ({ cursor, isOwnCursor = false }) => {
   const { profile, initials } = useUserProfile(cursor.userId)
 
   // Don't render own cursor or if profile not loaded yet
-  if (isOwnCursor || !profile) {
+  if (isOwnCursor || !profile || !profile.displayName) {
     return null
   }
 
