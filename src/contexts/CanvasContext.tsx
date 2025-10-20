@@ -1077,23 +1077,23 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     switch (shapeType) {
       case 'rectangle':
         return {
-          select: canvasService.selectRectangle,
-          deselect: canvasService.deselectRectangle
+          select: canvasService.selectRectangle.bind(canvasService),
+          deselect: canvasService.deselectRectangle.bind(canvasService)
         }
       case 'circle':
         return {
-          select: canvasService.selectCircle,
-          deselect: canvasService.deselectCircle
+          select: canvasService.selectCircle.bind(canvasService),
+          deselect: canvasService.deselectCircle.bind(canvasService)
         }
       case 'line':
         return {
-          select: canvasService.selectLine,
-          deselect: canvasService.deselectLine
+          select: canvasService.selectLine.bind(canvasService),
+          deselect: canvasService.deselectLine.bind(canvasService)
         }
       case 'text':
         return {
-          select: canvasService.selectText,
-          deselect: canvasService.deselectText
+          select: canvasService.selectText.bind(canvasService),
+          deselect: canvasService.deselectText.bind(canvasService)
         }
     }
   }

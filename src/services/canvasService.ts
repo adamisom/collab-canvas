@@ -704,6 +704,13 @@ export class CanvasService {
    */
   async selectCircle(circleId: string, userId: string, username: string): Promise<boolean> {
     try {
+      // DEBUG: Check if method exists
+      console.log('🔍 selectCircle - this:', this)
+      console.log('🔍 selectCircle - this.selectShapeGeneric:', this.selectShapeGeneric)
+      console.log('🔍 selectCircle - typeof this.selectShapeGeneric:', typeof this.selectShapeGeneric)
+      console.log('🔍 selectCircle - this.constructor.name:', this.constructor.name)
+      console.log('🔍 selectCircle - Object.getOwnPropertyNames(Object.getPrototypeOf(this)):', Object.getOwnPropertyNames(Object.getPrototypeOf(this)))
+      
       // REFACTORED (Post-3C): Use generic method
       await this.selectShapeGeneric(circleId, '/circles', userId, username)
       return true
