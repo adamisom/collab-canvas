@@ -154,6 +154,20 @@ const Canvas: React.FC<CanvasProps> = ({
     }
   }, [])
 
+  // NEW: Transform canvas coordinates to screen coordinates (for positioning UI elements)
+  const transformToScreenCoords = useCallback((canvasX: number, canvasY: number) => {
+    if (!stageRef.current) return null
+    
+    const stage = stageRef.current
+    const scale = stage.scaleX()
+    const stagePos = { x: stage.x(), y: stage.y() }
+    
+    return {
+      x: canvasX * scale + stagePos.x,
+      y: canvasY * scale + stagePos.y
+    }
+  }, [])
+
   // Calculate and update viewport info (for AI agent)
   const sendViewportInfo = useCallback(() => {
     if (!stageRef.current) return
@@ -1381,17 +1395,23 @@ const Canvas: React.FC<CanvasProps> = ({
             </div>
           )}
           
-          {/* PR #9: Text Format Toolbar */}
-          {selectedText && (
-            <TextFormatToolbar
-              fontSize={selectedText.fontSize}
-              fontWeight={selectedText.fontWeight || 'normal'}
-              fontStyle={selectedText.fontStyle || 'normal'}
-              onFontSizeChange={(size) => changeTextFontSize(selectedText.id, size)}
-              onBoldToggle={() => toggleTextBold(selectedText.id)}
-              onItalicToggle={() => toggleTextItalic(selectedText.id)}
-            />
-          )}
+          {/* PR #9: Text Format Toolbar - positioned above selected text */}
+          {selectedText && (() => {
+            const screenPos = transformToScreenCoords(selectedText.x, selectedText.y)
+            if (!screenPos) return null
+            return (
+              <TextFormatToolbar
+                fontSize={selectedText.fontSize}
+                fontWeight={selectedText.fontWeight || 'normal'}
+                fontStyle={selectedText.fontStyle || 'normal'}
+                x={screenPos.x}
+                y={screenPos.y}
+                onFontSizeChange={(size) => changeTextFontSize(selectedText.id, size)}
+                onBoldToggle={() => toggleTextBold(selectedText.id)}
+                onItalicToggle={() => toggleTextItalic(selectedText.id)}
+              />
+            )
+          })()}
         </div>
         
         {cursorsError && (
